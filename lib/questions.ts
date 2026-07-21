@@ -1,8 +1,8 @@
 export const questions = [
-
   {
-    id: "account",
-    title: "What account are you investing in?",
+    id: "accounts",
+    type: "multi",
+    title: "What accounts are you investing in?",
     options: [
       "TFSA",
       "RRSP",
@@ -11,9 +11,21 @@ export const questions = [
     ]
   },
 
+  {
+    id: "initialInvestment",
+    type: "number",
+    title: "How much are you investing today?"
+  },
+
+  {
+    id: "monthlyContribution",
+    type: "number",
+    title: "How much will you contribute each month?"
+  },
 
   {
     id: "horizon",
+    type: "single",
     title: "How long will you invest?",
     options: [
       "Short term",
@@ -22,9 +34,9 @@ export const questions = [
     ]
   },
 
-
   {
     id: "risk",
+    type: "single",
     title: "What is your risk tolerance?",
     options: [
       "Conservative",
@@ -32,6 +44,16 @@ export const questions = [
       "Growth",
       "Aggressive"
     ]
-  }
+  },
 
+  {
+    id: "preferences",
+    type: "multi",
+    title: "Do you have any investment preferences?",
+    options: [
+      "Exclude Fossil Fuels",
+      "ESG",
+      "High Dividend Yield"
+    ]
+  }
 ];
