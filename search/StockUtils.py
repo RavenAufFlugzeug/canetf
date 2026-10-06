@@ -7,10 +7,13 @@ from datetime import datetime
 import pandas as pd
 import yfinance as yf
 
-# Relative path = a separate database per folder you run from.
-# To share one database between all notebooks, use an absolute path, e.g.
-#   DB_PATH = os.path.expanduser("~/stock_data/stocks.db")
-DB_PATH = "stocks.db"
+# One database shared by the notebooks, update.py and the Next.js site (lib/db.ts).
+# Defaults to search/stocks.db no matter which folder you run from;
+# set CANETF_DB_PATH to use a different file (the website reads the same variable).
+DB_PATH = os.environ.get(
+    "CANETF_DB_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "stocks.db"),
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS companies (          -- one row per company (latest info)

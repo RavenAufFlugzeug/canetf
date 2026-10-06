@@ -1,11 +1,7 @@
-"use client";
-
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { useRouter } from "next/navigation";
 
 export default function Home() {
-  const router = useRouter();
-
   return (
     <main className="min-h-screen bg-slate-50">
       <Navbar />
@@ -19,8 +15,8 @@ export default function Home() {
           and stay on track without complicated decisions.
         </p>
 
-        <button
-          onClick={() => router.push("/onboarding")}
+        <Link
+          href="/onboarding"
           className="
             mt-8
             rounded-xl
@@ -34,7 +30,7 @@ export default function Home() {
           "
         >
           Build My Portfolio
-        </button>
+        </Link>
       </section>
     </main>
   );

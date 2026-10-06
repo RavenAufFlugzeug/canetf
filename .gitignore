@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python / data pipeline
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+*.db
+*.db-wal
+*.db-shm
+/data/
+
+# secrets (keep keys in .env.local)
+docs/API.txt
+docs/Token.txt

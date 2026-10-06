@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { saveAnswers } from "@/app/actions/profile";
 import { questions } from "@/lib/questions";
 
 export default function OnboardingQuiz() {
@@ -10,6 +13,10 @@ export default function OnboardingQuiz() {
 
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showValidationError, setShowValidationError] = useState(false);
+  const [finishStatus, setFinishStatus] = useState<
+    "idle" | "saving" | "needsLogin" | "error"
+  >("idle");
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -126,6 +133,26 @@ export default function OnboardingQuiz() {
     return true;
   }
 
+  async function finish() {
+    setFinishStatus("saving");
+
+    try {
+      const result = await saveAnswers(answers);
+
+      if (result.ok) {
+        sessionStorage.removeItem("canetf_answers");
+        sessionStorage.removeItem("canetf_step");
+        router.push("/account");
+        return;
+      }
+
+      // Not signed in: keep the answers in sessionStorage so they survive logging in.
+      setFinishStatus(result.reason === "unauthenticated" ? "needsLogin" : "error");
+    } catch {
+      setFinishStatus("error");
+    }
+  }
+
   function nextQuestion() {
     if (!isCurrentAnswerValid()) {
       setShowValidationError(true);
@@ -136,10 +163,7 @@ export default function OnboardingQuiz() {
     setShowValidationError(false);
 
     if (step === questions.length) {
-      console.log("Final answers:", answers);
-
-      sessionStorage.removeItem("canetf_answers");
-      sessionStorage.removeItem("canetf_step");
+      finish();
 
       return;
     }
@@ -300,7 +324,7 @@ export default function OnboardingQuiz() {
 
         <button
           onClick={nextQuestion}
-          disabled={!isCurrentAnswerValid()}
+          disabled={!isCurrentAnswerValid() || finishStatus === "saving"}
           className={`
             rounded-lg
             px-6
@@ -314,9 +338,32 @@ export default function OnboardingQuiz() {
             }
         `}
         >
-          {step === questions.length ? "Finish" : "Next"}
+          {step === questions.length
+            ? finishStatus === "saving"
+              ? "Saving…"
+              : "Finish"
+            : "Next"}
         </button>
       </div>
+
+      {finishStatus === "needsLogin" && (
+        <p role="alert" className="mt-6 text-slate-600">
+          <Link href="/signup?next=/onboarding" className="font-medium text-blue-600 hover:underline">
+            Create an account
+          </Link>{" "}
+          or{" "}
+          <Link href="/login?next=/onboarding" className="font-medium text-blue-600 hover:underline">
+            log in
+          </Link>{" "}
+          to save your answers. They&apos;ll be waiting here when you come back.
+        </p>
+      )}
+
+      {finishStatus === "error" && (
+        <p role="alert" className="mt-6 text-red-600">
+          Something went wrong saving your answers. Please try again.
+        </p>
+      )}
     </div>
   );
 }

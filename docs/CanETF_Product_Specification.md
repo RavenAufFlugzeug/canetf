@@ -309,29 +309,116 @@ Components:
 # Technical Architecture
 
 
-Frontend:
+Infrastructure:
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
+- Linux Mint 22.3
+- Git 2.43.0
+- Tools installed directly on the host (no containers)
 
 
-Backend:
+Frontend (package.json):
 
-- FastAPI
+- Node.js 24.21.0
+- npm 11.19.0
+- Next.js 16.2.10
+- React 19.2.4
+- React DOM 19.2.4
+- TypeScript 5.9.3
+- Tailwind CSS 4.3.2 (@tailwindcss/postcss 4.3.2)
+- ESLint 9.39.5 (eslint-config-next 16.2.10)
+- @types/node 24.19.1
+- @types/react 19.2.17
+- @types/react-dom 19.2.3
+
+
+Data pipeline (search/, search/requirements.txt):
+
+- Python 3.12.3 (project virtual environment in .venv/)
+- pip 26.2.1
+- yfinance 1.7.0
+- pandas 3.0.6
+- ipykernel 7.4.0 (runs the .ipynb notebooks in VS Code)
+- Jupyter notebooks + update.py script
+
+
+Main packages installed with yfinance:
+
+- numpy 2.5.3
+- curl_cffi 0.16.3
+- requests 2.34.2
+- lxml 6.1.3
+- beautifulsoup4 4.15.0
+- protobuf 7.36.2
+- websockets 17.2
+- peewee 4.5.2
 
 
 Database:
 
-- PostgreSQL
+- SQLite (search/stocks.db), written by the data pipeline
+- Read by Next.js server code through Node's built-in node:sqlite (lib/db.ts, SQLite 3.53.4)
+- Python side uses the standard sqlite3 module (SQLite 3.45.1)
+- Location shared through the CANETF_DB_PATH environment variable
 
 
-Infrastructure:
+Planned:
 
-- Podman
-- Bazzite
-- Toolbox
+- FastAPI backend
+- PostgreSQL database (replacing SQLite once the site is hosted)
+
+
+---
+
+# Development Setup
+
+
+One-time system package (needed to create virtual environments):
+
+    sudo apt install python3.12-venv
+
+
+Website:
+
+    npm install
+    npm run dev
+
+
+Create the Python virtual environment (first time, from the project root):
+
+    python3 -m venv .venv
+    .venv/bin/pip install -r search/requirements.txt
+
+
+Enter the virtual environment:
+
+    source .venv/bin/activate
+
+The prompt now starts with (.venv), and python / pip use the project's packages.
+
+
+Leave the virtual environment:
+
+    deactivate
+
+
+Run without entering it:
+
+    .venv/bin/python search/update.py
+
+
+Notebooks in VS Code:
+
+- Open a .ipynb file in search/
+- Click the kernel picker (top right)
+- Choose .venv
+
+
+Add a new Python package:
+
+    source .venv/bin/activate
+    pip install <package>
+
+Then add it to search/requirements.txt.
 
 
 ---
@@ -346,6 +433,8 @@ Completed:
 - Landing page
 - Navbar
 - Onboarding prototype
+- Company data pipeline (yfinance → SQLite)
+- Companies page reading from the database
 
 
 In progress:
@@ -355,5 +444,5 @@ In progress:
 Next:
 
 - User accounts
-- Database
+- ETF data in the pipeline
 - Recommendation engine

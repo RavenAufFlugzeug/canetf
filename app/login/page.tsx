@@ -1,15 +1,26 @@
-export default function LoginPage() {
-  return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="rounded-xl bg-white p-8 shadow">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Login
-        </h1>
+import { redirect } from "next/navigation";
+import AuthForm from "@/components/AuthForm";
+import Navbar from "@/components/Navbar";
+import { getCurrentUser } from "@/lib/session";
 
-        <p className="mt-2 text-slate-600">
-          Login page coming soon.
-        </p>
-      </div>
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  if (await getCurrentUser()) {
+    redirect("/account");
+  }
+
+  const { next } = await searchParams;
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <Navbar />
+
+      <section className="flex justify-center px-6 py-12">
+        <AuthForm mode="login" next={typeof next === "string" ? next : undefined} />
+      </section>
     </main>
   );
 }

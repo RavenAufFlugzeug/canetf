@@ -15,60 +15,6 @@ July 13, 2026
 
 ---
 
-# Development Environment
-
-
-Operating System:
-
-Bazzite Linux
-
-
-Development approach:
-
-Toolbox container workflow.
-
-
-Tools verified:
-
-
-Python:
-
-3.14.6
-
-
-Git:
-
-2.55.0
-
-
-Podman:
-
-5.8.4
-
-
-Toolbox:
-
-0.3
-
-
----
-
-# Created Development Container
-
-
-Command:
-
-
-toolbox create canetf-dev
-
-
-Purpose:
-
-Keep development dependencies separate from Bazzite host.
-
-
----
-
 # Created Next.js Application
 
 
@@ -302,11 +248,6 @@ Next.js:
 TypeScript:
 
 - Data typing
-
-
-Bazzite:
-
-- Toolbox workflow
 
 
 ---

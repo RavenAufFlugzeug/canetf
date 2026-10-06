@@ -1,0 +1,3 @@
+yfinance>=1.7,<2
+pandas>=3,<4
+ipykernel>=7  # runs the .ipynb notebooks in VS Code
