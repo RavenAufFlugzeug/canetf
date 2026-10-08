@@ -40,7 +40,12 @@ CREATE TABLE IF NOT EXISTS quotes (             -- one row per company per run
     day_high   REAL,
     day_low    REAL,
     prev_close REAL,
-    volume     INTEGER
+    volume     INTEGER,
+    bid        REAL,
+    bid_size   INTEGER,                         -- shares
+    ask        REAL,
+    ask_size   INTEGER,                         -- shares
+    avg_volume INTEGER                          -- 3-month average daily volume
 );
 CREATE TABLE IF NOT EXISTS prices (             -- one row per company per day
     symbol TEXT NOT NULL REFERENCES companies(symbol),
@@ -52,19 +57,58 @@ CREATE TABLE IF NOT EXISTS prices (             -- one row per company per day
     volume INTEGER,
     PRIMARY KEY (symbol, date)
 );
+CREATE TABLE IF NOT EXISTS intraday (           -- 5-minute bars for the last few trading days
+    symbol TEXT NOT NULL REFERENCES companies(symbol),
+    ts     TEXT NOT NULL,                       -- bar start in exchange time, with UTC offset
+    date   TEXT NOT NULL,                       -- trading day the bar belongs to
+    open   REAL,
+    high   REAL,
+    low    REAL,
+    close  REAL,
+    volume INTEGER,
+    PRIMARY KEY (symbol, ts)
+);
 """
+
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS won't add them
+# to an existing database, so init_db does: {table: [(column, type), ...]}.
+ADDED_COLUMNS = {
+    "quotes": [("bid", "REAL"), ("bid_size", "INTEGER"), ("ask", "REAL"),
+               ("ask_size", "INTEGER"), ("avg_volume", "INTEGER")],
+}
 
 # (max days since the last stored price, yfinance period to download).
 # Each limit is a bit shorter than its period, so the download always overlaps the data we already have.
 UPDATE_STEPS = [(1, "1d"), (7, "5d"), (28, "1mo"), (89, "3mo"), (180, "6mo"), (360, "1y")]
 
+# Intraday bars behind the website's 1D and 5D charts. Replaced in full on every refresh.
+INTRADAY_PERIOD, INTRADAY_INTERVAL = "5d", "5m"
+
 
 # ---------------------------------------------------------------------------
 # Fetching data from Yahoo Finance
 # ---------------------------------------------------------------------------
-def get_quote(symbol):
-    """Current price and change vs. the previous close -> dict."""
-    fi = yf.Ticker(symbol).fast_info
+def _get_info(ticker):
+    """Full Yahoo profile -> dict, or {} when Yahoo blocks .info (fast_info still works)."""
+    try:
+        return ticker.info
+    except Exception:
+        return {}
+
+
+def _lot_to_shares(size):
+    """Yahoo reports bid/ask sizes in round lots of 100 shares, as its website shows them."""
+    return None if size is None else size * 100
+
+
+def get_quote(symbol, info=None):
+    """Current price and change vs. the previous close -> dict.
+
+    Pass `info` (a Ticker's .info) to reuse it instead of downloading it again.
+    """
+    t = yf.Ticker(symbol)
+    fi = t.fast_info
+    info = _get_info(t) if info is None else info
     price, prev = fi["last_price"], fi["previous_close"]
     if price is None or prev is None:
         raise ValueError(f"No quote found for '{symbol}'. Try search_symbol('company name').")
@@ -79,16 +123,21 @@ def get_quote(symbol):
         "prev_close": prev,
         "volume": fi["last_volume"],
         "currency": fi["currency"],
+        "bid": info.get("bid") or None,          # 0 means no bid, e.g. outside market hours
+        "bid_size": _lot_to_shares(info.get("bidSize")),
+        "ask": info.get("ask") or None,
+        "ask_size": _lot_to_shares(info.get("askSize")),
+        "avg_volume": info.get("averageVolume") or fi["three_month_average_volume"],
     }
 
 
-def get_company_info(symbol):
-    """Company profile and key stats -> dict. Missing values are None."""
+def get_company_info(symbol, info=None):
+    """Company profile and key stats -> dict. Missing values are None.
+
+    Pass `info` (a Ticker's .info) to reuse it instead of downloading it again.
+    """
     t = yf.Ticker(symbol)
-    try:
-        info = t.info
-    except Exception:
-        info = {}  # Yahoo sometimes blocks .info; fast_info covers the basics below
+    info = _get_info(t) if info is None else info  # fast_info covers the basics if it's {}
     fi = t.fast_info
     return {
         "symbol": symbol.upper(),
@@ -140,6 +189,11 @@ def init_db(db_path=DB_PATH):
     """Create the database file and tables if they don't exist -> connection."""
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
+    for table, columns in ADDED_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, type_ in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {type_}")
     conn.commit()
     return conn
 
@@ -171,12 +225,14 @@ def save_quote(conn, q):
     """Add a new price snapshot (quotes accumulate with every run)."""
     conn.execute(
         """INSERT INTO quotes (symbol, fetched_at, price, change, change_pct, open,
-                               day_high, day_low, prev_close, volume)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                               day_high, day_low, prev_close, volume,
+                               bid, bid_size, ask, ask_size, avg_volume)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (q["symbol"], datetime.now().isoformat(timespec="seconds"),
          _num(q["price"]), _num(q["change"]), _num(q["change_pct"]), _num(q["open"]),
          _num(q["day_high"]), _num(q["day_low"]), _num(q["prev_close"]),
-         _num(q["volume"], int)))
+         _num(q["volume"], int), _num(q.get("bid")), _num(q.get("bid_size"), int),
+         _num(q.get("ask")), _num(q.get("ask_size"), int), _num(q.get("avg_volume"), int)))
 
 
 def save_prices(conn, symbol, df):
@@ -191,6 +247,27 @@ def save_prices(conn, symbol, df):
     return len(rows)
 
 
+def save_intraday(conn, symbol, df):
+    """Replace a company's intraday bars with `df` (a tz-aware index, as yfinance returns)."""
+    symbol = symbol.upper()
+    rows = [(symbol, r.Index.isoformat(), r.Index.strftime("%Y-%m-%d"), _num(r.Open),
+             _num(r.High), _num(r.Low), _num(r.Close), _num(r.Volume, int))
+            for r in df.itertuples()]
+    conn.execute("DELETE FROM intraday WHERE symbol = ?", (symbol,))
+    conn.executemany(
+        "INSERT INTO intraday (symbol, ts, date, open, high, low, close, volume) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    return len(rows)
+
+
+def _get_intraday(symbol):
+    """Recent intraday bars, or None if Yahoo has none (the old bars are then kept)."""
+    try:
+        return get_history(symbol, period=INTRADAY_PERIOD, interval=INTRADAY_INTERVAL)
+    except ValueError:
+        return None
+
+
 def _refresh_company(conn, symbol, period, replace_prices=False):
     """Download one company and store it -> (info, rows saved).
 
@@ -199,15 +276,19 @@ def _refresh_company(conn, symbol, period, replace_prices=False):
     This is the single place where a company is fetched and saved; both
     build_database and update_database use it.
     """
-    info = get_company_info(symbol)
-    quote = get_quote(symbol)
+    raw_info = _get_info(yf.Ticker(symbol))   # downloaded once, used by both
+    info = get_company_info(symbol, raw_info)
+    quote = get_quote(symbol, raw_info)
     history = get_history(symbol, period=period, interval="1d")
+    intraday = _get_intraday(symbol)
     try:
         if replace_prices:
             conn.execute("DELETE FROM prices WHERE symbol = ?", (symbol,))
         save_company(conn, info)          # company row first
         save_quote(conn, quote)
         n = save_prices(conn, symbol, history)
+        if intraday is not None:
+            save_intraday(conn, symbol, intraday)
         conn.commit()
     except Exception:
         conn.rollback()

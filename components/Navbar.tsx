@@ -12,6 +12,10 @@ export default async function Navbar() {
       </Link>
 
       <div className="flex items-center gap-6">
+        <Link href="/company" className="hover:text-blue-600">
+          Company lookup
+        </Link>
+
         <Link href="/companies" className="hover:text-blue-600">
           Companies
         </Link>

@@ -24,3 +24,171 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Price chart: the axes and caption fade in when the range changes (components/PriceChart.tsx). */
+@keyframes chart-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.chart-fade {
+  animation: chart-fade 900ms ease-out;
+}
+
+/* Price chart hover: the crosshair and tooltips fade in, glide with the pointer and
+   fade out; the previous-close line darkens while it is hovered. */
+@keyframes chart-tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+}
+
+.chart-hover {
+  transition: opacity 150ms ease-out;
+  animation: chart-fade 150ms ease-out;
+}
+
+.chart-follow {
+  transition:
+    transform 160ms ease-out,
+    opacity 160ms ease-out,
+    fill 160ms ease-out;
+}
+
+/* One tooltip for the price and previous-close lines: it travels between them,
+   resizing to its new text while the old text fades out and the new one fades in. */
+.chart-tip {
+  transition:
+    left 160ms ease-out,
+    top 220ms ease-out,
+    width 220ms ease-out,
+    opacity 150ms ease-out;
+  animation: chart-tip-in 200ms ease-out;
+}
+
+/* .chart-tip-text: its fade timings are set inline (components/PriceChart.tsx). */
+
+.chart-baseline {
+  transition:
+    stroke 200ms ease-out,
+    stroke-width 200ms ease-out;
+}
+
+/* Company page entrances: the symbol dropdown drops open, shows a "Searching…" stage,
+   then its options arrive one at a time; options that stop matching fade and fold away.
+   A chosen company rises in, its price line drawing itself left to right. */
+@keyframes picker-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.95);
+  }
+}
+
+.picker-menu {
+  transform-origin: top;
+  animation: picker-menu-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition:
+    opacity 300ms ease-in,
+    transform 300ms ease-in;
+}
+
+.picker-menu-closing {
+  opacity: 0;
+  transform: translateY(-6px) scaleY(0.97);
+}
+
+/* Folds an element's height open or shut (grid rows 1fr <-> 0fr) while fading it.
+   The child must be a single wrapper, which is clipped as it folds. */
+.picker-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 300ms ease,
+    opacity 300ms ease;
+}
+
+.picker-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.picker-collapse[data-closed] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+@keyframes picker-option-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+/* "backwards" only: the delay holds each option hidden until its turn, then the
+   option's own styles take over, so the fade-out transition above still works. */
+.picker-option {
+  animation: picker-option-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.rise-in {
+  animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes chart-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+.chart-draw {
+  animation: chart-draw 1100ms cubic-bezier(0.4, 0, 0.2, 1) 150ms both;
+}
+
+@keyframes chart-area-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.chart-area-in {
+  animation: chart-area-in 700ms ease-out 600ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-menu,
+  .picker-collapse,
+  .picker-option,
+  .rise-in,
+  .chart-draw,
+  .chart-area-in {
+    animation: none;
+    transition: none;
+  }
+
+  .chart-fade,
+  .chart-hover,
+  .chart-follow,
+  .chart-tip,
+  .chart-baseline {
+    animation: none;
+    transition: none;
+  }
+
+  .chart-tip-text {
+    transition: none !important; /* overrides the inline fade timings */
+  }
+}
