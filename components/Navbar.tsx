@@ -6,18 +6,19 @@ export default async function Navbar() {
   const user = await getCurrentUser();
 
   return (
-    <nav className="flex justify-between p-6 text-slate-600">
+    // Named, so page transitions leave it in place while the content changes.
+    <nav className="flex justify-between p-6 text-slate-600" style={{ viewTransitionName: "site-header" }}>
       <Link href="/" className="font-bold text-xl">
         CanETF
       </Link>
 
       <div className="flex items-center gap-6">
-        <Link href="/company" className="hover:text-blue-600">
-          Company lookup
+        <Link href="/search" className="hover:text-blue-600">
+          Search
         </Link>
 
-        <Link href="/companies" className="hover:text-blue-600">
-          Companies
+        <Link href="/watchlist" className="hover:text-blue-600">
+          Watch List
         </Link>
 
         {user ? (

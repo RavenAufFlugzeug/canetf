@@ -1,10 +1,11 @@
 import CompanyPicker from "@/components/CompanyPicker";
+import EtfBreakdown from "@/components/EtfBreakdown";
 import KeyStats from "@/components/KeyStats";
 import Navbar from "@/components/Navbar";
 import PriceChart from "@/components/PriceChart";
-import { getCompany, getKeyStats, getPriceHistory } from "@/lib/db";
+import { getCompany, getEtfBreakdown, getKeyStats, getPriceHistory } from "@/lib/db";
 
-export default async function CompanyPage({
+export default async function SearchPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -14,6 +15,7 @@ export default async function CompanyPage({
   const company = typeof symbol === "string" && symbol ? await getCompany(symbol) : null;
   const history = company ? await getPriceHistory(company.symbol) : null;
   const stats = company ? await getKeyStats(company.symbol) : null;
+  const breakdown = company ? await getEtfBreakdown(company.symbol) : null;
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -21,8 +23,12 @@ export default async function CompanyPage({
 
       <section className="mx-auto max-w-2xl px-6 pb-12">
         <div className="rounded-2xl bg-white p-8 shadow">
-          <h1 className="text-2xl font-bold text-slate-900">Company</h1>
-          <CompanyPicker key={`picker-${company?.symbol}`} selected={company?.symbol ?? null} />
+          <h1 className="text-2xl font-bold text-slate-900">Search</h1>
+          <CompanyPicker
+            key={`picker-${company?.symbol}`}
+            selected={company?.symbol ?? null}
+            hideLabel
+          />
 
           {company && history ? (
             // Keyed by symbol, so each newly chosen company plays its entrance.
@@ -34,7 +40,12 @@ export default async function CompanyPage({
               <div className="rise-in" style={{ animationDelay: "80ms" }}>
                 <PriceChart history={history} currency={company.currency} />
               </div>
-              {stats && <KeyStats stats={stats} />}
+              {stats && <KeyStats stats={stats} currency={company.currency} />}
+              {breakdown && (
+                <div className="rise-in" style={{ animationDelay: "400ms" }}>
+                  <EtfBreakdown breakdown={breakdown} />
+                </div>
+              )}
             </div>
           ) : (
             <p className="rise-in mt-4 text-slate-600">

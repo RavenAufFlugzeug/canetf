@@ -53,3 +53,6 @@ __pycache__/
 # secrets (keep keys in .env.local)
 docs/API.txt
 docs/Token.txt
+
+# data pipeline log (search/update.py, scheduled run)
+search/update.log

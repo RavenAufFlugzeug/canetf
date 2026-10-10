@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PriceHistory, PricePoint } from "@/lib/db";
+import { moneyFormatter } from "@/lib/money";
 
 // The standard ranges finance sites offer, up to one year.
 const RANGES = ["1D", "5D", "1M", "6M", "YTD", "1Y"] as const;
@@ -334,10 +335,7 @@ export default function PriceChart({
     return () => observer.disconnect();
   }, []);
 
-  const money = useMemo(
-    () => new Intl.NumberFormat("en-CA", { style: "currency", currency: currency ?? "CAD" }),
-    [currency],
-  );
+  const money = useMemo(() => moneyFormatter(currency), [currency]);
   const series = useMemo(() => buildSeries(range, history), [range, history]);
 
   // The line's shape in pixels, resampled so it can morph into the next range's.

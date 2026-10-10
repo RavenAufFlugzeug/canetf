@@ -2,7 +2,7 @@
 ## Product Specification
 
 Version:
-0.1
+0.2
 
 Status:
 Development
@@ -309,9 +309,14 @@ Components:
 # Technical Architecture
 
 
+Full technical documentation (setup, running, databases, things to be aware of):
+docs/TECHNICAL.md
+
+
 Infrastructure:
 
 - Linux Mint 22.3
+- Windows 11 (second development machine: Node.js 24.18.0, Python 3.14)
 - Git 2.43.0
 - Tools installed directly on the host (no containers)
 
@@ -359,6 +364,18 @@ Database:
 - Read by Next.js server code through Node's built-in node:sqlite (lib/db.ts, SQLite 3.53.4)
 - Python side uses the standard sqlite3 module (SQLite 3.45.1)
 - Location shared through the CANETF_DB_PATH environment variable
+- Tables: companies, quotes, prices (daily), intraday (5-minute bars),
+  etf_breakdown (ETF composition), holding_symbols
+- About 426 companies and ETFs: 120 Canadian ETFs (search/etfs.py), the companies
+  they hold (search/holding_companies.py) and the funds held by funds
+- Updated every hour by a scheduled task (Windows Task Scheduler, or cron on Linux)
+
+
+Accounts database:
+
+- SQLite (data/app.db), created by the website on first use (lib/appDb.ts)
+- Tables: users, sessions, profiles, watchlist
+- Location: CANETF_APP_DB_PATH environment variable (default data/app.db)
 
 
 Planned:
@@ -379,8 +396,11 @@ One-time system package (needed to create virtual environments):
 
 Website:
 
-    npm install
+    npm ci
     npm run dev
+
+npm ci installs exactly what package-lock.json lists; an out-of-date node_modules
+has broken the build before.
 
 
 Create the Python virtual environment (first time, from the project root):
@@ -406,6 +426,26 @@ Run without entering it:
     .venv/bin/python search/update.py
 
 
+On Windows (PowerShell):
+
+    py -m venv .venv
+    .venv\Scripts\pip install -r search\requirements.txt
+    .venv\Scripts\python search\update.py
+
+
+Build the database (first time):
+
+- Run the cells of search/Database.ipynb in order (stocks, the 120 ETFs, the
+  companies they hold), or see docs/TECHNICAL.md section 3.3
+
+
+Keep it updated:
+
+- Run search/update.py every hour: the "CanETF hourly update" task in Windows
+  Task Scheduler, or a cron line on Linux (docs/TECHNICAL.md section 5)
+- Output goes to search/update.log
+
+
 Notebooks in VS Code:
 
 - Open a .ipynb file in search/
@@ -428,21 +468,29 @@ Then add it to search/requirements.txt.
 
 Completed:
 
-- Development environment
+- Development environment (Linux Mint and Windows)
 - Next.js application
 - Landing page
 - Navbar
-- Onboarding prototype
-- Company data pipeline (yfinance → SQLite)
-- Companies page reading from the database
+- Onboarding questionnaire, saved to the user's account
+- User accounts: sign up, log in, log out, change password, account page
+- Company data pipeline (yfinance → SQLite), updated every hour
+- ETF data: 120 Canadian ETFs with their composition (top holdings, or credit
+  ratings for bond funds); the companies and funds they hold are added automatically
+- Search page: look up any company or ETF by symbol; price chart (1D, 5D, 1M, 6M,
+  YTD, 1Y), key stats, ETF composition pie chart
+- Watch List: each user's list of companies and ETFs (add/remove)
+- Animations and page transitions throughout (off for reduced motion)
+- Technical documentation (docs/TECHNICAL.md)
 
 
 In progress:
 
-- Complete questionnaire system
+- Investor profile → ETF recommendation (Module 2)
 
 Next:
 
-- User accounts
-- ETF data in the pipeline
 - Recommendation engine
+- Monthly contribution engine (Module 3)
+- Portfolio tracking and drift detection (Module 4)
+- Dashboard

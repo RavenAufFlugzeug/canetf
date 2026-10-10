@@ -111,7 +111,9 @@ body {
 
 .picker-collapse > * {
   min-height: 0;
-  overflow: hidden;
+  /* clip, not hidden: hidden would also let the content's width shrink to nothing
+     (a table column could squeeze its cell narrower than the content). */
+  overflow: clip;
 }
 
 .picker-collapse[data-closed] {
@@ -130,6 +132,56 @@ body {
    option's own styles take over, so the fade-out transition above still works. */
 .picker-option {
   animation: picker-option-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* Watch list: a newly added row unfolds into the table and fades in, with a soft
+   highlight that drains away; removed rows fold shut via .picker-collapse. */
+@keyframes row-unfold {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+@keyframes row-highlight {
+  from {
+    background-color: #dbeafe; /* blue-100 */
+  }
+}
+
+.row-added {
+  animation: row-highlight 2s ease-out 300ms backwards;
+}
+
+.row-added .picker-collapse {
+  animation: row-unfold 400ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Rows already on the list rise in when the page opens. The motion goes on the cells'
+   content, not the <tr>: a transform on a table row changes how the table sizes its
+   columns, so text would re-wrap when the animation ends. */
+.row-rise .picker-collapse > * {
+  animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* ETF breakdown pie (components/EtfBreakdown.tsx): it turns into place as it appears,
+   and a hovered slice eases out of the pie while the others fade back. */
+@keyframes pie-in {
+  from {
+    opacity: 0;
+    transform: rotate(-40deg) scale(0.9);
+  }
+}
+
+.pie-in {
+  transform-origin: center;
+  animation: pie-in 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 450ms both;
+}
+
+.pie-slice {
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out;
 }
 
 @keyframes rise-in {
@@ -168,10 +220,59 @@ body {
   animation: chart-area-in 700ms ease-out 600ms both;
 }
 
+/* Page transitions (app/template.tsx): the old page fades out quickly, then the new
+   one fades in while rising slightly. The navbar stays put throughout. */
+::view-transition-old(.page-exit) {
+  animation: 180ms ease-in both page-out;
+}
+
+::view-transition-new(.page-enter) {
+  animation: 380ms cubic-bezier(0.2, 0.7, 0.2, 1) 120ms both page-in;
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(site-header) {
+  display: none;
+}
+
+::view-transition-new(site-header) {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
   .picker-menu,
   .picker-collapse,
   .picker-option,
+  .row-added,
+  .row-added .picker-collapse,
+  .row-rise .picker-collapse > *,
+  .pie-in,
+  .pie-slice,
   .rise-in,
   .chart-draw,
   .chart-area-in {

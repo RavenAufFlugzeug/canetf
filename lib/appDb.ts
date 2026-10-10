@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS profiles (              -- latest onboarding answers 
     answers    TEXT NOT NULL,                        -- JSON
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS watchlist (             -- companies and ETFs each user follows
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol   TEXT NOT NULL,                          -- a companies.symbol in stocks.db
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, symbol)
+);
 `;
 
 let db: DatabaseSync | undefined;

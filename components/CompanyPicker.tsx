@@ -34,8 +34,27 @@ function merge(rows: Row[], results: CompanyMatch[]): Row[] {
 
 const leaveAll = (rows: Row[]) => rows.map((r) => ({ ...r, leftAt: r.leftAt ?? Date.now() }));
 
-// Picks the company on display by writing ?symbol= to the URL; the page reads it back.
-export default function CompanyPicker({ selected }: { selected: string | null }) {
+type Props = {
+  selected?: string | null;
+  // Instead of showing the chosen company (?symbol= in the URL), hand its symbol to
+  // this, e.g. a server action; the box is then cleared for the next search.
+  onChoose?: (symbol: string) => Promise<void>;
+  added?: string[]; // symbols already chosen: marked "Added" and not choosable
+  label?: string;
+  hideLabel?: boolean; // keep the label for screen readers only
+  placeholder?: string;
+};
+
+// Searches companies and ETFs by symbol. By default the chosen one goes into the URL
+// as ?symbol=, which the page reads back; with onChoose it is handed over instead.
+export default function CompanyPicker({
+  selected = null,
+  onChoose,
+  added = [],
+  label = "Enter a symbol",
+  hideLabel = false,
+  placeholder = "e.g. AAPL",
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const listId = useId();
@@ -101,11 +120,13 @@ export default function CompanyPicker({ selected }: { selected: string | null })
   const live = rows.filter((r) => r.leftAt === null).map((r) => r.match);
 
   function choose(match: CompanyMatch) {
-    setQuery(match.symbol);
+    if (added.includes(match.symbol)) return;
+    setQuery(onChoose ? "" : match.symbol);
     setOpen(false);
     dismiss();
-    startNavigation(() => {
-      router.replace(`${pathname}?symbol=${encodeURIComponent(match.symbol)}`, { scroll: false });
+    startNavigation(async () => {
+      if (onChoose) await onChoose(match.symbol);
+      else router.replace(`${pathname}?symbol=${encodeURIComponent(match.symbol)}`, { scroll: false });
     });
   }
 
@@ -133,8 +154,11 @@ export default function CompanyPicker({ selected }: { selected: string | null })
 
   return (
     <div className="relative mt-4">
-      <label htmlFor={`${listId}-input`} className="block text-sm font-medium text-slate-700">
-        Company symbol
+      <label
+        htmlFor={`${listId}-input`}
+        className={hideLabel ? "sr-only" : "block text-sm font-medium text-slate-700"}
+      >
+        {label}
       </label>
       <div className="relative mt-1">
         <input
@@ -143,7 +167,7 @@ export default function CompanyPicker({ selected }: { selected: string | null })
           role="combobox"
           autoComplete="off"
           spellCheck={false}
-          placeholder="e.g. AAPL"
+          placeholder={placeholder}
           value={query}
           aria-expanded={showList}
           aria-controls={listId}
@@ -166,7 +190,7 @@ export default function CompanyPicker({ selected }: { selected: string | null })
             dismiss();
           }}
           onKeyDown={onKeyDown}
-          className="w-full rounded-lg border p-3 uppercase text-slate-700"
+          className="w-full rounded-lg border p-3 uppercase text-slate-700 placeholder:normal-case"
         />
         {navigating && (
           <span
@@ -197,12 +221,14 @@ export default function CompanyPicker({ selected }: { selected: string | null })
             {rows.map((row) => {
               const leaving = row.leftAt !== null;
               const i = leaving ? -1 : ++liveIndex;
+              const isAdded = added.includes(row.match.symbol);
               return (
                 <li
                   key={row.match.symbol}
                   id={leaving ? undefined : `${listId}-${i}`}
                   role="option"
                   aria-selected={!leaving && i === active}
+                  aria-disabled={isAdded || undefined}
                   aria-hidden={leaving || undefined}
                   className="picker-collapse picker-option"
                   data-closed={leaving ? "" : undefined}
@@ -216,12 +242,19 @@ export default function CompanyPicker({ selected }: { selected: string | null })
                 >
                   <div>
                     <div
-                      className={`flex cursor-pointer justify-between gap-4 px-4 py-2 transition-colors ${
-                        !leaving && i === active ? "bg-blue-50" : ""
-                      }`}
+                      className={`flex justify-between gap-4 px-4 py-2 transition-colors ${
+                        isAdded ? "cursor-default" : "cursor-pointer"
+                      } ${!leaving && i === active ? (isAdded ? "bg-slate-50" : "bg-blue-50") : ""}`}
                     >
                       <span className="font-semibold text-slate-900">{row.match.symbol}</span>
-                      <span className="truncate text-slate-500">{row.match.name ?? ""}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="truncate text-slate-500">{row.match.name ?? ""}</span>
+                        {isAdded && (
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            Added
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </div>
                 </li>
@@ -232,7 +265,7 @@ export default function CompanyPicker({ selected }: { selected: string | null })
           <div className="picker-collapse" data-closed={noMatches && !searching ? undefined : ""}>
             <div>
               <p className="px-4 py-2 text-sm text-slate-500">
-                No companies start with &ldquo;{query.trim()}&rdquo;.
+                No companies or ETFs start with &ldquo;{query.trim()}&rdquo;.
               </p>
             </div>
           </div>
