@@ -164,24 +164,43 @@ body {
   animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* ETF breakdown pie (components/EtfBreakdown.tsx): it turns into place as it appears,
-   and a hovered slice eases out of the pie while the others fade back. */
-@keyframes pie-in {
+/* ETF breakdown treemap (components/EtfBreakdown.tsx): tiles fade and grow into place
+   one after another; a hovered tile grows, brightens and lifts with a soft shadow while
+   the others fade back and lose some colour; switching the colour family eases each
+   tile to its new colour. */
+@keyframes tile-in {
   from {
     opacity: 0;
-    transform: rotate(-40deg) scale(0.9);
+    transform: scale(0.85);
   }
 }
 
-.pie-in {
-  transform-origin: center;
-  animation: pie-in 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 450ms both;
+/* "backwards" only: once in place, the tile's own transform takes over for hover. */
+.tile-in {
+  animation: tile-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
-.pie-slice {
+.breakdown-tile {
+  transform-box: fill-box;
+  transform-origin: center;
   transition:
-    transform 200ms ease-out,
-    opacity 200ms ease-out;
+    transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 320ms ease-out,
+    filter 320ms ease-out;
+}
+
+.breakdown-tile[data-state="lit"] {
+  transform: scale(1.04);
+  filter: brightness(1.08) drop-shadow(0 4px 10px rgb(15 23 42 / 0.28));
+}
+
+.breakdown-tile[data-state="dimmed"] {
+  opacity: 0.45;
+  filter: saturate(0.5);
+}
+
+.breakdown-fill {
+  transition: fill 500ms ease;
 }
 
 @keyframes rise-in {
@@ -271,13 +290,18 @@ body {
   .row-added,
   .row-added .picker-collapse,
   .row-rise .picker-collapse > *,
-  .pie-in,
-  .pie-slice,
+  .tile-in,
+  .breakdown-tile,
+  .breakdown-fill,
   .rise-in,
   .chart-draw,
   .chart-area-in {
     animation: none;
     transition: none;
+  }
+
+  .breakdown-tile[data-state="lit"] {
+    transform: none; /* highlight without movement */
   }
 
   .chart-fade,
