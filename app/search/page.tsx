@@ -1,3 +1,4 @@
+import Link from "next/link";
 import CompanyPicker from "@/components/CompanyPicker";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import KeyStats from "@/components/KeyStats";
@@ -44,6 +45,28 @@ export default async function SearchPage({
               {breakdown && (
                 <div className="rise-in" style={{ animationDelay: "400ms" }}>
                   <EtfBreakdown breakdown={breakdown} />
+                  <div className="mt-8 flex justify-center">
+                    <Link
+                      href={`/map?symbol=${encodeURIComponent(company.symbol)}`}
+                      // On hover the button lifts and gains a shadow, and the map icon tilts.
+                      className="group inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-900 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-lg hover:shadow-slate-300/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:translate-y-0 active:shadow-sm motion-safe:hover:-translate-y-0.5"
+                    >
+                      View full holdings of {company.symbol}
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="size-4 shrink-0 text-slate-500 transition duration-300 ease-out group-hover:text-slate-900 motion-safe:group-hover:-rotate-12 motion-safe:group-hover:scale-110"
+                      >
+                        <path d="M9 4 3.5 6.5v13L9 17l6 3 5.5-2.5v-13L15 7 9 4Z" />
+                        <path d="M9 4v13M15 7v13" />
+                      </svg>
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>

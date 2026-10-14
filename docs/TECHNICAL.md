@@ -200,6 +200,7 @@ Each line of `update.log` says what happened to one entry (`✓`, `✗`, `+` add
 app/                      Next.js App Router
   page.tsx                landing page
   search/page.tsx         company/ETF viewer: chart, key stats, ETF composition
+  map/page.tsx            Holdings Map: an ETF's composition, level by level
   watchlist/page.tsx      per-user watch list
   account/                account info, investor profile, change password
   login/ signup/ onboarding/
@@ -210,7 +211,8 @@ components/
   CompanyPicker.tsx       symbol search with animated dropdown
   PriceChart.tsx          SVG price chart (1D … 1Y), hover, range morphing
   KeyStats.tsx            stats table under the chart
-  EtfBreakdown.tsx        ETF pie chart + holdings list
+  EtfBreakdown.tsx        ETF treemap + holdings list
+  HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree)
   WatchlistTable.tsx      watch list table (add/remove animations)
   Navbar.tsx, AuthForm.tsx, ChangePasswordForm.tsx, OnboardingQuiz.tsx
 lib/
@@ -289,6 +291,7 @@ never commit it.
 |---|---|---|
 | `/` | no | landing page |
 | `/search?symbol=XIU.TO` | no | symbol search; chart (1D, 5D, 1M, 6M, YTD, 1Y), key stats, ETF composition |
+| `/map?symbol=XEQT.TO` | no | Holdings Map: the ETF, what it holds, what those hold, down to companies or credit ratings |
 | `/watchlist` | yes | add/remove companies and ETFs |
 | `/account`, `/account/password` | yes | account info, investor profile, change password |
 | `/login`, `/signup`, `/onboarding` | no | auth and questionnaire |

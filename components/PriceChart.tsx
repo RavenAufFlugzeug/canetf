@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PriceHistory, PricePoint } from "@/lib/db";
 import { moneyFormatter } from "@/lib/money";
 
@@ -295,6 +295,63 @@ function watchWidth(onWidth: (width: number) => void) {
 // ---------------------------------------------------------------------------
 // The chart
 // ---------------------------------------------------------------------------
+// The range options. A dark pill sits behind the chosen one and slides to the next when
+// another is picked, whose label gives a small pop; the others darken and rise a touch
+// when pointed at, and every option dips when pressed.
+function RangeTabs({ range, onPick }: { range: Range; onPick: (r: Range) => void }) {
+  const group = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const placed = useRef(false);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const chosen = group.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+      const el = pill.current;
+      if (!chosen || !el) return;
+      // The first time, it is simply put in place rather than sliding in from the corner.
+      if (!placed.current) {
+        el.style.transition = "none";
+        requestAnimationFrame(() => (el.style.transition = ""));
+        placed.current = true;
+      }
+      el.style.transform = `translate(${chosen.offsetLeft}px, ${chosen.offsetTop}px)`;
+      el.style.width = `${chosen.offsetWidth}px`;
+      el.style.height = `${chosen.offsetHeight}px`;
+      el.style.opacity = "1";
+    };
+    place();
+    // The options can wrap onto another line when the page narrows.
+    const watch = new ResizeObserver(place);
+    if (group.current) watch.observe(group.current);
+    return () => watch.disconnect();
+  }, [range]);
+
+  return (
+    <div ref={group} role="group" aria-label="Chart range" className="relative flex flex-wrap gap-1">
+      <span
+        ref={pill}
+        aria-hidden
+        className="range-pill pointer-events-none absolute left-0 top-0 rounded-md bg-slate-900 opacity-0 shadow-md shadow-slate-900/25"
+      />
+      {RANGES.map((r) => (
+        <button
+          key={r}
+          type="button"
+          aria-pressed={r === range}
+          onClick={() => onPick(r)}
+          className={`relative rounded-md px-3 py-1.5 text-sm font-semibold transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-90 ${
+            r === range
+              ? "text-white"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 motion-safe:hover:-translate-y-0.5"
+          }`}
+        >
+          <span className={r === range ? "range-pop inline-block" : "inline-block"}>{r}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PriceChart({
   history,
   currency,
@@ -395,32 +452,21 @@ export default function PriceChart({
   }, [range, view]);
 
   const rangeButtons = (
-    <div role="group" aria-label="Chart range" className="flex flex-wrap gap-1">
-      {RANGES.map((r) => (
-        <button
-          key={r}
-          type="button"
-          aria-pressed={r === range}
-          onClick={() => {
-            // Keep showing the current line and figures until the morph starts,
-            // so the new range's final values never flash for a frame first.
-            const current = frameRef.current ?? view;
-            if (current && r !== range) {
-              frameRef.current = current;
-              setFrame({ range: r, view: current });
-            }
-            setRange(r);
-            setActive(null);
-            setOnBaseline(null);
-          }}
-          className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
-            r === range ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100"
-          }`}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
+    <RangeTabs
+      range={range}
+      onPick={(r) => {
+        // Keep showing the current line and figures until the morph starts,
+        // so the new range's final values never flash for a frame first.
+        const current = frameRef.current ?? view;
+        if (current && r !== range) {
+          frameRef.current = current;
+          setFrame({ range: r, view: current });
+        }
+        setRange(r);
+        setActive(null);
+        setOnBaseline(null);
+      }}
+    />
   );
 
   if (!series) {

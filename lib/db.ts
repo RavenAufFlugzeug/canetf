@@ -213,22 +213,132 @@ export type EtfBreakdown = {
   items: { label: string; symbol: string | null; weight: number }[]; // weight: share of the fund, 0..1
 };
 
+function readBreakdown(db: DatabaseSync, symbol: string): EtfBreakdown | null {
+  const rows = db
+    .prepare("SELECT kind, label, symbol, weight FROM etf_breakdown WHERE etf = ? ORDER BY kind, rank")
+    .all(symbol) as { kind: EtfBreakdown["kind"]; label: string; symbol: string | null; weight: number }[];
+  if (!rows.length) return null;
+  // One kind per ETF; holdings win if both were ever stored.
+  const kind: EtfBreakdown["kind"] = rows.some((r) => r.kind === "holding") ? "holding" : "rating";
+  return {
+    kind,
+    // Largest share first, for credit ratings too (which are stored from AAA down).
+    items: rows
+      .filter((r) => r.kind === kind)
+      .map((r) => ({ label: r.label, symbol: r.symbol, weight: r.weight }))
+      .sort((a, b) => b.weight - a.weight),
+  };
+}
+
 // What an ETF is made of, or null for companies (and ETFs Yahoo has no breakdown for).
 export async function getEtfBreakdown(symbol: string): Promise<EtfBreakdown | null> {
-  const breakdown = await withDb((db) => {
-    if (!hasTable(db, "etf_breakdown")) return null;
-    const rows = db
-      .prepare("SELECT kind, label, symbol, weight FROM etf_breakdown WHERE etf = ? ORDER BY kind, rank")
-      .all(symbol) as { kind: EtfBreakdown["kind"]; label: string; symbol: string | null; weight: number }[];
-    if (!rows.length) return null;
-    // One kind per ETF; holdings win if both were ever stored.
-    const kind: EtfBreakdown["kind"] = rows.some((r) => r.kind === "holding") ? "holding" : "rating";
-    return {
-      kind,
-      items: rows
-        .filter((r) => r.kind === kind)
-        .map((r) => ({ label: r.label, symbol: r.symbol, weight: r.weight })),
-    };
-  });
+  const breakdown = await withDb((db) =>
+    hasTable(db, "etf_breakdown") ? readBreakdown(db, symbol) : null,
+  );
   return breakdown ?? null;
+}
+
+// Symbols of ETFs with a composition, starting with `prefix` (the Holdings Map's search).
+export async function findEtfs(prefix: string, limit = 10): Promise<CompanyMatch[]> {
+  const escaped = prefix.toUpperCase().replace(/[!%_]/g, (ch) => `!${ch}`);
+  const matches = await withDb((db) =>
+    hasTable(db, "etf_breakdown")
+      ? (db
+          .prepare(
+            `SELECT symbol, name FROM companies
+             WHERE symbol LIKE ? ESCAPE '!' AND symbol IN (SELECT etf FROM etf_breakdown)
+             ORDER BY symbol LIMIT ?`,
+          )
+          .all(`${escaped}%`, limit) as CompanyMatch[])
+      : [],
+  );
+  return (matches ?? []).map(({ symbol, name }) => ({ symbol, name }));
+}
+
+// One product on the Holdings Map: the chosen ETF, something it holds, something that
+// holds, and so on.
+export type EtfTreeNode = {
+  id: string; // its place in the tree: "0" is the chosen ETF, "0.2" its third part
+  // fund: has a composition of its own. holding: a company or other single holding, where
+  // a branch ends. rating: a slice of a bond fund by credit rating. other: the part of a
+  // fund its holdings list doesn't itemise.
+  kind: "fund" | "holding" | "rating" | "other";
+  label: string;
+  symbol: string | null;
+  stored: boolean; // in the database, so it has a Search page
+  weight: number; // share of the fund it is in, 0..1 (1 for the chosen ETF)
+  children: EtfTreeNode[];
+};
+
+const MAX_TREE_DEPTH = 8; // funds of funds go 3 deep today; this only stops a runaway
+
+// The chosen ETF's composition, then each part's own composition, down to the companies
+// (or credit ratings) where nothing more is known. Null when the symbol has no composition.
+export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
+  const tree = await withDb((db) => {
+    if (!hasTable(db, "etf_breakdown")) return null;
+    const company = db.prepare("SELECT symbol, name FROM companies WHERE symbol = ?");
+    // Holdings lists don't always spell a ticker the way it is stored (see holding_symbols).
+    const alias = hasTable(db, "holding_symbols")
+      ? db.prepare("SELECT symbol FROM holding_symbols WHERE holding = ?")
+      : null;
+    const find = (ticker: string) => {
+      const direct = company.get(ticker) as { symbol: string; name: string | null } | undefined;
+      if (direct) return direct;
+      const mapped = alias?.get(ticker) as { symbol: string | null } | undefined;
+      return mapped?.symbol
+        ? (company.get(mapped.symbol) as { symbol: string; name: string | null } | undefined)
+        : undefined;
+    };
+
+    // `path` holds the funds above this one, so a fund that (indirectly) holds itself
+    // isn't opened a second time.
+    function build(
+      id: string,
+      ticker: string | null,
+      label: string,
+      weight: number,
+      path: string[],
+    ): EtfTreeNode {
+      const found = ticker ? find(ticker) : undefined;
+      const node: EtfTreeNode = {
+        id,
+        kind: "holding",
+        label: found?.name ?? label,
+        symbol: found?.symbol ?? ticker,
+        stored: Boolean(found),
+        weight,
+        children: [],
+      };
+      if (!found || path.includes(found.symbol) || path.length >= MAX_TREE_DEPTH) return node;
+      const breakdown = readBreakdown(db, found.symbol);
+      if (!breakdown) return node;
+
+      node.kind = "fund";
+      const below = [...path, found.symbol];
+      node.children = breakdown.items.map((it, i) =>
+        breakdown.kind === "rating"
+          ? { id: `${id}.${i}`, kind: "rating", label: it.label, symbol: null, stored: false, weight: it.weight, children: [] }
+          : build(`${id}.${i}`, it.symbol, it.label, it.weight, below),
+      );
+      // Holdings lists give the largest few; the rest of the fund is one unnamed part.
+      const rest = 1 - breakdown.items.reduce((sum, it) => sum + it.weight, 0);
+      if (breakdown.kind === "holding" && rest > 0.001) {
+        node.children.push({
+          id: `${id}.${node.children.length}`,
+          kind: "other",
+          label: "Other holdings",
+          symbol: null,
+          stored: false,
+          weight: rest,
+          children: [],
+        });
+      }
+      return node;
+    }
+
+    const root = build("0", symbol.toUpperCase(), symbol.toUpperCase(), 1, []);
+    return root.kind === "fund" ? root : null;
+  });
+  return tree ?? null;
 }

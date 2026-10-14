@@ -4,7 +4,7 @@ import { useId, useState, useSyncExternalStore } from "react";
 import type { EtfBreakdown as Breakdown } from "@/lib/db";
 
 // The breakdown is drawn as a treemap: one square split into tiles sized by weight.
-// Tiles are ordered (largest holding first, or AAA first), so they share one family of
+// Tiles are ordered (largest share first), so they share one family of
 // colours, from a deep shade for the first to a light one for the last. The steps are
 // interpolated in OKLCH, which keeps them evenly spaced to the eye, and spread over
 // however many tiles there are. Past 7 holdings fold into one pale grey "Other" tile.
@@ -13,16 +13,16 @@ type Oklch = { l: number; c: number; h: number };
 const PALETTES = {
   red: { label: "Red", deep: { l: 0.56, c: 0.21, h: 25 }, light: { l: 0.89, c: 0.09, h: 40 } },
   green: { label: "Green", deep: { l: 0.56, c: 0.16, h: 152 }, light: { l: 0.92, c: 0.13, h: 128 } },
-  purple: { label: "Purple", deep: { l: 0.52, c: 0.22, h: 295 }, light: { l: 0.89, c: 0.09, h: 330 } },
-  blue: { label: "Blue", deep: { l: 0.54, c: 0.19, h: 260 }, light: { l: 0.91, c: 0.1, h: 200 } },
+  teal: { label: "Teal", deep: { l: 0.58, c: 0.12, h: 176 }, light: { l: 0.92, c: 0.09, h: 166 } },
+  blue: { label: "Blue", deep: { l: 0.34, c: 0.18, h: 262 }, light: { l: 0.76, c: 0.11, h: 248 } },
 } satisfies Record<string, { label: string; deep: Oklch; light: Oklch }>;
-type PaletteName = keyof typeof PALETTES;
+export type PaletteName = keyof typeof PALETTES;
 const DEFAULT_PALETTE: PaletteName = "blue";
 
 const oklch = ({ l, c, h }: Oklch, alpha = 1) =>
   `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)} / ${alpha})`;
 // The colour for tile i of n, and the text colour that reads on it.
-const shade = (palette: PaletteName, i: number, n: number) => {
+export const shade = (palette: PaletteName, i: number, n: number) => {
   const { deep, light } = PALETTES[palette];
   const t = n <= 1 ? 0 : i / (n - 1);
   const mix = (a: number, b: number) => a + (b - a) * t;
@@ -66,6 +66,48 @@ function savePalette(palette: PaletteName) {
   }
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
+
+// The family chosen in this browser, for other charts (components/HoldingsMap.tsx).
+// The server always renders the default; the stored choice applies once in the browser.
+export const useChartPalette = () =>
+  useSyncExternalStore(subscribePalette, readPalette, () => DEFAULT_PALETTE);
+
+// The colour family picker, shared with the Holdings Map: flat diamonds in each family's
+// main shade. The chosen one is full size with a soft glow of its own colour; the rest
+// sit back, faded.
+export function PalettePicker({ current, onPick }: { current: PaletteName; onPick: (name: PaletteName) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Chart colours" className="flex items-center gap-3.5 py-1">
+      {(Object.keys(PALETTES) as PaletteName[]).map((name) => {
+        const { label, deep } = PALETTES[name];
+        const selected = name === current;
+        return (
+          <button
+            key={name}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={`${label} colours`}
+            title={label}
+            onClick={() => onPick(name)}
+            // A small square turned 45 degrees.
+            className={`size-3 rotate-45 rounded-[3px] transition duration-300 ease-out focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${
+              selected ? "scale-125 opacity-100" : "scale-90 opacity-40 hover:scale-110 hover:opacity-80"
+            }`}
+            style={{
+              backgroundColor: oklch(deep),
+              boxShadow: selected ? `0 0 0 4px ${oklch(deep, 0.18)}, 0 2px 8px ${oklch(deep, 0.35)}` : "none",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// Picks a colour family for every chart in this browser.
+export { savePalette };
+
 const MAX_SLICES = 7;
 
 const SIZE = 240; // the treemap's width and height
@@ -190,8 +232,7 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
   const [active, setActive] = useState<string | null>(null);
   // The list row under the pointer, which shows its tooltip.
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  // The server always renders the default; the stored choice applies once in the browser.
-  const palette = useSyncExternalStore(subscribePalette, readPalette, () => DEFAULT_PALETTE);
+  const palette = useChartPalette();
   // If storage is blocked, the choice still applies on this page.
   const [picked, setPicked] = useState<PaletteName | null>(null);
   const current = picked ?? palette;
@@ -201,7 +242,7 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
   const heading = breakdown.kind === "holding" ? "Top holdings" : "Credit quality";
   const note =
     breakdown.kind === "rating"
-      ? "The fund's bonds by credit rating, from highest (AAA) to lowest."
+      ? "The fund's bonds by credit rating, largest share first."
       : breakdown.items.length === 1
         ? "The whole fund is in this one holding."
         : `Its ${breakdown.items.length} largest holdings make up ${pct(Math.min(listed, 1))} of the fund.`;
@@ -286,36 +327,13 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
             })}
           </svg>
 
-          {/* Colour family picker: flat diamonds in each family's main shade. The chosen one
-              is full size with a soft glow of its own colour; the rest sit back, faded. */}
-          <div role="radiogroup" aria-label="Chart colours" className="flex items-center gap-3.5 py-1">
-            {(Object.keys(PALETTES) as PaletteName[]).map((name) => {
-              const { label, deep } = PALETTES[name];
-              const selected = name === current;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  aria-label={`${label} colours`}
-                  title={label}
-                  onClick={() => {
-                    setPicked(name);
-                    savePalette(name);
-                  }}
-                  // A small square turned 45 degrees.
-                  className={`size-3 rotate-45 rounded-[3px] transition duration-300 ease-out focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${
-                    selected ? "scale-125 opacity-100" : "scale-90 opacity-40 hover:scale-110 hover:opacity-80"
-                  }`}
-                  style={{
-                    backgroundColor: oklch(deep),
-                    boxShadow: selected ? `0 0 0 4px ${oklch(deep, 0.18)}, 0 2px 8px ${oklch(deep, 0.35)}` : "none",
-                  }}
-                />
-              );
-            })}
-          </div>
+          <PalettePicker
+            current={current}
+            onPick={(name) => {
+              setPicked(name);
+              savePalette(name);
+            }}
+          />
         </div>
 
         <ul className="w-full min-w-0 flex-1 text-sm">
