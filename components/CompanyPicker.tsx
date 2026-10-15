@@ -43,6 +43,7 @@ type Props = {
   label?: string;
   hideLabel?: boolean; // keep the label for screen readers only
   placeholder?: string;
+  etfsOnly?: boolean; // offer only ETFs that have a composition
 };
 
 // Searches companies and ETFs by symbol. By default the chosen one goes into the URL
@@ -54,6 +55,7 @@ export default function CompanyPicker({
   label = "Enter a symbol",
   hideLabel = false,
   placeholder = "e.g. AAPL",
+  etfsOnly = false,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -101,7 +103,7 @@ export default function CompanyPicker({
     const timer = setTimeout(async () => {
       setSearching(true);
       const started = Date.now();
-      const results = await searchCompanies(prefix);
+      const results = await searchCompanies(prefix, etfsOnly);
       const rest = MIN_THINKING_MS - (Date.now() - started);
       if (rest > 0) await new Promise((resolve) => setTimeout(resolve, rest));
       if (id !== request.current) return; // the user has typed something newer
@@ -114,7 +116,7 @@ export default function CompanyPicker({
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [query, open]);
+  }, [query, open, etfsOnly]);
 
   // The options that still match, in order; keyboard navigation moves through these.
   const live = rows.filter((r) => r.leftAt === null).map((r) => r.match);
@@ -265,7 +267,7 @@ export default function CompanyPicker({
           <div className="picker-collapse" data-closed={noMatches && !searching ? undefined : ""}>
             <div>
               <p className="px-4 py-2 text-sm text-slate-500">
-                No companies or ETFs start with &ldquo;{query.trim()}&rdquo;.
+                No {etfsOnly ? "ETFs" : "companies or ETFs"} start with &ldquo;{query.trim()}&rdquo;.
               </p>
             </div>
           </div>
