@@ -72,7 +72,7 @@ function savePalette(palette: PaletteName) {
 export const useChartPalette = () =>
   useSyncExternalStore(subscribePalette, readPalette, () => DEFAULT_PALETTE);
 
-// The colour family picker, shared with the Holdings Map: flat diamonds in each family's
+// The colour family picker for the treemap: flat diamonds in each family's
 // main shade. The chosen one is full size with a soft glow of its own colour; the rest
 // sit back, faded.
 export function PalettePicker({ current, onPick }: { current: PaletteName; onPick: (name: PaletteName) => void }) {
@@ -114,10 +114,52 @@ const SIZE = 240; // the treemap's width and height
 const GAP = 2; // white space between tiles
 
 type Row = { key: string; label: string; symbol: string | null; weight: number; color: string; slice: string };
-// `short` is what fits on a tile: the ticker, the rating, or "Other".
+// `short` is what goes on a tile: the ticker (shortened to fit, see fitName), the rating,
+// or "Other".
 type Slice = { key: string; label: string; short: string; weight: number; color: string; ink: string };
 
 const pct = (w: number) => `${(w * 100).toFixed(1)}%`;
+
+// Tile labels: their sizes, and the space kept clear between a label and its tile's edges.
+const NAME_PX = 11.5;
+const PCT_PX = 11;
+const LABEL_PAD = 6;
+
+// Arial Bold's capital letter widths, in em (the regular weight's are the same or a
+// little narrower, so these serve for both).
+const CAPS: Record<string, number> = {
+  A: 0.722, B: 0.722, C: 0.722, D: 0.722, E: 0.667, F: 0.611, G: 0.778, H: 0.722, I: 0.278,
+  J: 0.556, K: 0.722, L: 0.611, M: 0.833, N: 0.722, O: 0.778, P: 0.667, Q: 0.778, R: 0.722,
+  S: 0.667, T: 0.611, U: 0.722, V: 0.667, W: 0.944, X: 0.667, Y: 0.667, Z: 0.611,
+};
+
+// About how wide `text` is in Arial (the page font) at `px`, rounded up a little so a
+// label never ends up touching its tile's edge.
+function textWidth(text: string, px: number) {
+  let em = 0;
+  for (const ch of text) {
+    if (ch in CAPS) em += CAPS[ch];
+    else if (/[0-9]/.test(ch)) em += 0.556;
+    else if (/[ijlf.,' ]/.test(ch)) em += 0.278;
+    else if (/[rt-]/.test(ch)) em += 0.389;
+    else if (ch === "%") em += 0.889;
+    else if (/[mw]/.test(ch)) em += 0.889;
+    else em += 0.611; // other lowercase letters (bold), and anything else
+  }
+  return em * px * 1.05;
+}
+
+// What of `name` fits in `room` px, or null: the whole of it, or else it shortened a
+// dot-separated part at a time from the end (ASML.AS -> ASML, ABCD.EF.HI -> ABCD.EF), never
+// cut mid-word.
+function fitName(name: string, room: number) {
+  const parts = name.split(".");
+  for (let n = parts.length; n >= 1; n--) {
+    const shown = parts.slice(0, n).join(".");
+    if (textWidth(shown, NAME_PX) <= room) return shown;
+  }
+  return null;
+}
 
 function build({ kind, items }: Breakdown, palette: PaletteName): { slices: Slice[]; rows: Row[] } {
   if (kind === "rating") {
@@ -156,7 +198,7 @@ function build({ kind, items }: Breakdown, palette: PaletteName): { slices: Slic
     .filter((r) => r.slice !== "other")
     .map(({ key, label, symbol, weight, color }, i) => ({
       // On a tile the exchange suffix is dropped (BMO.TO -> BMO); the list shows it in full.
-      key, label, short: symbol ? symbol.split(".")[0] : label, weight, color, ink: shades[i].ink,
+      key, label, short: symbol ?? label, weight, color, ink: shades[i].ink,
     }));
   const other = rows.filter((r) => r.slice === "other").reduce((sum, r) => sum + r.weight, 0);
   if (other > 0.001) {
@@ -272,11 +314,18 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
               const y = t.box.y + GAP / 2;
               const w = Math.max(t.box.w - GAP, 0);
               const h = Math.max(t.box.h - GAP, 0);
-              // Name and percentage when the tile has room, just the percentage when it's
-              // small, nothing when it's tiny (the list and tooltip still have it).
-              const both = w >= 38 && h >= 32;
-              const pctOnly = !both && w >= 30 && h >= 16;
-              const fits = Math.floor((w - 8) / 7); // characters of the name that fit
+              // Name and percentage when the tile has room for both, just the name (maybe
+              // shortened, see fitName) when it's small, nothing when not even that fits (the
+              // list and tooltip still have it all). LABEL_PAD stays clear on every side.
+              const room = w - 2 * LABEL_PAD;
+              const share = pct(t.weight);
+              const name = fitName(t.short, room);
+              // Two lines: baselines 18 and 33px down, then the descent and the padding.
+              const both =
+                name !== null && textWidth(share, PCT_PX) <= room && h >= 33 + 3 + LABEL_PAD;
+              // One line, centred: the text's box is about 1.15em tall, with 4px clear above
+              // and below it.
+              const nameOnly = !both && name !== null && h >= NAME_PX * 1.15 + 2 * 4;
               return (
                 <g
                   key={t.key}
@@ -301,24 +350,24 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
                   <clipPath id={`${clipId}-${t.order}`}>
                     <rect x={x} y={y} width={Math.max(w - 2, 0)} height={h} />
                   </clipPath>
-                  {(both || pctOnly) && (
+                  {(both || nameOnly) && (
                     <text
-                      x={x + 6}
+                      x={x + LABEL_PAD}
                       y={y + (both ? 18 : h / 2)}
                       dy={both ? 0 : "0.35em"}
                       fill={t.ink}
-                      fontSize={11}
+                      fontSize={PCT_PX}
                       pointerEvents="none"
                       clipPath={`url(#${clipId}-${t.order})`}
                     >
+                      <tspan fontWeight={600} fontSize={NAME_PX}>
+                        {name}
+                      </tspan>
                       {both && (
-                        <tspan fontWeight={600} fontSize={11.5}>
-                          {t.short.length > fits ? `${t.short.slice(0, Math.max(fits - 1, 1))}…` : t.short}
+                        <tspan x={x + LABEL_PAD} dy={15} opacity={0.85}>
+                          {share}
                         </tspan>
                       )}
-                      <tspan x={x + 6} dy={both ? 15 : 0} opacity={0.85}>
-                        {pct(t.weight)}
-                      </tspan>
                     </text>
                   )}
                   <title>{`${t.label}: ${pct(t.weight)}`}</title>

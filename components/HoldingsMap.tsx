@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PalettePicker, savePalette, shade, useChartPalette, type PaletteName } from "@/components/EtfBreakdown";
+import { createPortal } from "react-dom";
 import type { EtfTreeNode, MissingReason } from "@/lib/db";
+import { listingOf } from "@/lib/exchanges";
+import { NAICS_GROUPS, naicsOf, type NaicsGroup } from "@/lib/naics";
 
 // The map reads left to right: the chosen ETF, then what it holds, then what those hold,
 // until a branch ends in a company, a credit rating, or the part of a fund its holdings
@@ -17,8 +19,11 @@ const FOLD_MS = 550; // how long opening or folding one fund takes
 const FOLD_ALL_MS = 950; // ...and several at once (Fold all, Open all), level after level
 const LEVEL_GAP = 0.2; // share of that time between one level starting to move and the next
 const SIBLING_GAP = 0.014; // ...and between one holding and the next in the same fund
-const NOTICE_W = 248; // the notice beside a holding we have no data on
-const NOTICE_H = 96; // about its height, to decide whether it fits below the box
+// The hover card under a product (what it is, or why we have no data): its left edge lined
+// up with the box's, a small pointer joining the two.
+const CARD_W = 260;
+const CARD_H = 170; // about its tallest, to decide whether it fits below the box on screen
+const CARD_GAP = 10; // between the box and the card
 
 type Placed = {
   node: EtfTreeNode;
@@ -115,18 +120,61 @@ function missingNotice({ reason, lastTrade }: MissingReason): { title: string; t
   }
 }
 
+// A company's NAICS group (null for funds and anything Yahoo doesn't classify).
+const sectorOf = (node: EtfTreeNode): NaicsGroup | null =>
+  node.kind === "holding" && node.details ? naicsOf(node.details.sector, node.details.industry) : null;
+
+// The colour of the lines and outlines along the route to the product pointed at.
+const ROUTE = "#334155"; // slate-700
+
+// The hover card's rows for a stored company or fund: what it does (a company's sector and
+// industry, a fund's provider and category), its location (head office), its exchange,
+// and how many holdings a fund lists. Rows Yahoo has nothing for are left out.
+function detailRows(node: EtfTreeNode): [string, string][] {
+  const d = node.details;
+  if (!d) return [];
+  const listing = listingOf(d.exchange);
+  const listed = node.children.filter((c) => c.kind === "holding" || c.kind === "fund").length;
+  const naics = sectorOf(node);
+  const rows: [string, string | null][] = [
+    ["NAICS", naics ? `${naics.code} · ${naics.name}` : null],
+    ["Business", [d.sector, d.industry].filter(Boolean).join(" · ") || null],
+    ["Provider", d.fundFamily],
+    ["Category", d.category],
+    ["Location", [d.hqCity, d.hqCountry].filter(Boolean).join(", ") || null],
+    ["Exchange", listing ? `${listing.exchange}, ${listing.country}` : null],
+    ["Holds", node.kind === "fund" && listed ? `${listed} listed ${listed === 1 ? "holding" : "holdings"} shown here` : null],
+  ];
+  return rows.filter((r): r is [string, string] => Boolean(r[1]));
+}
+
 const LEGEND: { kind: EtfTreeNode["kind"]; text: string }[] = [
   { kind: "fund", text: "Fund" },
-  { kind: "holding", text: "Company or single holding" },
   { kind: "rating", text: "Credit rating" },
   { kind: "other", text: "Not itemised" },
 ];
 
-const BOX: Record<Exclude<EtfTreeNode["kind"], "fund">, string> = {
+// Funds and companies are white, credit ratings black. A company's tile carries a small
+// diamond in its NAICS group's colour (see lib/naics.ts), grey when its sector is unknown.
+const BOX: Record<EtfTreeNode["kind"], string> = {
+  fund: "border border-slate-400 bg-white text-slate-900",
   holding: "border border-slate-300 bg-white text-slate-900",
-  rating: "border border-slate-900 bg-slate-800 text-white",
+  rating: "border border-black bg-slate-950 text-white",
   other: "border border-slate-300 bg-slate-200 text-slate-600",
 };
+const UNKNOWN_SECTOR = "#cbd5e1"; // slate-300
+
+// The sector diamond: a small square turned on its corner (.sector-diamond in globals.css,
+// which also rolls it when its tile is pointed at).
+function SectorDiamond({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden
+      className="sector-diamond size-2.5 shrink-0 rounded-[2px] border border-black/15"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
 // A holding we have no data on: dashed and greyed, with an info mark.
 const MISSING_BOX = "border border-dashed border-slate-400 bg-slate-50 text-slate-500";
 
@@ -243,10 +291,8 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
   const [moving, setMoving] = useState(false);
   // The product under the pointer or with focus: its route back to the ETF lights up.
   const [active, setActive] = useState<string | null>(null);
-  const stored = useChartPalette();
-  // If the browser blocks storage, the choice still applies on this page.
-  const [picked, setPicked] = useState<PaletteName | null>(null);
-  const palette = picked ?? stored;
+  // Where the active product's box is on screen, for its hover card (see below).
+  const [cardBox, setCardBox] = useState<DOMRect | null>(null);
 
   const plan = useMemo(
     () => planChange(tree, moving ? fold.from : fold.to, fold.to),
@@ -286,6 +332,21 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
     return () => cancelAnimationFrame(frame);
   }, [moving, fold.ms, plan]);
 
+  // While a product is active, its card follows its box if the page (or the map) scrolls.
+  useEffect(() => {
+    if (active === null) return;
+    const follow = () => {
+      const el = nodeEls.current.get(active);
+      if (el) setCardBox(el.getBoundingClientRect());
+    };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+  }, [active]);
+
   function setCollapsed(next: Set<string>) {
     // With reduced motion the map changes at once.
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -308,9 +369,8 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
   const foldable = all.filter(({ node, depth }) => depth > 0 && node.children.length > 0);
   const levels = Math.max(...all.map((n) => n.depth));
   const ends = all.filter(({ node }) => node.kind === "holding" || node.kind === "rating").length;
-  // Funds get darker shades the nearer they are to the chosen ETF.
-  const fundShade = (depth: number) => shade(palette, depth, levels + 2);
-  const lit = fundShade(0).color;
+  // Whether any company's sector is unknown (the legend then lists that too).
+  const unclassified = all.some(({ node }) => node.kind === "holding" && node.details && !sectorOf(node));
 
   // What React draws: the finished map, or the first frame of a change.
   const shown = plan.moves.map((m) => ({ ...m, at: pose(m, moving ? 0 : 1, plan.span) }));
@@ -318,14 +378,17 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
   // The first time the map appears, its boxes slide in level by level instead.
   const intro = !fold.changed;
 
-  // Nothing lights up while the map is moving.
-  const point = (id: string | null) => {
-    if (!moving) setActive(id);
+  // Nothing lights up while the map is moving. `box` is the product's box, for the card.
+  const point = (id: string | null, box?: HTMLElement) => {
+    if (moving) return;
+    setActive(id);
+    setCardBox(box ? box.getBoundingClientRect() : null);
   };
   const onPath = (id: string) => active !== null && (active === id || active.startsWith(`${id}.`));
   const current = shown.find((s) => s.p.node.id === active)?.p ?? null;
-  const noticeFor = !moving ? (current?.node.missing ?? null) : null;
-  const noticeAt = current ? at.get(current.node.id) : undefined;
+  // The hover card: for a stored company or fund, or a holding we have no data on.
+  const cardFor = !moving && current && (current.node.missing || current.node.details) ? current.node : null;
+
   const allFolded = foldable.every(({ node }) => fold.to.has(node.id));
   const allOpen = fold.to.size === 0;
   const bulkButton =
@@ -362,10 +425,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
       <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
         {LEGEND.map(({ kind, text }) => (
           <span key={kind} className="flex items-center gap-1.5">
-            <span
-              className={`h-3 w-5 rounded-sm ${kind === "fund" ? "" : BOX[kind]}`}
-              style={kind === "fund" ? { backgroundColor: lit } : undefined}
-            />
+            <span className={`h-3 w-5 rounded-sm ${BOX[kind]}`} />
             {text}
           </span>
         ))}
@@ -401,6 +461,34 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
           </span>
         )}
       </div>
+
+      {/* Companies are coloured by NAICS sector group: every group, with its codes. */}
+      {all.some(({ node }) => node.kind === "holding") && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-slate-700">Companies/holdings by NAICS sector</p>
+          {/* Two columns on wider screens, filled top to bottom so the codes read in order. */}
+          <ul className="mt-1.5 grid gap-x-5 gap-y-1 text-xs text-slate-600 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-7">
+            {NAICS_GROUPS.map((g) => (
+              <li key={g.code} className="flex items-center gap-1.5">
+                <span className="flex w-4 shrink-0 justify-center">
+                  <SectorDiamond color={g.color} />
+                </span>
+                <span className="w-9 shrink-0 font-semibold tabular-nums text-slate-700">{g.code}</span>
+                <span className="min-w-0">{g.name}</span>
+              </li>
+            ))}
+            {unclassified && (
+              <li className="flex items-center gap-1.5">
+                <span className="flex w-4 shrink-0 justify-center">
+                  <SectorDiamond color={UNKNOWN_SECTOR} />
+                </span>
+                <span className="w-9 shrink-0" />
+                <span>Sector unknown</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <p className="mt-4 min-h-10 text-sm text-slate-500" aria-live="polite">
         {/* Keyed, so each new product's line fades up into place. */}
@@ -470,7 +558,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                     key={p.node.id}
                     d={linkPath(fund, held)}
                     fill="none"
-                    stroke={lit}
+                    stroke={ROUTE}
                     strokeLinecap="round"
                     strokeWidth={linkWidth(p) + 1.5}
                   />
@@ -481,8 +569,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
 
           {shown.map(({ p, mode, at: here }) => {
             const { node } = p;
-            const fund = node.kind === "fund";
-            const colours = fund ? fundShade(p.depth) : null;
+            const sector = sectorOf(node);
             const on = onPath(node.id);
             const open = !fold.to.has(node.id);
             return (
@@ -492,15 +579,21 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                   if (el) nodeEls.current.set(node.id, el);
                   else nodeEls.current.delete(node.id);
                 }}
-                onPointerEnter={() => point(node.id)}
+                onPointerEnter={(e) => point(node.id, e.currentTarget)}
                 onPointerLeave={() => point(null)}
-                onFocus={() => point(node.id)}
+                onFocus={(e) => point(node.id, e.currentTarget)}
                 onBlur={() => point(null)}
                 // Holdings we have no data on explain why in their own notice instead, and
                 // can be tabbed to so keyboard users can read it.
-                title={node.missing ? undefined : `${node.label}${p.parent ? `: ${pct(node.weight)} of ${nameOf(p.parent.node)}` : ""}`}
+                // Companies, funds and holdings we have no data on explain themselves in a
+                // hover card instead; holdings with no link can be tabbed to for it.
+                title={
+                  node.missing || node.details
+                    ? undefined
+                    : `${node.label}${p.parent ? `: ${pct(node.weight)} of ${nameOf(p.parent.node)}` : ""}`
+                }
                 tabIndex={node.missing ? 0 : undefined}
-                aria-describedby={node.missing && active === node.id ? "map-missing-notice" : undefined}
+                aria-describedby={(node.missing || node.details) && active === node.id ? "map-hover-card" : undefined}
                 // Boxes on their way out can't be pointed at or tabbed to.
                 inert={mode === "leave"}
                 // lit: the one pointed at. path: the funds it sits in. Their lift and
@@ -509,7 +602,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                 data-selected={node.stored && node.symbol === detail ? "" : undefined}
                 className={`map-node absolute left-0 top-0 flex items-center gap-1.5 rounded-md px-2 text-xs ${
                   intro ? "map-node-in" : ""
-                } ${fund ? "" : node.missing ? MISSING_BOX : BOX[node.kind as keyof typeof BOX]}`}
+                } ${node.missing ? MISSING_BOX : BOX[node.kind]}`}
                 style={{
                   // Placed with `translate`, which moves a box without the browser having
                   // to lay the page out again (and leaves `transform` free for the lift).
@@ -519,12 +612,13 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                   // Funds stay above the boxes sliding out of (or back into) them; lit
                   // boxes sit above the white sheet.
                   zIndex: on ? levels + 4 : levels - p.depth + 1,
-                  backgroundColor: colours?.color,
-                  color: colours?.ink,
                   opacity: here.opacity,
                   animationDelay: `${p.depth * 90}ms`,
                 }}
               >
+                {node.kind === "holding" && !node.missing && node.details && (
+                  <SectorDiamond color={sector?.color ?? UNKNOWN_SECTOR} />
+                )}
                 {node.symbol &&
                   (node.stored ? (
                     // Shows this product's chart and figures under the map (the page reads
@@ -571,45 +665,74 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
             );
           })}
 
-          {/* Pointing at (or tabbing to) a holding we have no data on explains why, in a
-              notice under the box, or above it near the bottom of the map. */}
-          {noticeFor && noticeAt && (
-            <div
-              id="map-missing-notice"
-              role="tooltip"
-              className="pointer-events-none absolute left-0 top-0"
-              style={{
-                width: NOTICE_W,
-                translate: `${Math.max(0, Math.min(noticeAt.x, plan.width - NOTICE_W))}px ${
-                  noticeAt.y + NODE_H + 8 + NOTICE_H <= plan.heightTo ? noticeAt.y + NODE_H + 8 : noticeAt.y - 8
-                }px`,
-                transform: noticeAt.y + NODE_H + 8 + NOTICE_H <= plan.heightTo ? undefined : "translateY(-100%)",
-                zIndex: levels + 5,
-              }}
-            >
-              {/* Keyed, so moving to another such holding fades the new notice in. */}
-              <div
-                key={active}
-                className="map-caption rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 shadow-lg shadow-slate-300/50"
-              >
-                <p className="font-semibold text-slate-900">{missingNotice(noticeFor).title}</p>
-                <p className="mt-1">{missingNotice(noticeFor).text}</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* The same colour choice as the Search page's chart, and shared with it. */}
-      <div className="mt-4 flex justify-center">
-        <PalettePicker
-          current={palette}
-          onPick={(name) => {
-            setPicked(name);
-            savePalette(name);
-          }}
-        />
-      </div>
+      {/* Pointing at (or tabbing to) a product shows a card under its box, or above it
+          when there's no room below on screen: a company's or fund's full name and what
+          and where it is, or why we have no data on a holding. It is drawn over the page
+          (a portal, fixed to the screen) so the map's scrolling area can't clip it. */}
+      {cardFor &&
+        cardBox &&
+        (() => {
+          const left = Math.max(8, Math.min(cardBox.left, window.innerWidth - CARD_W - 8));
+          const below = cardBox.bottom + CARD_GAP + CARD_H <= window.innerHeight;
+          return createPortal(
+            <div
+              id="map-hover-card"
+              role="tooltip"
+              className="pointer-events-none fixed z-50"
+              style={{
+                left,
+                top: below ? cardBox.bottom + CARD_GAP : cardBox.top - CARD_GAP,
+                width: CARD_W,
+                transform: below ? undefined : "translateY(-100%)",
+              }}
+            >
+              {/* Keyed, so moving to another product fades the new card in. */}
+              <div
+                key={active}
+                className="map-caption relative rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 shadow-lg shadow-slate-300/50"
+              >
+                {/* The pointer: a small square turned on its corner, half hidden behind the
+                    card, on the side facing the box and near the box's left end. */}
+                <span
+                  aria-hidden
+                  className={`absolute size-2.5 rotate-45 border-slate-200 bg-white ${
+                    below ? "-top-[5.5px] border-l border-t" : "-bottom-[5.5px] border-b border-r"
+                  }`}
+                  style={{ left: cardBox.left - left + 18 }}
+                />
+                {cardFor.missing ? (
+                  <>
+                    <p className="font-semibold text-slate-900">{missingNotice(cardFor.missing).title}</p>
+                    <p className="mt-1">{missingNotice(cardFor.missing).text}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold leading-snug text-slate-900">{cardFor.label}</p>
+                    <p className="text-slate-400">
+                      {cardFor.symbol}
+                      {cardFor.kind === "fund" ? " · Fund" : ""}
+                    </p>
+                    {detailRows(cardFor).length > 0 && (
+                      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-slate-100 pt-2">
+                        {detailRows(cardFor).map(([label, value]) => (
+                          <div key={label} className="contents">
+                            <dt className="text-slate-400">{label}</dt>
+                            <dd className="text-slate-700">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>,
+            document.body,
+          );
+        })()}
+
     </div>
   );
 }

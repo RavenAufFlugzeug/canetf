@@ -6,7 +6,7 @@ import KeyStats from "@/components/KeyStats";
 import MapDetail from "@/components/MapDetail";
 import Navbar from "@/components/Navbar";
 import PriceChart from "@/components/PriceChart";
-import { getCompany, getEtfBreakdown, getEtfTree, getKeyStats, getPriceHistory } from "@/lib/db";
+import { getCompany, getEtfBreakdown, getExchange, getEtfTree, getKeyStats, getPriceHistory } from "@/lib/db";
 
 export default async function MapPage({
   searchParams,
@@ -24,6 +24,7 @@ export default async function MapPage({
   const picked = tree && typeof detail === "string" && detail ? await getCompany(detail) : null;
   const history = picked ? await getPriceHistory(picked.symbol) : null;
   const stats = picked ? await getKeyStats(picked.symbol) : null;
+  const exchange = picked ? await getExchange(picked.symbol) : null;
   const breakdown = picked ? await getEtfBreakdown(picked.symbol) : null;
 
   return (
@@ -70,7 +71,9 @@ export default async function MapPage({
             // Keyed by symbol, so each newly chosen ETF plays its entrance.
             <div key={`map-${etf.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
               <p className="rise-in text-lg font-semibold text-slate-900">
-                {etf.name ?? etf.symbol} <span className="font-normal text-slate-500">{etf.symbol}</span>
+                {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                {etf.name ?? etf.symbol}
+                <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
               </p>
               <div className="rise-in mt-2" style={{ animationDelay: "80ms" }}>
                 <HoldingsMap tree={tree} detail={picked?.symbol ?? null} />
@@ -85,7 +88,7 @@ export default async function MapPage({
                   closeHref={`/map?symbol=${encodeURIComponent(etf.symbol)}`}
                 >
                   <div className="rise-in" style={{ animationDelay: "80ms" }}>
-                    <PriceChart history={history} currency={picked.currency} />
+                    <PriceChart history={history} currency={picked.currency} exchange={exchange} />
                   </div>
                   {stats && <KeyStats stats={stats} currency={picked.currency} />}
                   {breakdown && (

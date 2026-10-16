@@ -52,14 +52,6 @@ const FEATURES = [
   },
 ];
 
-// Decorative ticker chips floating around the hero, each with a tiny made-up trend line.
-const CHIPS = [
-  { symbol: "XEQT", line: "M0 14 L8 11 L16 12 L24 7 L32 8 L40 3", pos: "left-[6%] top-[22%]", delay: "0s" },
-  { symbol: "VFV", line: "M0 12 L8 13 L16 8 L24 9 L32 5 L40 4", pos: "right-[7%] top-[18%]", delay: "1.2s" },
-  { symbol: "ZAG", line: "M0 9 L8 10 L16 8 L24 9 L32 7 L40 8", pos: "left-[10%] bottom-[18%]", delay: "2.1s" },
-  { symbol: "XIC", line: "M0 13 L8 9 L16 11 L24 6 L32 7 L40 2", pos: "right-[11%] bottom-[24%]", delay: "0.6s" },
-];
-
 export default async function Home() {
   const user = await getCurrentUser();
 
@@ -69,20 +61,6 @@ export default async function Home() {
 
       {/* Hero */}
       <section className="relative px-6 pb-24 pt-16 text-center sm:pt-24">
-        {CHIPS.map((chip) => (
-          <div
-            key={chip.symbol}
-            aria-hidden
-            className={`welcome-float absolute hidden items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-lg shadow-slate-300/40 backdrop-blur lg:flex ${chip.pos}`}
-            style={{ animationDelay: chip.delay }}
-          >
-            <span className="text-sm font-bold text-slate-800">{chip.symbol}</span>
-            <svg viewBox="0 0 40 16" className="h-4 w-10" fill="none">
-              <path d={chip.line} stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-        ))}
-
         <div className="relative mx-auto max-w-3xl">
           <h1
             className="rise-in text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl"

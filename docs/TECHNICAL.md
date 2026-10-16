@@ -148,6 +148,7 @@ Useful functions in `search/StockUtils.py` (import with `from StockUtils import 
 | `get_etf_breakdown("XIU.TO")` | an ETF's composition straight from Yahoo |
 | `missing_holdings()` | ETF holdings that aren't in the database, and why (`cash`, `stopped` with its last trading day, `unlisted`, or `new`) |
 | `add_missing_holdings(limit=None)` | add them now instead of 15 per update (`recheck=True` also retries holdings that had no listing) |
+| `fill_company_details()` | look up where each company trades and is based, and a fund's provider and category, for those without them (one-off for older databases; the update also fills them as profiles refresh) |
 | `extend_history()` | download every stored company's full daily price history (one-off, for databases built when less was kept; about 30 minutes) |
 
 To add a company or ETF: `build_database(["TICKER"])`. TSX listings need `.TO`
@@ -213,7 +214,7 @@ components/
   PriceChart.tsx          SVG price chart (1D … 5Y, All), hover, range morphing
   KeyStats.tsx            stats table under the chart
   EtfBreakdown.tsx        ETF treemap + holdings list
-  HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree)
+  HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree), coloured by NAICS
   WatchlistTable.tsx      watch list table (add/remove animations)
   Navbar.tsx, AuthForm.tsx, ChangePasswordForm.tsx, OnboardingQuiz.tsx
 lib/
@@ -239,7 +240,7 @@ next.config.ts            redirects, experimental view transitions
 
 | Table | One row per | Columns |
 |---|---|---|
-| `companies` | company/ETF | `symbol` (PK), `name`, `sector`, `industry`, `currency`, `market_cap`, `pe_trailing`, `pe_forward`, `week52_high`, `week52_low`, `updated_at` (when the profile was last refreshed) |
+| `companies` | company/ETF | `symbol` (PK), `name`, `sector`, `industry`, `currency`, `market_cap`, `pe_trailing`, `pe_forward`, `week52_high`, `week52_low`, `updated_at` (when the profile was last refreshed), `exchange` (Yahoo's code for where it trades, e.g. `TOR`, `NMS`; named in `lib/exchanges.ts`), `hq_city`, `hq_country` (where a company is based), `fund_family`, `category` (a fund's provider and Yahoo category) |
 | `quotes` | company (latest only) | `symbol` (PK), `fetched_at`, `price`, `avg_volume` |
 | `prices` | company per trading day | `symbol`, `date`, `open`, `high`, `low`, `close`, `volume` |
 | `intraday` | 5-minute bar, last 5 trading days | `symbol`, `ts` (exchange-local time with offset), `date`, OHLC, `volume` |
@@ -297,7 +298,7 @@ never commit it.
 |---|---|---|
 | `/` | no | landing page |
 | `/search?symbol=XIU.TO` | no | symbol search; chart (1D, 5D, 1M, 6M, YTD, 1Y, 5Y, All), key stats, ETF composition |
-| `/map?symbol=XEQT.TO` | no | Holdings Map: the ETF, what it holds, what those hold, down to companies or credit ratings; holdings with no data are dashed and explain why on hover |
+| `/map?symbol=XEQT.TO` | no | Holdings Map: the ETF, what it holds, what those hold, down to companies or credit ratings; funds white, credit ratings black, companies coloured by NAICS sector group (`lib/naics.ts`, from Yahoo's industry) with a legend and the code on each box; pointing at a company or fund shows its full name, sector, business or provider, location and exchange; holdings with no data are dashed and explain why |
 | `/watchlist` | yes | add/remove companies and ETFs |
 | `/account`, `/account/password` | yes | account info, investor profile, change password |
 | `/login`, `/signup`, `/onboarding` | no | auth and questionnaire |

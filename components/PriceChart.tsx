@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PriceHistory, PricePoint } from "@/lib/db";
+import { listingOf, type Listing } from "@/lib/exchanges";
 import { moneyFormatter } from "@/lib/money";
 
 // The standard ranges finance sites offer, up to all the daily history there is
@@ -28,9 +29,10 @@ const DOWN = "#dc2626"; // red-600
 const MORPH_MS = 900; // matches .chart-fade in globals.css
 const BASELINE_HIT_PX = 6; // how close the pointer must be to the previous-close line
 const TIP_PAD = 26; // the tooltip's horizontal padding (px-3) and border, around its text
-// Enough for about one per pixel across the widest chart. (All can hold decades of daily
-// closes; the line drawn needs no more points than the chart has pixels.)
-const SAMPLES = 1300;
+// Points in every range's resampled line (see resample): two per column, and the columns
+// must be no wider than a pixel on the widest chart (about 1,100px), or the morph's last
+// frame would differ visibly from the exact line drawn after it.
+const SAMPLES = 2400;
 
 type Point = PricePoint & { x: number }; // x: time (1D) or index (other ranges)
 
@@ -252,23 +254,61 @@ function layout(series: Series, width: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Morphing between ranges. Every range's line is resampled to the same number
-// of evenly spaced pixel positions, so any two can be blended point by point.
+// Morphing between ranges. Every range's line is resampled to the same number of
+// points, so any two can be blended point by point.
 // ---------------------------------------------------------------------------
 type Shape = { xs: number[]; ys: number[] };
 
+// The line through pixel positions (px, py), as SAMPLES points that look the same as it.
+// The line's span is cut into SAMPLES / 2 columns of under a pixel each, and each column
+// gives two points: its lowest and highest point of the line, in the order they come.
+// A column holding no point of the line takes the line where it crosses the column's
+// edges. Picking evenly spaced points instead would skip the spikes between them when a
+// range has more prices than the chart has pixels (5Y, All), and the line would jump when
+// the exact one replaced the morph's last frame.
 function resample(px: number[], py: number[]): Shape {
+  const n = px.length;
+  if (n < 2) return { xs: Array(SAMPLES).fill(px[0] ?? 0), ys: Array(SAMPLES).fill(py[0] ?? 0) };
+
+  const x0 = px[0];
+  const span = px[n - 1] - x0 || 1;
+  const columns = SAMPLES / 2;
+  let seg = 0;
+  // The line's height at x (x within the line's span), scanning forward from `seg`.
+  const at = (x: number) => {
+    while (seg < n - 2 && px[seg + 1] < x) seg++;
+    const w = px[seg + 1] - px[seg];
+    const f = w > 0 ? Math.min(Math.max((x - px[seg]) / w, 0), 1) : 0;
+    return py[seg] + (py[seg + 1] - py[seg]) * f;
+  };
+
   const xs: number[] = [];
   const ys: number[] = [];
-  let seg = 0;
-  for (let i = 0; i < SAMPLES; i++) {
-    const x = px[0] + ((px[px.length - 1] - px[0]) * i) / (SAMPLES - 1);
-    while (seg < px.length - 2 && px[seg + 1] < x) seg++;
-    const span = px[seg + 1] - px[seg];
-    const f = px.length < 2 || span <= 0 ? 0 : Math.min(Math.max((x - px[seg]) / span, 0), 1);
-    xs.push(x);
-    ys.push(px.length < 2 ? py[0] : py[seg] + (py[seg + 1] - py[seg]) * f);
+  let j = 0; // the first point not yet placed in a column
+  for (let c = 0; c < columns; c++) {
+    const a = x0 + (span * c) / columns;
+    const b = x0 + (span * (c + 1)) / columns;
+    const last = c === columns - 1;
+    let lo = -1;
+    let hi = -1;
+    for (; j < n && (px[j] < b || last); j++) {
+      if (lo < 0 || py[j] > py[lo]) lo = j; // pixel y grows downwards: lowest price
+      if (hi < 0 || py[j] < py[hi]) hi = j;
+    }
+    if (lo < 0) {
+      xs.push(a, b);
+      ys.push(at(a), at(b));
+    } else {
+      const [first, second] = lo <= hi ? [lo, hi] : [hi, lo];
+      xs.push(px[first], px[second]);
+      ys.push(py[first], py[second]);
+    }
   }
+  // The ends sit exactly where the line's do, so the shading under it lines up too.
+  xs[0] = px[0];
+  ys[0] = py[0];
+  xs[SAMPLES - 1] = px[n - 1];
+  ys[SAMPLES - 1] = py[n - 1];
   return { xs, ys };
 }
 
@@ -365,12 +405,195 @@ function RangeTabs({ range, onPick }: { range: Range; onPick: (r: Range) => void
   );
 }
 
+// The current minute, as a number that changes once a minute; null on the server, so the
+// clock below is only drawn in the browser (the two would disagree about the time).
+function subscribeToClock(onTick: () => void) {
+  const timer = setInterval(onTick, 1000);
+  return () => clearInterval(timer);
+}
+const currentMinute = () => Math.floor(Date.now() / 60_000);
+
+// How far `timeZone` is ahead of UTC at `date`, in minutes.
+function utcOffset(timeZone: string, date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+  }).formatToParts(date);
+  const n = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"));
+  return Math.round((wall - date.getTime()) / 60_000);
+}
+
+// "3 hours ahead of you", "5½ hours behind you", "Same time as you".
+function timeGap(minutes: number) {
+  if (minutes === 0) return "Same time as you";
+  const hours = Math.abs(minutes) / 60;
+  const whole = Math.floor(hours);
+  const text = hours === whole ? String(whole) : hours - whole === 0.5 ? `${whole || ""}½` : hours.toFixed(2);
+  return `${text} ${hours === 1 ? "hour" : "hours"} ${minutes > 0 ? "ahead of" : "behind"} you`;
+}
+
+// One item of the strip under the chart: an icon and a value that lift into a white chip
+// when pointed at (or tabbed to), with a card of details rising above it.
+function ListingChip({
+  label,
+  icon,
+  children,
+  details,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  details: React.ReactNode;
+}) {
+  return (
+    <span
+      tabIndex={0}
+      aria-label={label}
+      className="group relative flex items-center gap-1.5 rounded-md px-2 py-1 outline-none transition duration-200 ease-out hover:bg-white hover:shadow-sm hover:shadow-slate-300/60 focus-visible:bg-white focus-visible:shadow-sm focus-visible:ring-2 focus-visible:ring-slate-300 motion-safe:hover:-translate-y-px"
+    >
+      {icon}
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 w-max max-w-64 translate-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg shadow-slate-300/50 transition duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+      >
+        {details}
+      </span>
+    </span>
+  );
+}
+
+// Where it trades, as a strip under the chart: the exchange, its country and the time
+// there now, each a chip with a small icon that responds when pointed at (the building
+// darkens, the pin hops, the clock's hand sweeps round) and a card of details. Under the
+// strip, a note that the chart's times are local too.
+function ListingStrip({ listing, code, currency }: { listing: Listing; code: string; currency: string | null }) {
+  const minute = useSyncExternalStore(subscribeToClock, currentMinute, () => null);
+  const icon = "size-3.5 shrink-0 text-slate-400 transition-colors duration-200 group-hover:text-slate-700 group-focus-visible:text-slate-700";
+  const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+  const divider = <span aria-hidden className="hidden h-3.5 w-px bg-slate-200 sm:block" />;
+  const city = listing.timeZone.split("/").pop()!.replace(/_/g, " ");
+
+  // The time there, split so the figures can be darker than the day and zone.
+  let there: { time: string; rest: string } | null = null;
+  let gap = "";
+  let yours = "";
+  if (minute !== null) {
+    const now = new Date(minute * 60_000);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: listing.timeZone,
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).formatToParts(now);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+    there = {
+      time: `${part("hour")}:${part("minute")} ${part("dayPeriod")}`,
+      rest: `${part("weekday")} · ${part("timeZoneName")}`,
+    };
+    gap = timeGap(utcOffset(listing.timeZone, now) + now.getTimezoneOffset());
+    yours = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" }).format(now);
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-xs text-slate-500">
+        <ListingChip
+          label={`Exchange: ${listing.exchange}`}
+          icon={
+            // A columned building: the exchange.
+            <svg aria-hidden viewBox="0 0 16 16" className={icon} {...stroke}>
+              <path d="M2 6.5 8 3l6 3.5M3 13.5h10M4 7v5M7 7v5M9 7v5M12 7v5" />
+            </svg>
+          }
+          details={
+            <>
+              <span className="block font-semibold text-slate-900">{listing.exchange}</span>
+              Exchange code {code}
+              {currency && ` · prices in ${currency}`}
+            </>
+          }
+        >
+          <span className="font-medium text-slate-900">{listing.exchange}</span>
+        </ListingChip>
+        {divider}
+        <ListingChip
+          label={`Country: ${listing.country}`}
+          icon={
+            // A map pin: the country. It hops when pointed at.
+            <svg aria-hidden viewBox="0 0 16 16" className={`${icon} motion-safe:group-hover:animate-[pin-hop_600ms_ease-out]`} {...stroke}>
+              <path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 9.8 8 14 8 14Z" />
+              <circle cx="8" cy="6.5" r="1.6" />
+            </svg>
+          }
+          details={
+            <>
+              <span className="block font-semibold text-slate-900">Listed in {listing.country}</span>
+              Where these shares trade. The company itself may be based elsewhere.
+            </>
+          }
+        >
+          <span className="text-slate-700">{listing.country}</span>
+        </ListingChip>
+        {divider}
+        <ListingChip
+          label={there ? `Local time at the exchange: ${there.time}, ${there.rest}` : "Local time at the exchange"}
+          icon={
+            // A clock: the time there now. Its hand sweeps round when pointed at.
+            <svg aria-hidden viewBox="0 0 16 16" className={icon} {...stroke}>
+              <circle cx="8" cy="8" r="5.5" />
+              <path
+                d="M8 5v3l2 1.5"
+                className="motion-safe:group-hover:animate-[clock-sweep_900ms_ease-in-out]"
+                style={{ transformOrigin: "8px 8px" }}
+              />
+            </svg>
+          }
+          details={
+            there ? (
+              <>
+                <span className="block font-semibold text-slate-900">
+                  {there.time} in {city}
+                </span>
+                <span className="block">{gap}</span>
+                <span className="block text-slate-400">Your time: {yours}</span>
+              </>
+            ) : (
+              `Local time in ${city}`
+            )
+          }
+        >
+          {/* Until the browser takes over, an invisible stand-in holds the clock's place. */}
+          {there ? (
+            <span>
+              <span className="font-medium tabular-nums text-slate-900">{there.time}</span> {there.rest}
+            </span>
+          ) : (
+            <span className="invisible tabular-nums">00:00 PM Thu · EDT</span>
+          )}
+        </ListingChip>
+      </div>
+      <p className="mt-1.5 px-0.5 text-xs text-slate-500">Chart times are in the exchange&apos;s local time.</p>
+    </div>
+  );
+}
+
+// `exchange` is Yahoo's code for where it trades (companies.exchange), shown under the chart.
 export default function PriceChart({
   history,
   currency,
+  exchange = null,
 }: {
   history: PriceHistory;
   currency: string | null;
+  exchange?: string | null;
 }) {
   const [range, setRange] = useState<Range>("1D");
   const [active, setActive] = useState<number | null>(null);
@@ -406,6 +629,7 @@ export default function PriceChart({
   }, []);
 
   const money = useMemo(() => moneyFormatter(currency), [currency]);
+  const listing = listingOf(exchange);
   const series = useMemo(() => buildSeries(range, history), [range, history]);
 
   // The line's shape in pixels, resampled so it can morph into the next range's.
@@ -598,7 +822,9 @@ export default function PriceChart({
 
   return (
     <div className="mt-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* The range options always sit on their own line under the figures: beside them,
+          they dropped under whenever the change figure grew too long, moving the chart. */}
+      <div className="flex flex-col items-start gap-4">
         <div>
           <p className="text-3xl font-bold text-slate-900">{money.format(latestPrice(history))}</p>
           <p className="mt-1 text-sm">
@@ -655,18 +881,27 @@ export default function PriceChart({
               </g>
             ))}
 
-            {ticks.map((t) => (
-              <text
-                key={`${t.x}-${t.label}`}
-                x={sx(t.x)}
-                y={HEIGHT - 8}
-                textAnchor="middle"
-                fontSize={12}
-                fill="#64748b"
-              >
-                {t.label}
-              </text>
-            ))}
+            {ticks.map((t) => {
+              // Centred under its time, unless that would push it past the chart's edge
+              // (a market opening on the hour puts "9 AM" right at the left edge): then it
+              // lines up with that edge instead. About 0.62em a character at 12px.
+              const x = sx(t.x);
+              const half = (t.label.length * 12 * 0.62) / 2;
+              const [anchor, at] =
+                x - half < 0 ? (["start", 0] as const) : x + half > width ? (["end", width] as const) : (["middle", x] as const);
+              return (
+                <text
+                  key={`${t.x}-${t.label}`}
+                  x={at}
+                  y={HEIGHT - 8}
+                  textAnchor={anchor}
+                  fontSize={12}
+                  fill="#64748b"
+                >
+                  {t.label}
+                </text>
+              );
+            })}
 
             {/* Previous close; hovering it shows its value and date. */}
             {series.showBaseline && (
@@ -769,7 +1004,11 @@ export default function PriceChart({
       </div>
 
       {/* Always shown, even for daily ranges, so switching ranges never shifts the layout. */}
-      <p className="mt-2 text-xs text-slate-500">Times are in the exchange&apos;s local time.</p>
+      {listing ? (
+        <ListingStrip listing={listing} code={exchange!} currency={currency} />
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">Times are in the exchange&apos;s local time.</p>
+      )}
     </div>
   );
 }

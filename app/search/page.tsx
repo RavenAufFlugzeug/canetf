@@ -4,7 +4,7 @@ import EtfBreakdown from "@/components/EtfBreakdown";
 import KeyStats from "@/components/KeyStats";
 import Navbar from "@/components/Navbar";
 import PriceChart from "@/components/PriceChart";
-import { getCompany, getEtfBreakdown, getKeyStats, getPriceHistory } from "@/lib/db";
+import { getCompany, getEtfBreakdown, getExchange, getKeyStats, getPriceHistory } from "@/lib/db";
 
 export default async function SearchPage({
   searchParams,
@@ -16,6 +16,7 @@ export default async function SearchPage({
   const company = typeof symbol === "string" && symbol ? await getCompany(symbol) : null;
   const history = company ? await getPriceHistory(company.symbol) : null;
   const stats = company ? await getKeyStats(company.symbol) : null;
+  const exchange = company ? await getExchange(company.symbol) : null;
   const breakdown = company ? await getEtfBreakdown(company.symbol) : null;
 
   return (
@@ -35,11 +36,12 @@ export default async function SearchPage({
             // Keyed by symbol, so each newly chosen company plays its entrance.
             <div key={`company-${company.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
               <p className="rise-in text-lg font-semibold text-slate-900">
-                {company.name ?? company.symbol}{" "}
-                <span className="font-normal text-slate-500">{company.symbol}</span>
+                {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                {company.name ?? company.symbol}
+                <span className="block text-base font-normal text-slate-500">{company.symbol}</span>
               </p>
               <div className="rise-in" style={{ animationDelay: "80ms" }}>
-                <PriceChart history={history} currency={company.currency} />
+                <PriceChart history={history} currency={company.currency} exchange={exchange} />
               </div>
               {stats && <KeyStats stats={stats} currency={company.currency} />}
               {breakdown && (

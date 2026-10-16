@@ -39,7 +39,9 @@ export default function MapDetail({ name, symbol, closeHref, children }: Props) 
           <div className="mx-auto max-w-2xl">
             <div className="rise-in flex items-start justify-between gap-4">
               <p className="text-lg font-semibold text-slate-900">
-                {name} <span className="font-normal text-slate-500">{symbol}</span>
+                {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                {name}
+                <span className="block text-base font-normal text-slate-500">{symbol}</span>
               </p>
               <button
                 type="button"

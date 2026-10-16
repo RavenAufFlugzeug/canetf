@@ -97,6 +97,20 @@ export async function getCompany(symbol: string): Promise<Company | null> {
   return company ? inMajorUnits(company) : null;
 }
 
+// Yahoo's code for the exchange a company trades on (see lib/exchanges.ts), or null.
+// Databases the pipeline hasn't migrated yet lack the column.
+export async function getExchange(symbol: string): Promise<string | null> {
+  const code = await withDb((db) => {
+    const columns = db.prepare("PRAGMA table_info(companies)").all() as { name: string }[];
+    if (!columns.some((c) => c.name === "exchange")) return null;
+    const row = db.prepare("SELECT exchange FROM companies WHERE symbol = ?").get(symbol.toUpperCase()) as
+      | { exchange: string | null }
+      | undefined;
+    return row?.exchange ?? null;
+  });
+  return code ?? null;
+}
+
 export type CompanyMatch = Pick<Company, "symbol" | "name">;
 
 // Symbols starting with `prefix`, so "A" finds AAPL and AMZN.
@@ -268,8 +282,22 @@ export type EtfTreeNode = {
   stored: boolean; // in the database, so it has a Search page
   // For a holding that isn't stored: why we have no data on it (null otherwise).
   missing: MissingReason | null;
+  // For a stored company or fund: what it is and where, for the map's hover card.
+  details: NodeDetails | null;
   weight: number; // share of the fund it is in, 0..1 (1 for the chosen ETF)
   children: EtfTreeNode[];
+};
+
+// What the Holdings Map's hover card says about a stored company or fund (null fields are
+// unknown). exchange is Yahoo's code (see lib/exchanges.ts).
+export type NodeDetails = {
+  sector: string | null;
+  industry: string | null;
+  hqCity: string | null;
+  hqCountry: string | null;
+  fundFamily: string | null;
+  category: string | null;
+  exchange: string | null;
 };
 
 // Why an ETF holding isn't in the database (holding_symbols.reason in search/StockUtils.py).
@@ -308,6 +336,16 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
       const reason = (["cash", "stopped"] as const).find((r) => r === row.reason) ?? "unlisted";
       return { reason, lastTrade: row.lastTrade };
     };
+    // Details for the hover card; columns an older database lacks read as null.
+    const have = new Set(
+      (db.prepare("PRAGMA table_info(companies)").all() as { name: string }[]).map((c) => c.name),
+    );
+    const col = (name: string, as: string) => (have.has(name) ? `${name} AS ${as}` : `NULL AS ${as}`);
+    const detailsOf = db.prepare(
+      `SELECT sector, industry, ${col("hq_city", "hqCity")}, ${col("hq_country", "hqCountry")},
+              ${col("fund_family", "fundFamily")}, ${col("category", "category")}, ${col("exchange", "exchange")}
+       FROM companies WHERE symbol = ?`,
+    );
     const find = (ticker: string) => {
       const direct = company.get(ticker) as { symbol: string; name: string | null } | undefined;
       if (direct) return direct;
@@ -334,6 +372,8 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
         symbol: found?.symbol ?? ticker,
         stored: Boolean(found),
         missing: found ? null : missingReason(ticker),
+        // Copied into a plain object: node:sqlite rows can't be passed to a client component.
+        details: found ? { ...(detailsOf.get(found.symbol) as NodeDetails) } : null,
         weight,
         children: [],
       };
@@ -345,7 +385,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
       const below = [...path, found.symbol];
       node.children = breakdown.items.map((it, i) =>
         breakdown.kind === "rating"
-          ? { id: `${id}.${i}`, kind: "rating", label: it.label, symbol: null, stored: false, missing: null, weight: it.weight, children: [] }
+          ? { id: `${id}.${i}`, kind: "rating", label: it.label, symbol: null, stored: false, missing: null, details: null, weight: it.weight, children: [] }
           : build(`${id}.${i}`, it.symbol, it.label, it.weight, below),
       );
       // Holdings lists give the largest few; the rest of the fund is one unnamed part.
@@ -358,6 +398,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
           symbol: null,
           stored: false,
           missing: null,
+          details: null,
           weight: rest,
           children: [],
         });

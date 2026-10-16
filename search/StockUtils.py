@@ -40,7 +40,15 @@ CREATE TABLE IF NOT EXISTS companies (          -- one row per company (latest i
     pe_forward  REAL,
     week52_high REAL,
     week52_low  REAL,
-    updated_at  TEXT
+    updated_at  TEXT,
+    exchange    TEXT,                           -- where it trades: Yahoo's exchange code,
+                                                --   e.g. TOR (Toronto), NMS (Nasdaq)
+    hq_city     TEXT,                           -- where a company is based (NULL for funds)
+    hq_country  TEXT,
+    fund_family TEXT,                           -- a fund's provider, e.g. BlackRock (NULL for
+                                                --   companies)
+    category    TEXT                            -- a fund's category, e.g. Large Blend, when
+                                                --   Yahoo has one
 );""" + QUOTES_TABLE + """;
 CREATE TABLE IF NOT EXISTS prices (             -- one row per company per day
     symbol TEXT NOT NULL REFERENCES companies(symbol),
@@ -85,6 +93,11 @@ CREATE TABLE IF NOT EXISTS holding_symbols (    -- how ETF holdings map to compa
 """
 # Columns added to holding_symbols after it was first created, for _migrate_columns.
 HOLDING_SYMBOLS_ADDED = [("reason", "TEXT"), ("last_trade", "TEXT")]
+COMPANIES_ADDED = [("exchange", "TEXT"), ("hq_city", "TEXT"), ("hq_country", "TEXT"),
+                   ("fund_family", "TEXT"), ("category", "TEXT")]
+# The company columns get_company_info fills from Yahoo's profile beyond the original ones
+# (save_company and fill_company_details write them; a missing value keeps the old one).
+PROFILE_EXTRAS = ["exchange", "hq_city", "hq_country", "fund_family", "category"]
 
 # How much daily price history every company gets: everything Yahoo has (the website's
 # "All" chart range shows it).
@@ -168,6 +181,11 @@ def get_company_info(symbol, info=None):
         "pe_forward": info.get("forwardPE"),
         "week52_high": info.get("fiftyTwoWeekHigh") or fi["year_high"],
         "week52_low": info.get("fiftyTwoWeekLow") or fi["year_low"],
+        "exchange": info.get("exchange") or fi["exchange"],
+        "hq_city": info.get("city"),
+        "hq_country": info.get("country"),
+        "fund_family": info.get("fundFamily"),
+        "category": info.get("category"),
     }
 
 
@@ -255,11 +273,12 @@ def _migrate_quotes(conn):
 
 
 def _migrate_columns(conn):
-    """Add the columns holding_symbols gained since an older database was created."""
-    have = {row[1] for row in conn.execute("PRAGMA table_info(holding_symbols)")}
-    for column, kind in HOLDING_SYMBOLS_ADDED:
-        if column not in have:
-            conn.execute(f"ALTER TABLE holding_symbols ADD COLUMN {column} {kind}")
+    """Add the columns tables gained since an older database was created."""
+    for table, added in (("companies", COMPANIES_ADDED), ("holding_symbols", HOLDING_SYMBOLS_ADDED)):
+        have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for column, kind in added:
+            if column not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
 
 def init_db(db_path=DB_PATH):
@@ -275,10 +294,12 @@ def init_db(db_path=DB_PATH):
 def save_company(conn, info):
     """Insert or update a company. A missing value never erases an older one."""
     conn.execute(
-        """INSERT INTO companies (symbol, name, sector, industry, currency, market_cap,
-                                  pe_trailing, pe_forward, week52_high, week52_low, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        f"""INSERT INTO companies (symbol, name, sector, industry, currency, market_cap,
+                                  pe_trailing, pe_forward, week52_high, week52_low, updated_at,
+                                  {", ".join(PROFILE_EXTRAS)})
+           VALUES ({", ".join("?" * (11 + len(PROFILE_EXTRAS)))})
            ON CONFLICT(symbol) DO UPDATE SET
+               {"".join(f"{c} = COALESCE(excluded.{c}, {c}), " for c in PROFILE_EXTRAS)}
                name        = COALESCE(excluded.name, name),
                sector      = COALESCE(excluded.sector, sector),
                industry    = COALESCE(excluded.industry, industry),
@@ -292,7 +313,7 @@ def save_company(conn, info):
         (info["symbol"], info["name"], info["sector"], info["industry"], info["currency"],
          _num(info["market_cap"]), _num(info["pe_trailing"]), _num(info["pe_forward"]),
          _num(info["week52_high"]), _num(info["week52_low"]),
-         datetime.now().isoformat(timespec="seconds")))
+         datetime.now().isoformat(timespec="seconds"), *(info.get(c) for c in PROFILE_EXTRAS)))
 
 
 def save_quote(conn, symbol, price, avg_volume=None):
@@ -761,6 +782,45 @@ def extend_history(db_path=DB_PATH, period=HISTORY_PERIOD, starting_after=None):
                     failed.append(symbol)
                     print(f"✗ {symbol}: {e}")
                 time.sleep(UPDATE_PAUSE_SECONDS)
+    finally:
+        conn.close()
+    print("\nDone." + (f" Failed: {failed}" if failed else ""))
+    return failed
+
+
+def fill_company_details(db_path=DB_PATH):
+    """Store the PROFILE_EXTRAS (where a company trades and is based, a fund's provider and
+    category) for the companies that have none of them yet.
+
+    For databases built before those columns existed; update_database fills them in anyway
+    as each profile is refreshed, but only about PROFILES_PER_RUN a run. Downloads each
+    company's profile (.info). A company Yahoo has none of these for is tried again on the
+    next call. Returns the symbols that failed.
+    """
+    conn = init_db(db_path)
+    todo = [r[0] for r in conn.execute(
+        f"""SELECT symbol FROM companies
+            WHERE {" AND ".join(f"{c} IS NULL" for c in PROFILE_EXTRAS if c != "exchange")}
+               OR exchange IS NULL
+            ORDER BY symbol""")]
+    print(f"Looking up the details of {len(todo)} companies\n")
+    failed = []
+    try:
+        for symbol in todo:
+            try:
+                info = get_company_info(symbol)
+                found = {c: info[c] for c in PROFILE_EXTRAS if info.get(c)}
+                if found:
+                    conn.execute(
+                        f"""UPDATE companies SET {", ".join(f"{c} = COALESCE(?, {c})" for c in found)}
+                            WHERE symbol = ?""", (*found.values(), symbol))
+                    conn.commit()
+                print(f"✓ {symbol}: " + (", ".join(f"{c}={v}" for c, v in found.items()) or "nothing from Yahoo"))
+            except Exception as e:
+                conn.rollback()
+                failed.append(symbol)
+                print(f"✗ {symbol}: {e}")
+            time.sleep(UPDATE_PAUSE_SECONDS)
     finally:
         conn.close()
     print("\nDone." + (f" Failed: {failed}" if failed else ""))
