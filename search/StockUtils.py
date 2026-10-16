@@ -76,9 +76,19 @@ CREATE TABLE IF NOT EXISTS holding_symbols (    -- how ETF holdings map to compa
     holding    TEXT PRIMARY KEY,                -- the ticker as an ETF's holdings list it
     symbol     TEXT,                            -- its symbol here (companies.symbol); NULL if
                                                 --   Yahoo has no usable listing for it
-    checked_at TEXT NOT NULL
+    checked_at TEXT NOT NULL,
+    reason     TEXT,                            -- why symbol is NULL: 'cash' (a cash or money-
+                                                --   market fund), 'stopped' (no longer trades,
+                                                --   e.g. after a merger) or 'unlisted'
+    last_trade TEXT                             -- for 'stopped': its last trading day
 );
 """
+# Columns added to holding_symbols after it was first created, for _migrate_columns.
+HOLDING_SYMBOLS_ADDED = [("reason", "TEXT"), ("last_trade", "TEXT")]
+
+# How much daily price history every company gets: everything Yahoo has (the website's
+# "All" chart range shows it).
+HISTORY_PERIOD = "max"
 
 # (max days since the last stored price, yfinance period to download).
 # Each limit is a bit shorter than its period, so the download always overlaps the data we already have.
@@ -244,11 +254,20 @@ def _migrate_quotes(conn):
         raise
 
 
+def _migrate_columns(conn):
+    """Add the columns holding_symbols gained since an older database was created."""
+    have = {row[1] for row in conn.execute("PRAGMA table_info(holding_symbols)")}
+    for column, kind in HOLDING_SYMBOLS_ADDED:
+        if column not in have:
+            conn.execute(f"ALTER TABLE holding_symbols ADD COLUMN {column} {kind}")
+
+
 def init_db(db_path=DB_PATH):
     """Create the database file and tables if they don't exist -> connection."""
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
     _migrate_quotes(conn)
+    _migrate_columns(conn)
     conn.commit()
     return conn
 
@@ -415,8 +434,8 @@ def _report_missing(missing):
 # ---------------------------------------------------------------------------
 # Building, inspecting and updating the database
 # ---------------------------------------------------------------------------
-def build_database(symbols, db_path=DB_PATH, period="1y"):
-    """Fetch every company in `symbols` and store it in the database.
+def build_database(symbols, db_path=DB_PATH, period=HISTORY_PERIOD):
+    """Fetch every company in `symbols` and store it in the database (HISTORY_PERIOD of prices).
 
     Returns the list of symbols that failed (empty if everything worked).
     """
@@ -490,14 +509,17 @@ def missing_holdings(db_path=DB_PATH):
     """ETF holdings with no company in the database -> DataFrame.
 
     `status` says why: 'new' (not looked up yet; update_database adds these a few per
-    run) or 'no listing' (Yahoo has no usable listing, e.g. a private company).
-    Holdings stored under another symbol (TD as TD.TO) don't count as missing.
+    run), or why Yahoo has no usable listing (see _why_unlisted): 'cash', 'stopped'
+    (with `last_trade`) or 'unlisted'. Holdings stored under another symbol (TD as TD.TO)
+    don't count as missing.
     """
     conn = init_db(db_path)
     try:
         return pd.read_sql(
             """SELECT b.symbol, MIN(b.label) AS name, GROUP_CONCAT(b.etf, ', ') AS held_by,
-                      CASE WHEN h.holding IS NULL THEN 'new' ELSE 'no listing' END AS status
+                      CASE WHEN h.holding IS NULL THEN 'new'
+                           ELSE COALESCE(h.reason, 'unlisted') END AS status,
+                      h.last_trade
                FROM etf_breakdown b
                LEFT JOIN holding_symbols h ON h.holding = b.symbol
                WHERE b.kind = 'holding' AND b.symbol IS NOT NULL
@@ -511,7 +533,12 @@ def missing_holdings(db_path=DB_PATH):
 # ---------------------------------------------------------------------------
 # Adding the companies (and funds) that ETFs hold
 # ---------------------------------------------------------------------------
-def _holding_variants(holding):
+def _is_preferred(name):
+    """Whether a holding's name (as the ETF lists it) describes a preferred share."""
+    return bool(name and re.search(r"\b(PRF|Pfd|Preferred)\b", name, re.IGNORECASE))
+
+
+def _holding_variants(holding, name=None):
     """Ways Yahoo may spell a ticker as ETF holdings lists give it, most likely first."""
     out = [holding]
     m = re.fullmatch(r"([A-Z]+)\.(PR|PF)\.([A-Z])", holding)      # TRP.PR.D -> TRP-PD.TO
@@ -521,6 +548,12 @@ def _holding_variants(holding):
     m = re.fullmatch(r"([A-Z]+)\.([A-Z]{1,2})", holding)           # CCL.B -> CCL-B.TO, BIP.UN
     if m:
         out += [f"{m.group(1)}-{m.group(2)}.TO", f"{m.group(1)}-{m.group(2)}"]
+    m = re.fullmatch(r"([A-Z]+)\.U", holding)                       # US-dollar units: HTB.U ->
+    if m:                                                           #   the fund's CAD units
+        out += [f"{m.group(1)}.TO", f"{m.group(1)}.NE"]
+    m = re.fullmatch(r"([A-Z]+)P([A-Z])", holding)                  # US preferred: ABRPD -> ABR-PD
+    if m and _is_preferred(name):
+        out.append(f"{m.group(1)}-P{m.group(2)}")
     if holding.endswith(".KQ"):                                     # Samsung is on KOSPI (.KS)
         out.append(holding[:-3] + ".KS")
     if re.fullmatch(r"\d{6}", holding):                             # Korean code without suffix
@@ -543,20 +576,69 @@ def _check_listing(symbol):
             "name": info.get("longName") or info.get("shortName")}
 
 
-def resolve_holding(conn, holding):
+def _why_unlisted(holding, name=None):
+    """Why an ETF holding has no usable listing -> (reason, last trading day or None).
+
+    'cash': a cash or money-market fund the ETF parks cash in (not a company, no share
+    price). 'stopped': Yahoo knows the ticker but it no longer trades, usually because the
+    company was bought, merged or delisted; the day is its last trade. 'unlisted': Yahoo
+    has nothing for it (a private company, or a market Yahoo doesn't cover).
+    """
+    if name and re.search(r"\b(cash|money market|sl agency|t-bill)", name, re.IGNORECASE):
+        return "cash", None
+    try:
+        t = yf.Ticker(holding)
+        info = t.info or {}
+        if info.get("quoteType") == "MONEYMARKET":
+            return "cash", None
+        past = t.history(period="1y")
+        if not past.empty:
+            return "stopped", past.index[-1].strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return "unlisted", None
+
+
+def _common_shares(holding, symbol, name):
+    """The issuer's common shares for a preferred-share holding -> symbol, or None.
+
+    Works from the holding as listed (TD.PF.A -> TD.TO, ABRPD -> ABR) or from the Yahoo
+    listing found for it (TRP-PD.TO -> TRP.TO, KREF-PA -> KREF).
+    """
+    for text in (symbol, holding):
+        if not text:
+            continue
+        m = re.fullmatch(r"([A-Z]+)(?:\.(?:PR|PF)\.[A-Z]|-PF?[A-Z]{1,2}\.TO)", text)
+        if m:
+            return f"{m.group(1)}.TO"
+        m = re.fullmatch(r"([A-Z]+)-P[A-Z]", text)
+        if m:
+            return m.group(1)
+    m = re.fullmatch(r"([A-Z]+)P[A-Z]", holding)
+    return m.group(1) if m and _is_preferred(name) else None
+
+
+def resolve_holding(conn, holding, name=None):
     """The symbol to store an ETF holding under -> str, or None if Yahoo has no listing.
 
+    `name` is the holding's name as the ETF lists it (it tells preferred shares apart).
     The same rules as holding_companies.py: Yahoo's spelling (TRP.PR.D -> TRP-PD.TO), a
-    Canadian company's TSX listing rather than its US one (TD -> TD.TO), and a company
-    already here under another listing or share class maps to that one (a preferred
-    share to the common shares, GOOG to GOOGL).
+    Canadian company's TSX listing rather than its US one (TD -> TD.TO), a fund's CAD
+    units rather than its US-dollar ones (HTB.U -> HTB.TO), a preferred share maps to its
+    issuer's common shares (the company the ETF is invested in; also when the preferred
+    share itself has no listing), and a company already here under another listing or
+    share class maps to that one (GOOG to GOOGL).
     """
     listing = None
-    for candidate in _holding_variants(holding):
+    for candidate in _holding_variants(holding, name):
         listing = _check_listing(candidate)
         if listing:
             break
         time.sleep(UPDATE_PAUSE_SECONDS)
+    have = {r[0] for r in conn.execute("SELECT symbol FROM companies")}
+    common = _common_shares(holding, listing and listing["symbol"], name)
+    if common and (common in have or _check_listing(common)):
+        return common
     if not listing:
         return None
     symbol = listing["symbol"]
@@ -565,10 +647,6 @@ def resolve_holding(conn, holding):
         tsx = _check_listing(symbol + ".TO")
         if tsx and tsx["type"] == "EQUITY":
             symbol, listing = tsx["symbol"], tsx
-    have = {r[0] for r in conn.execute("SELECT symbol FROM companies")}
-    preferred = re.fullmatch(r"([A-Z]+)-P[A-Z]{1,2}\.TO", symbol)
-    if preferred and f"{preferred.group(1)}.TO" in have:
-        return f"{preferred.group(1)}.TO"
     if listing["name"] and symbol not in have:
         same = conn.execute("SELECT symbol FROM companies WHERE LOWER(name) = LOWER(?)",
                             (listing["name"],)).fetchone()
@@ -577,43 +655,50 @@ def resolve_holding(conn, holding):
     return symbol
 
 
-def add_missing_holdings(db_path=DB_PATH, limit=HOLDINGS_PER_RUN, conn=None):
+def add_missing_holdings(db_path=DB_PATH, limit=HOLDINGS_PER_RUN, conn=None, recheck=False):
     """Add the companies and funds ETFs hold that aren't in the database yet.
 
     Looks up at most `limit` holdings (None: all), remembers how each maps to a symbol
     here (holding_symbols), and builds the new ones like build_database does. A fund added
     this way gets its own composition, whose holdings are picked up by a later call.
-    Returns the symbols added.
+    Holdings Yahoo had no listing for are looked up again after UNRESOLVED_RECHECK, or
+    now with `recheck`. Returns the symbols added.
     """
     own = conn is None
     conn = conn or init_db(db_path)
-    recheck = (datetime.now() - UNRESOLVED_RECHECK).isoformat(timespec="seconds")
+    checked_before = datetime.now() - (timedelta(0) if recheck else UNRESOLVED_RECHECK)
     try:
-        pending = [r[0] for r in conn.execute(
-            """SELECT DISTINCT b.symbol FROM etf_breakdown b
+        pending = conn.execute(
+            """SELECT b.symbol, MIN(b.label) FROM etf_breakdown b
                WHERE b.kind = 'holding' AND b.symbol IS NOT NULL
                  AND b.symbol NOT IN (SELECT symbol FROM companies)
                  AND b.symbol NOT IN (SELECT holding FROM holding_symbols
                                       WHERE symbol IS NOT NULL OR checked_at > ?)
-               ORDER BY b.symbol""", (recheck,))]
+               GROUP BY b.symbol ORDER BY b.symbol""",
+            (checked_before.isoformat(timespec="seconds"),)).fetchall()
         added = []
-        for holding in pending[:limit]:
-            target = resolve_holding(conn, holding)
+        for holding, name in pending[:limit]:
+            target = resolve_holding(conn, holding, name)
             exists = target and conn.execute(
                 "SELECT 1 FROM companies WHERE symbol = ?", (target,)).fetchone()
             if target and not exists:
                 try:
-                    info, n, note, _ = _refresh_company(conn, target, "1y")
+                    info, n, note, _ = _refresh_company(conn, target, HISTORY_PERIOD)
                     added.append(target)
                     print(f"+ {target}: {info['name'] or 'n/a'} (held as {holding}) | "
                           f"{n} daily rows saved" + (f" | {note}" if note else ""))
                 except Exception as e:
                     print(f"✗ {target} (held as {holding}): {e}")
                     continue      # not recorded, so it is tried again next time
-            elif not target:
-                print(f"- {holding}: no usable listing on Yahoo, will look again later")
-            conn.execute("INSERT OR REPLACE INTO holding_symbols VALUES (?, ?, ?)",
-                         (holding, target, datetime.now().isoformat(timespec="seconds")))
+            reason, last_trade = (None, None) if target else _why_unlisted(holding, name)
+            if not target:
+                print(f"- {holding}: no usable listing on Yahoo ({reason}"
+                      + (f", last traded {last_trade}" if last_trade else "")
+                      + "), will look again later")
+            conn.execute(
+                """INSERT OR REPLACE INTO holding_symbols
+                   (holding, symbol, checked_at, reason, last_trade) VALUES (?, ?, ?, ?, ?)""",
+                (holding, target, datetime.now().isoformat(timespec="seconds"), reason, last_trade))
             conn.commit()
             time.sleep(UPDATE_PAUSE_SECONDS)
         left = len(pending) - min(len(pending), limit if limit is not None else len(pending))
@@ -641,6 +726,47 @@ def choose_period(last_price_date, today=None):
     return None
 
 
+def extend_history(db_path=DB_PATH, period=HISTORY_PERIOD, starting_after=None):
+    """Download `period` of daily prices (default: all Yahoo has) for stored companies.
+
+    For databases built while less history was kept: a one-off that takes a while (one
+    request per company). With `starting_after` ("YYYY-MM-DD"), only companies whose
+    stored history starts after that day. Days already stored are rewritten with the same
+    values. Failures are retried once after RATE_LIMIT_WAIT_SECONDS. Returns the symbols
+    that failed.
+    """
+    conn = init_db(db_path)
+    todo_all = [r[0] for r in conn.execute(
+        "SELECT symbol FROM prices GROUP BY symbol HAVING MIN(date) > ? ORDER BY symbol",
+        (starting_after or "",))]
+    print(f"Extending the price history of {len(todo_all)} companies to {period}\n")
+    failed = []
+    try:
+        for attempt in (1, 2):
+            todo = todo_all
+            if attempt == 2:
+                if not failed:
+                    break
+                print(f"\nRetrying {len(failed)} that failed, after {RATE_LIMIT_WAIT_SECONDS}s\n")
+                time.sleep(RATE_LIMIT_WAIT_SECONDS)
+                todo, failed = failed, []
+            for symbol in todo:
+                try:
+                    history = get_history(symbol, period=period)
+                    n = save_prices(conn, symbol, history)
+                    conn.commit()
+                    print(f"✓ {symbol}: {n} daily rows, from {history.index[0]:%Y-%m-%d}")
+                except Exception as e:
+                    conn.rollback()
+                    failed.append(symbol)
+                    print(f"✗ {symbol}: {e}")
+                time.sleep(UPDATE_PAUSE_SECONDS)
+    finally:
+        conn.close()
+    print("\nDone." + (f" Failed: {failed}" if failed else ""))
+    return failed
+
+
 def _update_one(conn, row, full_period, profile):
     """Refresh one company for update_database -> (log line, missing composition)."""
     last = pd.to_datetime(row.history_to).date() if pd.notna(row.history_to) else None
@@ -655,7 +781,7 @@ def _update_one(conn, row, full_period, profile):
             + (f" | {note}" if note else "")), no_composition
 
 
-def update_database(db_path=DB_PATH, full_period="1y"):
+def update_database(db_path=DB_PATH, full_period=HISTORY_PERIOD):
     """Refresh every company in the database, downloading only what's missing.
 
     Prices are refreshed for every company; profiles and ETF compositions only for the

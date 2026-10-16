@@ -7,12 +7,16 @@ export default async function Navbar() {
 
   return (
     // Named, so page transitions leave it in place while the content changes.
-    <nav className="flex justify-between p-6 text-slate-600" style={{ viewTransitionName: "site-header" }}>
+    <nav className="relative z-10 flex justify-between p-6 text-slate-600" style={{ viewTransitionName: "site-header" }}>
       <Link href="/" className="font-bold text-xl">
         CanETF
       </Link>
 
       <div className="flex items-center gap-6">
+        <Link href="/" className="hover:text-blue-600">
+          Home
+        </Link>
+
         <Link href="/search" className="hover:text-blue-600">
           Search
         </Link>

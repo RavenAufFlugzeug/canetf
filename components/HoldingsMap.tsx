@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PalettePicker, savePalette, shade, useChartPalette, type PaletteName } from "@/components/EtfBreakdown";
-import type { EtfTreeNode } from "@/lib/db";
+import type { EtfTreeNode, MissingReason } from "@/lib/db";
 
 // The map reads left to right: the chosen ETF, then what it holds, then what those hold,
 // until a branch ends in a company, a credit rating, or the part of a fund its holdings
@@ -17,6 +17,8 @@ const FOLD_MS = 550; // how long opening or folding one fund takes
 const FOLD_ALL_MS = 950; // ...and several at once (Fold all, Open all), level after level
 const LEVEL_GAP = 0.2; // share of that time between one level starting to move and the next
 const SIBLING_GAP = 0.014; // ...and between one holding and the next in the same fund
+const NOTICE_W = 248; // the notice beside a holding we have no data on
+const NOTICE_H = 96; // about its height, to decide whether it fits below the box
 
 type Placed = {
   node: EtfTreeNode;
@@ -85,6 +87,34 @@ const clamp = (t: number) => Math.min(Math.max(t, 0), 1);
 const siblingIndex = (p: Placed) => Math.min(Number(p.node.id.split(".").pop()), 12);
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
+const fmtTradeDay = new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+// What the notice on a holding we have no data on says.
+function missingNotice({ reason, lastTrade }: MissingReason): { title: string; text: string } {
+  switch (reason) {
+    case "cash":
+      return {
+        title: "Cash holding",
+        text: "A cash or money-market fund the ETF uses to hold cash. It isn't a company, so there's no share price to show.",
+      };
+    case "stopped":
+      return {
+        title: "No longer trades",
+        text: `Its shares ${lastTrade ? `stopped trading on ${fmtTradeDay.format(new Date(`${lastTrade}T00:00:00Z`))}` : "have stopped trading"}, usually because the company was bought, merged with another or delisted. The fund's holdings list may not have caught up yet.`,
+      };
+    case "pending":
+      return {
+        title: "Not added yet",
+        text: "New holdings join our data a few at a time during the hourly update. Check back soon.",
+      };
+    default:
+      return {
+        title: "Not in our data",
+        text: "Yahoo Finance, where our prices come from, has no listing for it. It may be private, delisted, or traded on a market Yahoo doesn't cover.",
+      };
+  }
+}
+
 const LEGEND: { kind: EtfTreeNode["kind"]; text: string }[] = [
   { kind: "fund", text: "Fund" },
   { kind: "holding", text: "Company or single holding" },
@@ -97,6 +127,8 @@ const BOX: Record<Exclude<EtfTreeNode["kind"], "fund">, string> = {
   rating: "border border-slate-900 bg-slate-800 text-white",
   other: "border border-slate-300 bg-slate-200 text-slate-600",
 };
+// A holding we have no data on: dashed and greyed, with an info mark.
+const MISSING_BOX = "border border-dashed border-slate-400 bg-slate-50 text-slate-500";
 
 // One box's part in a change of the map: where it starts and ends, and how it gets there.
 // stay: on screen throughout, it glides from its old place to its new one. enter: it fans
@@ -292,6 +324,8 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
   };
   const onPath = (id: string) => active !== null && (active === id || active.startsWith(`${id}.`));
   const current = shown.find((s) => s.p.node.id === active)?.p ?? null;
+  const noticeFor = !moving ? (current?.node.missing ?? null) : null;
+  const noticeAt = current ? at.get(current.node.id) : undefined;
   const allFolded = foldable.every(({ node }) => fold.to.has(node.id));
   const allOpen = fold.to.size === 0;
   const bulkButton =
@@ -335,6 +369,12 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
             {text}
           </span>
         ))}
+        {all.some(({ node }) => node.missing) && (
+          <span className="flex items-center gap-1.5">
+            <span className={`h-3 w-5 rounded-sm ${MISSING_BOX}`} />
+            No data (point at it to see why)
+          </span>
+        )}
         {foldable.length > 0 && (
           // Each is greyed out when the map is already that way. Their arrows close in
           // (or spread) when pointed at.
@@ -456,7 +496,11 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                 onPointerLeave={() => point(null)}
                 onFocus={() => point(node.id)}
                 onBlur={() => point(null)}
-                title={`${node.label}${p.parent ? `: ${pct(node.weight)} of ${nameOf(p.parent.node)}` : ""}`}
+                // Holdings we have no data on explain why in their own notice instead, and
+                // can be tabbed to so keyboard users can read it.
+                title={node.missing ? undefined : `${node.label}${p.parent ? `: ${pct(node.weight)} of ${nameOf(p.parent.node)}` : ""}`}
+                tabIndex={node.missing ? 0 : undefined}
+                aria-describedby={node.missing && active === node.id ? "map-missing-notice" : undefined}
                 // Boxes on their way out can't be pointed at or tabbed to.
                 inert={mode === "leave"}
                 // lit: the one pointed at. path: the funds it sits in. Their lift and
@@ -465,7 +509,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                 data-selected={node.stored && node.symbol === detail ? "" : undefined}
                 className={`map-node absolute left-0 top-0 flex items-center gap-1.5 rounded-md px-2 text-xs ${
                   intro ? "map-node-in" : ""
-                } ${fund ? "" : BOX[node.kind as keyof typeof BOX]}`}
+                } ${fund ? "" : node.missing ? MISSING_BOX : BOX[node.kind as keyof typeof BOX]}`}
                 style={{
                   // Placed with `translate`, which moves a box without the browser having
                   // to lay the page out again (and leaves `transform` free for the lift).
@@ -499,6 +543,13 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                 <span className={`min-w-0 flex-1 truncate ${node.symbol ? "opacity-75" : "font-medium"}`}>
                   {node.label}
                 </span>
+                {node.missing && (
+                  <svg aria-hidden viewBox="0 0 12 12" className="size-3 shrink-0 text-slate-400">
+                    <circle cx="6" cy="6" r="5.25" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M6 5.3v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    <circle cx="6" cy="3.4" r="0.75" fill="currentColor" />
+                  </svg>
+                )}
                 {p.parent && <span className="shrink-0 font-semibold tabular-nums">{pct(node.weight)}</span>}
                 {p.parent && node.children.length > 0 && (
                   <button
@@ -519,6 +570,33 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
               </div>
             );
           })}
+
+          {/* Pointing at (or tabbing to) a holding we have no data on explains why, in a
+              notice under the box, or above it near the bottom of the map. */}
+          {noticeFor && noticeAt && (
+            <div
+              id="map-missing-notice"
+              role="tooltip"
+              className="pointer-events-none absolute left-0 top-0"
+              style={{
+                width: NOTICE_W,
+                translate: `${Math.max(0, Math.min(noticeAt.x, plan.width - NOTICE_W))}px ${
+                  noticeAt.y + NODE_H + 8 + NOTICE_H <= plan.heightTo ? noticeAt.y + NODE_H + 8 : noticeAt.y - 8
+                }px`,
+                transform: noticeAt.y + NODE_H + 8 + NOTICE_H <= plan.heightTo ? undefined : "translateY(-100%)",
+                zIndex: levels + 5,
+              }}
+            >
+              {/* Keyed, so moving to another such holding fades the new notice in. */}
+              <div
+                key={active}
+                className="map-caption rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 shadow-lg shadow-slate-300/50"
+              >
+                <p className="font-semibold text-slate-900">{missingNotice(noticeFor).title}</p>
+                <p className="mt-1">{missingNotice(noticeFor).text}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

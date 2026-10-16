@@ -360,6 +360,17 @@ body {
   animation: chart-area-in 700ms ease-out 600ms both;
 }
 
+/* Welcome page (app/page.tsx): ticker chips that bob gently around the hero. */
+@keyframes welcome-float {
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.welcome-float {
+  animation: welcome-float 6s ease-in-out infinite;
+}
+
 /* Page transitions (app/template.tsx): the old page fades out quickly, then the new
    one fades in while rising slightly. The navbar stays put throughout. */
 ::view-transition-old(.page-exit) {
@@ -423,7 +434,8 @@ body {
   .map-caption,
   .rise-in,
   .chart-draw,
-  .chart-area-in {
+  .chart-area-in,
+  .welcome-float {
     animation: none;
     transition: none;
   }

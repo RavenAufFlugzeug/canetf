@@ -4,8 +4,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PriceHistory, PricePoint } from "@/lib/db";
 import { moneyFormatter } from "@/lib/money";
 
-// The standard ranges finance sites offer, up to one year.
-const RANGES = ["1D", "5D", "1M", "6M", "YTD", "1Y"] as const;
+// The standard ranges finance sites offer, up to all the daily history there is
+// (HISTORY_PERIOD in search/StockUtils.py keeps everything Yahoo has).
+const RANGES = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "All"] as const;
 type Range = (typeof RANGES)[number];
 
 const CAPTIONS: Record<Exclude<Range, "1D">, string> = {
@@ -14,6 +15,8 @@ const CAPTIONS: Record<Exclude<Range, "1D">, string> = {
   "6M": "Past 6 months",
   YTD: "Year to date",
   "1Y": "Past year",
+  "5Y": "Past 5 years",
+  All: "All time",
 };
 
 const HEIGHT = 280;
@@ -25,7 +28,9 @@ const DOWN = "#dc2626"; // red-600
 const MORPH_MS = 900; // matches .chart-fade in globals.css
 const BASELINE_HIT_PX = 6; // how close the pointer must be to the previous-close line
 const TIP_PAD = 26; // the tooltip's horizontal padding (px-3) and border, around its text
-const SAMPLES = 400; // at least as many as the densest range (5D has 390 bars)
+// Enough for about one per pixel across the widest chart. (All can hold decades of daily
+// closes; the line drawn needs no more points than the chart has pixels.)
+const SAMPLES = 1300;
 
 type Point = PricePoint & { x: number }; // x: time (1D) or index (other ranges)
 
@@ -139,13 +144,15 @@ function buildSeries(range: Range, { daily, intraday }: PriceHistory): Series | 
     isIntraday = true;
   } else if (range === "5D") {
     source = daily.slice(-5);
+  } else if (range === "All") {
+    source = daily;
   } else {
     if (!daily.length) return null;
     const last = daily[daily.length - 1].t;
     const start =
       range === "YTD"
         ? `${last.slice(0, 4)}-01-01`
-        : shiftDay(last, range === "1M" ? -1 : range === "6M" ? -6 : -12);
+        : shiftDay(last, { "1M": -1, "6M": -6, "1Y": -12, "5Y": -60 }[range]);
     source = daily.filter((p) => (range === "YTD" ? p.t >= start : p.t > start));
   }
   if (!source.length) return null;
@@ -209,6 +216,12 @@ function xTicks(range: Range, series: Series, maxTicks: number) {
       x: (ps[0].x + ps[ps.length - 1].x) / 2,
       label: fmtDay.format(utcDate(day)),
     }));
+  }
+
+  // 5Y and All: the first trading day of each year.
+  if (range === "5Y" || range === "All") {
+    const years = points.filter((p, i) => i > 0 && p.t.slice(0, 4) !== points[i - 1].t.slice(0, 4));
+    if (years.length >= 2) return thin(years, maxTicks).map((p) => at(p, p.t.slice(0, 4)));
   }
 
   // First trading day of each month.

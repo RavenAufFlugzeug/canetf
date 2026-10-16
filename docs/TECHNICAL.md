@@ -41,7 +41,7 @@ CanETF has two parts that share one SQLite database file:
   built-in `node:sqlite`, never writes to it. User accounts, sessions, questionnaire answers
   and watch lists live in a separate database, `data/app.db`, created automatically.
 
-The database currently holds about 426 entries: 5 starting stocks, 120 Canadian ETFs
+The database currently holds about 433 entries: 5 starting stocks, 120 Canadian ETFs
 (`search/etfs.py`), the companies those ETFs hold (`search/holding_companies.py`), and the
 funds/companies held by those funds (added automatically).
 
@@ -141,13 +141,14 @@ Useful functions in `search/StockUtils.py` (import with `from StockUtils import 
 
 | Function | Use |
 |---|---|
-| `build_database(symbols)` | add or fully refresh companies/ETFs (1 year of prices by default) |
+| `build_database(symbols)` | add or fully refresh companies/ETFs (all the daily prices Yahoo has, `HISTORY_PERIOD`) |
 | `update_database()` | refresh everything already stored (what the scheduled task runs) |
 | `list_companies()` | table of stored companies and how fresh each is |
 | `search_symbol("name")` | find a ticker on Yahoo by company name |
 | `get_etf_breakdown("XIU.TO")` | an ETF's composition straight from Yahoo |
-| `missing_holdings()` | ETF holdings that aren't in the database, and why |
-| `add_missing_holdings(limit=None)` | add them now instead of 15 per update |
+| `missing_holdings()` | ETF holdings that aren't in the database, and why (`cash`, `stopped` with its last trading day, `unlisted`, or `new`) |
+| `add_missing_holdings(limit=None)` | add them now instead of 15 per update (`recheck=True` also retries holdings that had no listing) |
+| `extend_history()` | download every stored company's full daily price history (one-off, for databases built when less was kept; about 30 minutes) |
 
 To add a company or ETF: `build_database(["TICKER"])`. TSX listings need `.TO`
 (e.g. `XEQT.TO`). To make an ETF part of the standard set, add it to `search/etfs.py`.
@@ -209,7 +210,7 @@ app/                      Next.js App Router
   layout.tsx, globals.css global layout, Tailwind, all animation CSS
 components/
   CompanyPicker.tsx       symbol search with animated dropdown
-  PriceChart.tsx          SVG price chart (1D … 1Y), hover, range morphing
+  PriceChart.tsx          SVG price chart (1D … 5Y, All), hover, range morphing
   KeyStats.tsx            stats table under the chart
   EtfBreakdown.tsx        ETF treemap + holdings list
   HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree)
@@ -243,7 +244,7 @@ next.config.ts            redirects, experimental view transitions
 | `prices` | company per trading day | `symbol`, `date`, `open`, `high`, `low`, `close`, `volume` |
 | `intraday` | 5-minute bar, last 5 trading days | `symbol`, `ts` (exchange-local time with offset), `date`, OHLC, `volume` |
 | `etf_breakdown` | ETF part | `etf`, `kind` (`holding` or `rating`), `rank`, `label`, `symbol`, `weight` (0–1) |
-| `holding_symbols` | ETF holding ticker | `holding` (as the ETF lists it), `symbol` (where it's stored here, NULL = no listing), `checked_at` |
+| `holding_symbols` | ETF holding ticker | `holding` (as the ETF lists it), `symbol` (where it's stored here, NULL = no listing), `checked_at`, `reason` (why there's no listing: `cash`, `stopped`, `unlisted`), `last_trade` (for `stopped`) |
 
 Design rules:
 
@@ -268,17 +269,22 @@ never commit it.
 ## 8. Data pipeline
 
 - **Source:** Yahoo Finance through `yfinance`, an unofficial library. Quote data is delayed.
-- **Build vs update:** `build_database` downloads a full year and the profile; `update_database`
+- **Build vs update:** `build_database` downloads all the daily prices Yahoo has
+  (`HISTORY_PERIOD = "max"`, decades for older companies) and the profile; `update_database`
   downloads only what's missing (`choose_period`: 1d, 5d, 1mo… since the last stored day) and
-  re-downloads a full year if the data is more than about a year old.
+  re-downloads the full history if the data is more than about a year old. A database built
+  before the switch needs `extend_history()` once. The full history makes `stocks.db` a few
+  hundred MB.
 - **ETF composition** (`get_etf_breakdown`): Yahoo's **top 10 holdings** with weights. Bond
   funds usually have no holdings list, so their **split by credit rating** is stored instead.
   Funds of funds (XEQT, VGRO, …) list the ETFs they hold.
 - **Holdings → companies** (`resolve_holding`): tickers in holdings lists don't always match
   Yahoo's. The rules: preferred shares use Yahoo's spelling (`TRP.PR.D` → `TRP-PD.TO`),
-  Canadian companies use their TSX listing (`TD` → `TD.TO`), and a holding that is another
-  listing or share class of a stored company maps to it (preferred shares → common shares,
-  `GOOG` → `GOOGL`). The result is remembered in `holding_symbols`.
+  Canadian companies use their TSX listing (`TD` → `TD.TO`), a fund's US-dollar units map to
+  its CAD units (`HTB.U` → `HTB.TO`, `EAFX.U` → `EAFX.NE`), preferred shares map to the
+  issuer's common shares, even when the preferred share has no Yahoo listing (`TD.PF.A` →
+  `TD.TO`, `ABRPD` → `ABR`), and a holding that is another listing or share class of a stored
+  company maps to it (`GOOG` → `GOOGL`). The result is remembered in `holding_symbols`.
 - **Rate limits:** Yahoo rejects bursts ("Too Many Requests"). The update keeps to about two
   requests per entry per hour; see the constants at the top of `StockUtils.py`
   (`PROFILES_PER_RUN`, `UPDATE_PAUSE_SECONDS`, `HOLDINGS_PER_RUN`, …) before raising load.
@@ -290,8 +296,8 @@ never commit it.
 | Route | Login | Contents |
 |---|---|---|
 | `/` | no | landing page |
-| `/search?symbol=XIU.TO` | no | symbol search; chart (1D, 5D, 1M, 6M, YTD, 1Y), key stats, ETF composition |
-| `/map?symbol=XEQT.TO` | no | Holdings Map: the ETF, what it holds, what those hold, down to companies or credit ratings |
+| `/search?symbol=XIU.TO` | no | symbol search; chart (1D, 5D, 1M, 6M, YTD, 1Y, 5Y, All), key stats, ETF composition |
+| `/map?symbol=XEQT.TO` | no | Holdings Map: the ETF, what it holds, what those hold, down to companies or credit ratings; holdings with no data are dashed and explain why on hover |
 | `/watchlist` | yes | add/remove companies and ETFs |
 | `/account`, `/account/password` | yes | account info, investor profile, change password |
 | `/login`, `/signup`, `/onboarding` | no | auth and questionnaire |
@@ -332,8 +338,10 @@ and `docs/Token.txt`.
 - **Composition is the top 10 only** for stock ETFs; the page says how much of the fund those
   cover. Global X "corporate class" ETFs (HXT, HXS, …) have no composition on Yahoo and were
   left out.
-- **Some holdings can't be priced** (cash funds, some preferred shares); `missing_holdings()`
-  lists them, and they're looked up again monthly.
+- **Some holdings can't be priced** (cash sweep funds such as BISXX/XTSLA, companies that
+  stopped trading such as QRVO, bought by Skyworks in Oct 2026); `missing_holdings()` lists
+  them, the Holdings Map explains why on hover, and they're looked up again monthly. Yahoo's
+  holdings lists can lag behind mergers.
 - **Prices are in each listing's own currency** (USD, EUR, ¥, …); there is no conversion to CAD.
 - **The 1D chart assumes a 6.5-hour session** (TSX/NYSE hours) when drawing a partial day.
 

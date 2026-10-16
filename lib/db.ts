@@ -266,8 +266,20 @@ export type EtfTreeNode = {
   label: string;
   symbol: string | null;
   stored: boolean; // in the database, so it has a Search page
+  // For a holding that isn't stored: why we have no data on it (null otherwise).
+  missing: MissingReason | null;
   weight: number; // share of the fund it is in, 0..1 (1 for the chosen ETF)
   children: EtfTreeNode[];
+};
+
+// Why an ETF holding isn't in the database (holding_symbols.reason in search/StockUtils.py).
+// cash: a cash or money-market fund, not a company. stopped: no longer trades, usually
+// after a merger, takeover or delisting (lastTrade is its last trading day). unlisted:
+// Yahoo Finance has no listing for it. pending: not looked up yet (the hourly update adds
+// new holdings a few at a time).
+export type MissingReason = {
+  reason: "cash" | "stopped" | "unlisted" | "pending";
+  lastTrade: string | null;
 };
 
 const MAX_TREE_DEPTH = 8; // funds of funds go 3 deep today; this only stops a runaway
@@ -282,6 +294,20 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
     const alias = hasTable(db, "holding_symbols")
       ? db.prepare("SELECT symbol FROM holding_symbols WHERE holding = ?")
       : null;
+    // Why a holding has no company here; older databases lack the reason columns.
+    const columns = hasTable(db, "holding_symbols")
+      ? (db.prepare("PRAGMA table_info(holding_symbols)").all() as { name: string }[]).map((c) => c.name)
+      : [];
+    const why = columns.includes("reason")
+      ? db.prepare("SELECT reason, last_trade AS lastTrade FROM holding_symbols WHERE holding = ? AND symbol IS NULL")
+      : null;
+    const missingReason = (ticker: string | null): MissingReason => {
+      if (!ticker) return { reason: "unlisted", lastTrade: null };
+      const row = why?.get(ticker) as { reason: string | null; lastTrade: string | null } | undefined;
+      if (!row) return { reason: "pending", lastTrade: null };
+      const reason = (["cash", "stopped"] as const).find((r) => r === row.reason) ?? "unlisted";
+      return { reason, lastTrade: row.lastTrade };
+    };
     const find = (ticker: string) => {
       const direct = company.get(ticker) as { symbol: string; name: string | null } | undefined;
       if (direct) return direct;
@@ -307,6 +333,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
         label: found?.name ?? label,
         symbol: found?.symbol ?? ticker,
         stored: Boolean(found),
+        missing: found ? null : missingReason(ticker),
         weight,
         children: [],
       };
@@ -318,7 +345,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
       const below = [...path, found.symbol];
       node.children = breakdown.items.map((it, i) =>
         breakdown.kind === "rating"
-          ? { id: `${id}.${i}`, kind: "rating", label: it.label, symbol: null, stored: false, weight: it.weight, children: [] }
+          ? { id: `${id}.${i}`, kind: "rating", label: it.label, symbol: null, stored: false, missing: null, weight: it.weight, children: [] }
           : build(`${id}.${i}`, it.symbol, it.label, it.weight, below),
       );
       // Holdings lists give the largest few; the rest of the fund is one unnamed part.
@@ -330,6 +357,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
           label: "Other holdings",
           symbol: null,
           stored: false,
+          missing: null,
           weight: rest,
           children: [],
         });
