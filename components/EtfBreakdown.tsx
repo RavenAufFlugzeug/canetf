@@ -67,7 +67,7 @@ function savePalette(palette: PaletteName) {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
-// The family chosen in this browser, for other charts (components/HoldingsMap.tsx).
+// The family chosen in this browser, for any other chart that should follow it.
 // The server always renders the default; the stored choice applies once in the browser.
 export const useChartPalette = () =>
   useSyncExternalStore(subscribePalette, readPalette, () => DEFAULT_PALETTE);

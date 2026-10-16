@@ -4,26 +4,32 @@
 // Yahoo Finance doesn't give NAICS codes, so a company's sector is worked out from Yahoo's
 // industry (YAHOO_INDUSTRIES), or failing that its broader sector (YAHOO_SECTORS).
 //
-// The colours are light, so a box's dark text stays readable (at least 6.9:1), and spread
-// as far apart as such colours can be in OKLab: goods-producing groups warm, trade and
-// transport in between, services cool, Other a quiet warm grey. The map's legend lists
-// every group with its codes, and its hover card names a company's group.
-export type NaicsGroup = { code: string; name: string; color: string };
+// Goods-producing groups are warm: manufacturing the Search treemap's brightest red,
+// utilities and construction a softer rose, mining and oil and gas orange, agriculture
+// orange-yellow. Trade and transport are teals: transportation teal, retail green-teal,
+// wholesale light green-teal. Information is green, finance dark blue,
+// real estate dark purple, professional services purple, management purple-blue, and
+// Other plain grey. The blues and purples differ in lightness as well as hue, so they stay
+// apart. Each colour carries whichever text reads better on it (`ink`, at least 4.5:1).
+export type NaicsGroup = { code: string; name: string; color: string; ink: string };
+
+const DARK_INK = "#0f172a";
+const WHITE_INK = "#ffffff";
 
 export const NAICS_GROUPS: NaicsGroup[] = [
-  { code: "11", name: "Agriculture, forestry, fishing and hunting", color: "#d0bc0f" },
-  { code: "21", name: "Mining, quarrying, and oil and gas extraction", color: "#fe9424" },
-  { code: "22-23", name: "Utilities and construction", color: "#ffe682" },
-  { code: "31-33", name: "Manufacturing", color: "#fe8b8a" },
-  { code: "41", name: "Wholesale trade", color: "#e6c087" },
-  { code: "44-45", name: "Retail trade", color: "#fca0ee" },
-  { code: "48-49", name: "Transportation and warehousing", color: "#bb96fe" },
-  { code: "51", name: "Information and cultural industries", color: "#89b8ff" },
-  { code: "52", name: "Finance and insurance", color: "#3ed1d4" },
-  { code: "53", name: "Real estate and rental and leasing", color: "#63df8d" },
-  { code: "54", name: "Professional, scientific and technical services", color: "#c4c2ec" },
-  { code: "55", name: "Management of companies and enterprises", color: "#9ee4cb" },
-  { code: "56-91", name: "Other", color: "#e2ddd8" },
+  { code: "11", name: "Agriculture, forestry, fishing and hunting", color: "oklch(0.83 0.15 80)", ink: DARK_INK },
+  { code: "21", name: "Mining, quarrying, and oil and gas extraction", color: "oklch(0.70 0.17 50)", ink: DARK_INK },
+  { code: "22-23", name: "Utilities and construction", color: "oklch(0.80 0.10 18)", ink: DARK_INK },
+  { code: "31-33", name: "Manufacturing", color: "oklch(0.56 0.21 25)", ink: WHITE_INK },
+  { code: "41", name: "Wholesale trade", color: "oklch(0.89 0.08 170)", ink: DARK_INK },
+  { code: "44-45", name: "Retail trade", color: "oklch(0.70 0.13 168)", ink: DARK_INK },
+  { code: "48-49", name: "Transportation and warehousing", color: "oklch(0.53 0.09 190)", ink: WHITE_INK },
+  { code: "51", name: "Information and cultural industries", color: "oklch(0.545 0.155 145)", ink: WHITE_INK },
+  { code: "52", name: "Finance and insurance", color: "oklch(0.44 0.15 258)", ink: WHITE_INK },
+  { code: "53", name: "Real estate and rental and leasing", color: "oklch(0.40 0.16 305)", ink: WHITE_INK },
+  { code: "54", name: "Professional, scientific and technical services", color: "oklch(0.55 0.17 320)", ink: WHITE_INK },
+  { code: "55", name: "Management of companies and enterprises", color: "oklch(0.72 0.11 282)", ink: DARK_INK },
+  { code: "56-91", name: "Other", color: "oklch(0.80 0 0)", ink: DARK_INK },
 ];
 
 // The group a two-digit sector (as used below) belongs to.

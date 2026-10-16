@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { EtfTreeNode, MissingReason } from "@/lib/db";
 import { listingOf } from "@/lib/exchanges";
@@ -154,23 +154,22 @@ const LEGEND: { kind: EtfTreeNode["kind"]; text: string }[] = [
   { kind: "other", text: "Not itemised" },
 ];
 
-// Funds and companies are white, credit ratings black. A company's tile carries a small
-// diamond in its NAICS group's colour (see lib/naics.ts), grey when its sector is unknown.
+// Funds are white, credit ratings black. A company's tile is filled with its NAICS
+// group's colour (see lib/naics.ts), grey when its sector is unknown.
 const BOX: Record<EtfTreeNode["kind"], string> = {
   fund: "border border-slate-400 bg-white text-slate-900",
-  holding: "border border-slate-300 bg-white text-slate-900",
+  holding: "border border-black/10 bg-white text-slate-900",
   rating: "border border-black bg-slate-950 text-white",
   other: "border border-slate-300 bg-slate-200 text-slate-600",
 };
-const UNKNOWN_SECTOR = "#cbd5e1"; // slate-300
+const UNKNOWN_SECTOR = "#f1f5f9"; // slate-100
 
-// The sector diamond: a small square turned on its corner (.sector-diamond in globals.css,
-// which also rolls it when its tile is pointed at).
-function SectorDiamond({ color }: { color: string }) {
+// The legend's swatch: a small tile in the sector's colour.
+function SectorSwatch({ color }: { color: string }) {
   return (
     <span
       aria-hidden
-      className="sector-diamond size-2.5 shrink-0 rounded-[2px] border border-black/15"
+      className="legend-swatch h-3 w-5 shrink-0 rounded-sm border border-black/10"
       style={{ backgroundColor: color }}
     />
   );
@@ -291,6 +290,9 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
   const [moving, setMoving] = useState(false);
   // The product under the pointer or with focus: its route back to the ETF lights up.
   const [active, setActive] = useState<string | null>(null);
+  // Whether the NAICS sector legend is open (it starts open).
+  const [legendOpen, setLegendOpen] = useState(true);
+  const legendId = useId();
   // Where the active product's box is on screen, for its hover card (see below).
   const [cardBox, setCardBox] = useState<DOMRect | null>(null);
 
@@ -462,31 +464,60 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
         )}
       </div>
 
-      {/* Companies are coloured by NAICS sector group: every group, with its codes. */}
+      {/* Companies are coloured by NAICS sector group: every group, with its codes, in one
+          column, open to begin with. Its Fold / Open button works like Fold all / Open all
+          above. Folding, the rows slip away bottom first, then the panel closes up; opening,
+          the panel opens out and the rows cascade in top first, each swatch growing into
+          place (.legend-fold and .legend-row in globals.css; each row's delay is --d). */}
       {all.some(({ node }) => node.kind === "holding") && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-          <p className="text-xs font-semibold text-slate-700">Companies/holdings by NAICS sector</p>
-          {/* Two columns on wider screens, filled top to bottom so the codes read in order. */}
-          <ul className="mt-1.5 grid gap-x-5 gap-y-1 text-xs text-slate-600 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-7">
-            {NAICS_GROUPS.map((g) => (
-              <li key={g.code} className="flex items-center gap-1.5">
-                <span className="flex w-4 shrink-0 justify-center">
-                  <SectorDiamond color={g.color} />
-                </span>
-                <span className="w-9 shrink-0 font-semibold tabular-nums text-slate-700">{g.code}</span>
-                <span className="min-w-0">{g.name}</span>
-              </li>
-            ))}
-            {unclassified && (
-              <li className="flex items-center gap-1.5">
-                <span className="flex w-4 shrink-0 justify-center">
-                  <SectorDiamond color={UNKNOWN_SECTOR} />
-                </span>
-                <span className="w-9 shrink-0" />
-                <span>Sector unknown</span>
-              </li>
-            )}
-          </ul>
+        <div className="mt-3 w-fit max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center gap-4">
+            <p className="text-xs font-semibold text-slate-700">Companies/holdings by NAICS sector</p>
+            <button
+              type="button"
+              aria-expanded={legendOpen}
+              aria-controls={legendId}
+              onClick={() => setLegendOpen((open) => !open)}
+              className={`${bulkButton} ml-auto text-xs`}
+            >
+              <svg aria-hidden viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-3">
+                {legendOpen ? (
+                  <>
+                    <path d="M3 1.5 6 4.5l3-3" className={`${arrow} motion-safe:group-hover:translate-y-0.5`} />
+                    <path d="M3 10.5 6 7.5l3 3" className={`${arrow} motion-safe:group-hover:-translate-y-0.5`} />
+                  </>
+                ) : (
+                  <>
+                    <path d="M3 4.5 6 1.5l3 3" className={`${arrow} motion-safe:group-hover:-translate-y-0.5`} />
+                    <path d="M3 7.5 6 10.5l3-3" className={`${arrow} motion-safe:group-hover:translate-y-0.5`} />
+                  </>
+                )}
+              </svg>
+              {legendOpen ? "Fold" : "Open"}
+            </button>
+          </div>
+          <div id={legendId} className="legend-fold" data-closed={legendOpen ? undefined : ""}>
+            {/* The folding element's only child (padding on it wouldn't fold away), so the
+                gap above the list is the list's own and is clipped with it. */}
+            <div>
+              <ul className="grid gap-y-1 pt-2 text-xs text-slate-600">
+                {[
+                  ...NAICS_GROUPS.map((g) => ({ key: g.code, color: g.color, code: g.code, name: g.name })),
+                  ...(unclassified ? [{ key: "unknown", color: UNKNOWN_SECTOR, code: "", name: "Sector unknown" }] : []),
+                ].map((row, i, rows) => (
+                  <li
+                    key={row.key}
+                    className="legend-row flex items-center gap-1.5"
+                    style={{ "--d": `${legendOpen ? 90 + i * 28 : (rows.length - 1 - i) * 14}ms` } as React.CSSProperties}
+                  >
+                    <SectorSwatch color={row.color} />
+                    <span className="w-9 shrink-0 font-semibold tabular-nums text-slate-700">{row.code}</span>
+                    <span className="min-w-0">{row.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
@@ -570,6 +601,8 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
           {shown.map(({ p, mode, at: here }) => {
             const { node } = p;
             const sector = sectorOf(node);
+            // Companies we have details on are filled with their sector's colour.
+            const filled = node.kind === "holding" && !node.missing && node.details !== null;
             const on = onPath(node.id);
             const open = !fold.to.has(node.id);
             return (
@@ -614,11 +647,11 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                   zIndex: on ? levels + 4 : levels - p.depth + 1,
                   opacity: here.opacity,
                   animationDelay: `${p.depth * 90}ms`,
+                  backgroundColor: filled ? (sector?.color ?? UNKNOWN_SECTOR) : undefined,
+                  // White text on the deeper sector shades, dark on the light ones.
+                  color: filled && sector ? sector.ink : undefined,
                 }}
               >
-                {node.kind === "holding" && !node.missing && node.details && (
-                  <SectorDiamond color={sector?.color ?? UNKNOWN_SECTOR} />
-                )}
                 {node.symbol &&
                   (node.stored ? (
                     // Shows this product's chart and figures under the map (the page reads
