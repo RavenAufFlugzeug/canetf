@@ -435,8 +435,8 @@ On Windows (PowerShell):
 
 Build the database (first time):
 
-- Run the cells of search/Database.ipynb in order (stocks, the 120 ETFs, the
-  companies they hold), or see docs/TECHNICAL.md section 3.3
+- In search/Database.ipynb, set REBUILD = True and run all cells (stocks, the
+  120 ETFs, the companies they hold), or see docs/TECHNICAL.md section 3.3
 
 
 Keep it updated:

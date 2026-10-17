@@ -94,8 +94,8 @@ When adding a Python package, also add it to `search/requirements.txt`.
 
 ### 3.3 Build the database
 
-The database file is not in git; each machine builds its own. Either run the cells of
-`search/Database.ipynb` in order, or from the project root:
+The database file is not in git; each machine builds its own. Either set `REBUILD = True` in
+`search/Database.ipynb` and run all its cells, or from the project root:
 
 ```bash
 # Linux/macOS: .venv/bin/python   Windows: .venv\Scripts\python
@@ -133,8 +133,7 @@ Sign up at `/signup` to use the Watch List and Account pages.
 
 | How | What it does |
 |---|---|
-| `search/Database.ipynb` | builds the database (stocks, ETFs, held companies) |
-| `search/UpdateDatabase.ipynb` | `list_companies()` (what's stored, how fresh) and `update_database()` |
+| `search/Database.ipynb` | `update_database()` and `list_companies()` (what's stored, how fresh); adding tickers; the full build (stocks, ETFs, held companies) behind `REBUILD = True` |
 | `python search/update.py` | one update run; exits with status 1 if any company failed |
 
 Useful functions in `search/StockUtils.py` (import with `from StockUtils import *` inside `search/`):
@@ -228,8 +227,7 @@ search/                   Python data pipeline
   update.py               one update run (used by the scheduled task)
   etfs.py                 the 120 ETFs
   holding_companies.py    companies held by those ETFs
-  Database.ipynb          build the database
-  UpdateDatabase.ipynb    inspect/update it
+  Database.ipynb          update, inspect or build the database
 docs/                     product spec, development log, this document
 next.config.ts            redirects, experimental view transitions
 ```

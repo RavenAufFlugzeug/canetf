@@ -20,7 +20,7 @@ python3 -m venv .venv                             # Windows: py -m venv .venv
 .venv/bin/pip install -r search/requirements.txt  # Windows: .venv\Scripts\pip ...
 ```
 
-Build the database by running `search/Database.ipynb` (or see
+Build the database by running `search/Database.ipynb` with `REBUILD = True` (or see
 [docs/TECHNICAL.md §3.3](docs/TECHNICAL.md#33-build-the-database)), then:
 
 ```bash
