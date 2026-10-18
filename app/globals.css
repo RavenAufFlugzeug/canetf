@@ -401,6 +401,181 @@ body {
   animation: chart-area-in 700ms ease-out 600ms both;
 }
 
+/* The navbar's link labels (NavLabel in components/Navbar.tsx). At the top of the page
+   they show beside their icons; once the page is scrolled (data-scrolled, set by
+   components/NavShell.tsx) they fold away to the icons alone, sliding shut as they fade,
+   and each opens again while its link is pointed at or tabbed to. */
+.nav-label {
+  display: grid;
+  grid-template-columns: 1fr;
+  transition: grid-template-columns 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.nav-label > span {
+  overflow: hidden;
+}
+
+.nav-label-text {
+  display: block;
+  white-space: nowrap;
+  padding-left: 0.5rem;
+  transition: opacity 300ms ease;
+}
+
+nav[data-scrolled] .nav-label {
+  grid-template-columns: 0fr;
+}
+
+nav[data-scrolled] .nav-label-text {
+  opacity: 0;
+}
+
+nav[data-scrolled] .group:hover .nav-label,
+nav[data-scrolled] .group:focus-visible .nav-label {
+  grid-template-columns: 1fr;
+}
+
+nav[data-scrolled] .group:hover .nav-label-text,
+nav[data-scrolled] .group:focus-visible .nav-label-text {
+  opacity: 1;
+  transition-delay: 150ms;
+}
+
+/* The Sandbox mark (components/SandboxMark.tsx, a 2 × 2 chessboard). Pointed at (or its
+   link is), it rolls over a little, tilting with a slight spring, and rolls back when let
+   go. The scale transition is kept for the navbar, which also grows it a touch. */
+.sandbox-mark {
+  transition:
+    rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    scale 500ms ease-out;
+}
+
+.sandbox-mark:hover,
+.group:hover .sandbox-mark,
+.group:focus-visible .sandbox-mark {
+  rotate: -15deg;
+}
+
+/* The chess-piece marks, the account's pawn (components/AccountMark.tsx) and Home's rook
+   (components/HomeMark.tsx), do the same, but pivot on their base, so they tip over to the
+   left a little like a nudged chess piece and right themselves. */
+.account-mark,
+.home-mark {
+  transform-origin: 50% 100%;
+  transition:
+    rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    scale 500ms ease-out;
+}
+
+.account-mark:hover,
+.group:hover .account-mark,
+.group:focus-visible .account-mark,
+.home-mark:hover,
+.group:hover .home-mark,
+.group:focus-visible .home-mark {
+  rotate: -12deg;
+}
+
+/* Search's magnifying glass (components/SearchMark.tsx). Pointed at (or its link is), it
+   swings a little about its lens, with the same slight spring, and swings back when let
+   go. */
+.search-mark {
+  transform-origin: 40% 40%; /* the lens's centre */
+  transition:
+    rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    scale 500ms ease-out;
+}
+
+.search-mark:hover,
+.group:hover .search-mark,
+.group:focus-visible .search-mark {
+  rotate: -15deg;
+}
+
+/* Log out's door (components/DoorMark.tsx). Pointed at (or its button is), the door swings
+   open on its left hinge, narrowing as its far edge drops, as a door does turning towards
+   you; it closes again when let go. */
+.door-mark-panel {
+  transform-box: view-box;
+  transform-origin: 27px 56px; /* the hinge: the door's left edge, halfway up */
+  transition: transform 550ms cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+
+.door-mark:hover .door-mark-panel,
+.group:hover .door-mark .door-mark-panel,
+.group:focus-visible .door-mark .door-mark-panel {
+  transform: scaleX(0.55) skewY(-10deg);
+}
+
+/* The Watch List's book and pen (components/WatchMark.tsx). It stands straight at rest.
+   Pointed at (or its link is), the whole mark tilts a little as the book opens: the cover
+   folds away to its spine on the left, then the two pages spread out from the middle,
+   left then right; the pen dips towards the page about its nib. All of it reverses when
+   let go, the pages closing first. */
+.watch-mark {
+  transition: rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1);
+}
+
+.watch-mark:hover,
+.group:hover .watch-mark,
+.group:focus-visible .watch-mark {
+  rotate: -8deg;
+}
+
+.watch-mark-cover {
+  transform-box: view-box;
+  transform-origin: 4px 57px; /* the spine, at the cover's left edge */
+  transition:
+    transform 380ms cubic-bezier(0.4, 0, 0.2, 1) 120ms,
+    opacity 260ms ease 160ms;
+}
+
+.watch-mark-page {
+  transform-box: view-box;
+  transform-origin: 45px 58px; /* the middle of the open book */
+  transform: scaleX(0);
+  opacity: 0;
+  transition:
+    transform 380ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease;
+}
+
+.watch-mark-pen {
+  transform-box: view-box;
+  transform-origin: 52px 86px; /* the nib */
+  transition: transform 500ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.watch-mark:hover .watch-mark-cover,
+.group:hover .watch-mark .watch-mark-cover,
+.group:focus-visible .watch-mark .watch-mark-cover {
+  transform: scaleX(0);
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
+.watch-mark:hover .watch-mark-page,
+.group:hover .watch-mark .watch-mark-page,
+.group:focus-visible .watch-mark .watch-mark-page {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform 460ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms,
+    opacity 220ms ease 180ms;
+}
+
+.watch-mark:hover .watch-mark-page-right,
+.group:hover .watch-mark .watch-mark-page-right,
+.group:focus-visible .watch-mark .watch-mark-page-right {
+  transition-delay: 240ms;
+}
+
+.watch-mark:hover .watch-mark-pen,
+.group:hover .watch-mark .watch-mark-pen,
+.group:focus-visible .watch-mark .watch-mark-pen {
+  transform: rotate(-10deg);
+}
+
 /* The strip under the price chart (ListingStrip in components/PriceChart.tsx): pointing at
    the country makes its map pin hop; pointing at the time sweeps the clock's hand round.
    Used through Tailwind's motion-safe:, so reduced motion leaves them still. */
@@ -512,5 +687,52 @@ body {
 
   .chart-tip-text {
     transition: none !important; /* overrides the inline fade timings */
+  }
+
+  /* The navbar's labels open and fold at once. */
+  .nav-label,
+  .nav-label-text {
+    transition: none !important;
+  }
+
+  /* The navbar's marks stay level. */
+  .sandbox-mark,
+  .sandbox-mark:hover,
+  .group:hover .sandbox-mark,
+  .group:focus-visible .sandbox-mark,
+  .account-mark,
+  .account-mark:hover,
+  .group:hover .account-mark,
+  .group:focus-visible .account-mark,
+  .home-mark,
+  .home-mark:hover,
+  .group:hover .home-mark,
+  .group:focus-visible .home-mark {
+    rotate: none;
+    transition: none;
+  }
+
+  /* Search's magnifying glass and the Watch List's book stay level. */
+  .search-mark,
+  .search-mark:hover,
+  .group:hover .search-mark,
+  .group:focus-visible .search-mark,
+  .watch-mark,
+  .watch-mark:hover,
+  .group:hover .watch-mark,
+  .group:focus-visible .watch-mark {
+    rotate: none;
+    transition: none;
+  }
+
+  /* Log out's door and the Watch List's book still open when pointed at, but at once. */
+  .door-mark-panel,
+  .watch-mark-cover,
+  .watch-mark-page,
+  .watch-mark-pen,
+  .watch-mark:hover .watch-mark-page,
+  .group:hover .watch-mark .watch-mark-page,
+  .group:focus-visible .watch-mark .watch-mark-page {
+    transition: none;
   }
 }
