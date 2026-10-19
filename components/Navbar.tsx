@@ -2,7 +2,7 @@ import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import AccountMark from "@/components/AccountMark";
 import DoorMark from "@/components/DoorMark";
-import MapMark from "@/components/MapMark";
+import KeyMark from "@/components/KeyMark";
 import NavLogo from "@/components/NavLogo";
 import NavShell from "@/components/NavShell";
 import SandboxMark from "@/components/SandboxMark";
@@ -11,14 +11,14 @@ import WatchMark from "@/components/WatchMark";
 import { getCurrentUser } from "@/lib/session";
 
 // Every link's icon gets the same box, so they line up at one size. Each mark's viewBox
-// frames its main shape (the glass, the treemap, the cube, the book, the pawn, the
-// door) with the same small margin, so those come out the same size; extras such as
-// Search's star and the Watch List's pen are left to reach past the box.
+// frames its main shape (the glass, the cube, the book, the pawn, the door, the key) with
+// the same small margin, so those come out the same size; extras such as Search's star and
+// the Watch List's pen are left to reach past the box.
 const ICON = "size-[22px]";
 
 // A link (or the log out button) in the navbar: its icon, then its label.
 const ITEM =
-  "group flex items-center rounded outline-none hover:text-slate-900 focus-visible:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-4";
+  "group flex items-center rounded outline-none hover:text-black focus-visible:text-black focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-4";
 
 // A link's label beside its icon. Showing at the top of the page; once the page is
 // scrolled it folds away, opening again while its link is pointed at or tabbed to
@@ -40,7 +40,7 @@ export default async function Navbar() {
     // It stays at the top of the screen as the page scrolls, over a soft frosted backdrop.
     // Named, so page transitions leave it in place while the content changes.
     <NavShell
-      className="sticky top-0 z-40 flex justify-between border-b border-transparent bg-white/80 p-6 text-slate-600 backdrop-blur transition-colors duration-300 data-[scrolled]:border-slate-200"
+      className="sticky top-0 z-40 flex justify-between border-b border-transparent bg-white/80 p-6 text-slate-950 backdrop-blur transition-colors duration-300 data-[scrolled]:border-slate-200"
       style={{ viewTransitionName: "site-header" }}
     >
       <NavLogo />
@@ -49,11 +49,6 @@ export default async function Navbar() {
         <Link href="/search" className={ITEM}>
           <SearchMark className={ICON} />
           <NavLabel>Search</NavLabel>
-        </Link>
-
-        <Link href="/map" className={ITEM}>
-          <MapMark className={ICON} />
-          <NavLabel>Holdings Map</NavLabel>
         </Link>
 
         <Link href="/sandbox" className={ITEM}>
@@ -81,8 +76,10 @@ export default async function Navbar() {
             </form>
           </>
         ) : (
-          <Link href="/login" className="hover:text-blue-600">
-            Login
+          <Link href="/login" className={ITEM}>
+            {/* The key reaches a little past its box, so it gets room either side. */}
+            <KeyMark className={`${ICON} mx-[3px]`} />
+            <NavLabel>Log in</NavLabel>
           </Link>
         )}
       </div>

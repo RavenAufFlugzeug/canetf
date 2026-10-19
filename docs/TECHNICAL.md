@@ -147,7 +147,8 @@ Useful functions in `search/StockUtils.py` (import with `from StockUtils import 
 | `get_etf_breakdown("XIU.TO")` | an ETF's composition straight from Yahoo |
 | `missing_holdings()` | ETF holdings that aren't in the database, and why (`cash`, `stopped` with its last trading day, `unlisted`, or `new`) |
 | `add_missing_holdings(limit=None)` | add them now instead of 15 per update (`recheck=True` also retries holdings that had no listing) |
-| `fill_company_details()` | look up where each company trades and is based, and a fund's provider and category, for those without them (one-off for older databases; the update also fills them as profiles refresh) |
+| `fill_company_details()` | look up where each company trades and is based, a fund's provider and category, and a company's state or province, website, employee count and description, for those without them (one-off for older databases; the update also fills them as profiles refresh) |
+| `fill_company_financials()` | look up each company's revenue and latest balance sheet (total assets and liabilities) for those not yet checked (one-off for older databases; the update also looks them up, at most weekly per company) |
 | `extend_history()` | download every stored company's full daily price history (one-off, for databases built when less was kept; about 30 minutes) |
 
 To add a company or ETF: `build_database(["TICKER"])`. TSX listings need `.TO`
@@ -212,6 +213,7 @@ components/
   CompanyPicker.tsx       symbol search with animated dropdown
   PriceChart.tsx          SVG price chart (1D … 5Y, All), hover, range morphing
   KeyStats.tsx            stats table under the chart
+  CompanyAbout.tsx        a company's About section: NAICS sector, where it's based, size, website, description
   EtfBreakdown.tsx        ETF treemap + holdings list
   HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree), coloured by NAICS
   WatchlistTable.tsx      watch list table (add/remove animations)
@@ -238,7 +240,7 @@ next.config.ts            redirects, experimental view transitions
 
 | Table | One row per | Columns |
 |---|---|---|
-| `companies` | company/ETF | `symbol` (PK), `name`, `sector`, `industry`, `currency`, `market_cap`, `pe_trailing`, `pe_forward`, `week52_high`, `week52_low`, `updated_at` (when the profile was last refreshed), `exchange` (Yahoo's code for where it trades, e.g. `TOR`, `NMS`; named in `lib/exchanges.ts`), `hq_city`, `hq_country` (where a company is based), `fund_family`, `category` (a fund's provider and Yahoo category) |
+| `companies` | company/ETF | `symbol` (PK), `name`, `sector`, `industry`, `currency`, `market_cap`, `pe_trailing`, `pe_forward`, `week52_high`, `week52_low`, `updated_at` (when the profile was last refreshed), `exchange` (Yahoo's code for where it trades, e.g. `TOR`, `NMS`; named in `lib/exchanges.ts`), `hq_city`, `hq_state`, `hq_country` (where a company is based), `fund_family`, `category` (a fund's provider and Yahoo category), `website`, `employees`, `description` (a company's website, full-time staff and Yahoo's business summary, for the Search page's About section), `revenue` (last 12 months), `financial_currency` (the currency it reports in, which can differ from the one it trades in), `total_assets`, `total_liabilities`, `balance_date` (from its latest balance sheet, quarterly else yearly), `balance_checked_at` (balance sheets are looked up at most weekly, `BALANCE_MAX_AGE`) |
 | `quotes` | company (latest only) | `symbol` (PK), `fetched_at`, `price`, `avg_volume` |
 | `prices` | company per trading day | `symbol`, `date`, `open`, `high`, `low`, `close`, `volume` |
 | `intraday` | 5-minute bar, last 5 trading days | `symbol`, `ts` (exchange-local time with offset), `date`, OHLC, `volume` |

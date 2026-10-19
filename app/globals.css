@@ -25,6 +25,30 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Tailwind v4 gives buttons the plain arrow cursor; every button here does something when
+   clicked (Log out, the search switch, …), so it shows the pointing hand, like a link.
+   In the base layer, so a utility such as cursor-default still wins. */
+@layer base {
+  /* Room for the scrollbar is always kept, so the page doesn't shift sideways (navbar and
+     all) when it grows tall enough to scroll, or shrinks back: switching between logging in
+     and creating an account, opening a description, choosing another company. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  /* Edge puts its own eye in password boxes; the login form has its own show/hide button
+     (components/AuthForm.tsx), so Edge's is hidden rather than shown twice. */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none; /* Edge's own eye and clear buttons */
+  }
+}
+
 /* The navbar sits outside the pages (it is built once, in app/layout.tsx), so a page with
    a light grey background lends it to the whole body, to show through the navbar's frosted
    backdrop as it did when the navbar was part of the page. */
@@ -383,6 +407,122 @@ body:has(> main.bg-slate-50) {
   animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* The loading mark (components/DiamondLoader.tsx): its four small diamonds fade out and
+   back in, one after another, round and round. */
+@keyframes diamond-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.15;
+  }
+}
+
+.diamond-loader path {
+  animation: diamond-blink 1100ms ease-in-out infinite both;
+}
+
+/* The Search page's search box (components/SearchBox.tsx): switching between searching by
+   ticker and by name, the new box slides in from the side the switch moved to as it fades
+   in. */
+@keyframes search-swap-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@keyframes search-swap-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+.search-swap-from-right {
+  animation: search-swap-from-right 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.search-swap-from-left {
+  animation: search-swap-from-left 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* The login card (components/AuthForm.tsx), switching between logging in and creating an
+   account: the new form glides and fades in from further out than the search box's, over a
+   longer, gentler curve (in step with the card easing to its new height), and the line at
+   the bottom fades to its new words. */
+@keyframes auth-swap-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+@keyframes auth-swap-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+
+.auth-swap-from-right {
+  animation: auth-swap-from-right 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.auth-swap-from-left {
+  animation: auth-swap-from-left 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.auth-fade {
+  animation: text-fade-in 400ms ease-out 120ms backwards; /* after the form starts moving */
+}
+
+@keyframes text-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* An error message (components/AuthForm.tsx) gives a little shake from side to side as it
+   appears, so it is noticed. */
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.shake {
+  animation: shake 360ms ease-in-out;
+}
+
+/* The Search page's About section (components/CompanyAbout.tsx). The balance bar's two
+   parts grow in from the left, one after the other, and pointing at a row pops the
+   sector's swatch. */
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.bar-grow {
+  transform-origin: left;
+  animation: bar-grow 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.about-swatch {
+  transition: scale 350ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.group\/row:hover .about-swatch {
+  scale: 1.35;
+}
+
 @keyframes chart-draw {
   from {
     stroke-dasharray: 1;
@@ -483,6 +623,20 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   rotate: -15deg;
 }
 
+/* Log in's key (components/KeyMark.tsx) turns the same way, a little further, as if
+   unlocking, and turns back when let go. */
+.key-mark {
+  transition:
+    rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    scale 500ms ease-out;
+}
+
+.key-mark:hover,
+.group:hover .key-mark,
+.group:focus-visible .key-mark {
+  rotate: -20deg;
+}
+
 /* The account's pawn (components/AccountMark.tsx) does the same, but pivots on its base, so
    it tips over to the left a little like a nudged chess piece and rights itself. */
 .account-mark {
@@ -498,12 +652,12 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   rotate: -12deg;
 }
 
-/* LitterBox's logo, the open box (components/LogoMark.tsx). Its cat sits hidden behind the
-   front of the box. Pointed at (or the logo's link is), it peeks: only its ears and the top
-   of its head come up over the rim, its eyes still below. Clicked (data-peek, set by
-   NavLogo until the pointer leaves), its whole head comes up, eyes and all, its chin just
-   behind the rim so it sits in the box rather than floating above it. Each time with a
-   springy bounce; it ducks back down when let go. */
+/* LitterBox's logo, the box (components/LogoMark.tsx). Its cat sits hidden in the box.
+   Pointed at (or the logo's link is), she peeks: as the lid lifts, only her ears and the
+   top of her head come up over the rim, her eyes still below. Clicked (data-peek, set by
+   NavLogo until the pointer leaves), her whole head comes up, eyes and all, her chin just
+   behind the rim so she sits in the box rather than floating above it. Each time with a
+   springy bounce; she ducks back down when let go. */
 .logo-mark-cat {
   transform: translateY(46px);
   transition: transform 500ms cubic-bezier(0.3, 1.5, 0.5, 1);
@@ -512,7 +666,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 .logo-mark:hover .logo-mark-cat,
 .group:hover .logo-mark .logo-mark-cat,
 .group:focus-visible .logo-mark .logo-mark-cat {
-  transform: translateY(22px);
+  transform: translateY(22px); /* ears and the top of her head, eyes still below */
 }
 
 .group[data-peek] .logo-mark .logo-mark-cat {
@@ -658,6 +812,45 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
+/* The home page's create-account panel and the login card share a name (app/page.tsx,
+   components/AuthForm.tsx): following the panel's links, it glides and reshapes into the
+   card while the dark panel fades out and the card fades in, and back on the way home. The
+   moving box keeps rounded corners, and each picture stays at its own size, pinned to the
+   box's top and clipped by it, so neither is stretched or zoomed as the shape changes. */
+::view-transition-group(.auth-morph) {
+  animation-duration: 550ms; /* a little longer than a page's fade, to follow the glide */
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  border-radius: 1.25rem; /* between the panel's and the card's */
+  overflow: clip;
+}
+
+::view-transition-old(.auth-morph),
+::view-transition-new(.auth-morph) {
+  height: 100%;
+  object-fit: none;
+  object-position: 50% 0;
+}
+
+::view-transition-old(.auth-morph) {
+  animation: 220ms ease-in both page-out-fade;
+}
+
+::view-transition-new(.auth-morph) {
+  animation: 380ms ease-out 170ms both page-in-fade;
+}
+
+@keyframes page-out-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-in-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 ::view-transition-group(site-header) {
   animation: none;
   z-index: 100;
@@ -700,7 +893,16 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .map-caption,
   .rise-in,
   .chart-draw,
-  .chart-area-in {
+  .chart-area-in,
+  .bar-grow,
+  .about-swatch,
+  .search-swap-from-right,
+  .search-swap-from-left,
+  .shake,
+  .auth-swap-from-right,
+  .auth-swap-from-left,
+  .auth-fade,
+  .diamond-loader path {
     animation: none;
     transition: none;
   }
@@ -737,6 +939,10 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .sandbox-mark:hover,
   .group:hover .sandbox-mark,
   .group:focus-visible .sandbox-mark,
+  .key-mark,
+  .key-mark:hover,
+  .group:hover .key-mark,
+  .group:focus-visible .key-mark,
   .account-mark,
   .account-mark:hover,
   .group:hover .account-mark,

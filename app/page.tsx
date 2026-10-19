@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ViewTransition } from "react";
 import AccountMark from "@/components/AccountMark";
 import MapMark from "@/components/MapMark";
 import SearchMark from "@/components/SearchMark";
@@ -72,7 +73,7 @@ export default async function Home() {
               {/* The badge turns dark when the card is pointed at; --mark-paper follows its
                   background, so the parts of a mark drawn in the background colour turn
                   with it. */}
-              <span className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition [--mark-paper:var(--color-slate-100)] group-hover:bg-slate-900 group-hover:text-white group-hover:[--mark-paper:var(--color-slate-900)]">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-950 transition [--mark-paper:var(--color-slate-100)] group-hover:bg-slate-900 group-hover:text-white group-hover:[--mark-paper:var(--color-slate-900)]">
                 {feature.icon}
               </span>
               <h3 className="mt-4 font-semibold text-slate-900">{feature.title}</h3>
@@ -82,45 +83,65 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Create account */}
+      {/* Create account. Following its links, this panel morphs into the login or sign-up
+          card on the next page (the two share a view transition name, "auth-card"), and back
+          again on the way home. */}
       <section className="px-6 pb-20">
-        <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl bg-neutral-800 px-8 py-14 text-center shadow-xl">
-          <div className="relative">
-            {user ? (
-              <>
-                <h2 className="text-3xl font-bold text-white">Welcome back, {user.username}</h2>
-                <p className="mx-auto mt-3 max-w-lg text-slate-300">
-                  Pick up where you left off with your watch list.
-                </p>
-                <Link
-                  href="/watchlist"
-                  className="mt-8 inline-block rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-100"
-                >
-                  Open my Watch List
-                </Link>
-              </>
-            ) : (
-              <>
-                <h2 className="text-3xl font-bold text-white">Ready to get started?</h2>
-                <p className="mx-auto mt-3 max-w-lg text-slate-300">
-                  Create a free account to save your watch list and investor profile.
-                </p>
-                <Link
-                  href="/signup"
-                  className="mt-8 inline-block rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-100"
-                >
-                  Create account
-                </Link>
-                <p className="mt-4 text-sm text-slate-400">
-                  Already have one?{" "}
-                  <Link href="/login" className="font-medium text-white underline underline-offset-4 hover:text-slate-200">
-                    Log in
+        <ViewTransition name="auth-card" share="auth-morph">
+          <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl bg-neutral-800 px-8 py-14 text-center shadow-xl">
+            <div className="relative">
+              {user ? (
+                <>
+                  <h2 className="text-3xl font-bold text-white">Welcome back, {user.username}</h2>
+                  <p className="mx-auto mt-3 max-w-lg text-slate-300">
+                    Pick up where you left off with your watch list.
+                  </p>
+                  <Link
+                    href="/watchlist"
+                    className="mt-8 inline-block rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-100"
+                  >
+                    Open my Watch List
                   </Link>
-                </p>
-              </>
-            )}
+                </>
+              ) : (
+                <>
+                  <h2 className="text-3xl font-bold text-white">Ready to get started?</h2>
+                  <p className="mx-auto mt-3 max-w-lg text-slate-300">
+                    Create a free account to save your watch list and investor profile.
+                  </p>
+                  <Link
+                    href="/signup"
+                    className="group/cta mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition duration-300 ease-out hover:bg-slate-100 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-safe:hover:-translate-y-0.5"
+                  >
+                    Create account
+                    {/* An arrow that slides on when the button is pointed at, like the others. */}
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="size-4 transition-transform duration-300 ease-out motion-safe:group-hover/cta:translate-x-1"
+                    >
+                      <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
+                    </svg>
+                  </Link>
+                  <p className="mt-4 text-sm text-slate-400">
+                    Already have one?{" "}
+                    <Link
+                      href="/login"
+                      className="rounded font-semibold text-white underline decoration-slate-500 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    >
+                      Log in
+                    </Link>
+                  </p>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        </ViewTransition>
       </section>
     </main>
   );

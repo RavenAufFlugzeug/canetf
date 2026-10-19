@@ -111,6 +111,50 @@ export async function getExchange(symbol: string): Promise<string | null> {
   return code ?? null;
 }
 
+// What the Search page's About section shows of a company: its sector and industry (for
+// its NAICS group), where it is based, its size, website and what it does, and its revenue
+// (last 12 months) and total assets and liabilities (from its latest balance sheet, as of
+// balanceDate), in the currency it reports in. Columns an older database lacks read as
+// null. A fund has a fund family instead, and none of this.
+export type CompanyProfile = {
+  sector: string | null;
+  industry: string | null;
+  hqCity: string | null;
+  hqState: string | null;
+  hqCountry: string | null;
+  website: string | null;
+  employees: number | null;
+  description: string | null;
+  fundFamily: string | null;
+  revenue: number | null;
+  financialCurrency: string | null;
+  totalAssets: number | null;
+  totalLiabilities: number | null;
+  balanceDate: string | null;
+};
+
+export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
+  return withDb((db) => {
+    const have = new Set(
+      (db.prepare("PRAGMA table_info(companies)").all() as { name: string }[]).map((c) => c.name),
+    );
+    const col = (name: string, as: string) => (have.has(name) ? `${name} AS ${as}` : `NULL AS ${as}`);
+    const row = db
+      .prepare(
+        `SELECT sector, industry, ${col("hq_city", "hqCity")}, ${col("hq_state", "hqState")},
+                ${col("hq_country", "hqCountry")}, ${col("website", "website")},
+                ${col("employees", "employees")}, ${col("description", "description")},
+                ${col("fund_family", "fundFamily")}, ${col("revenue", "revenue")},
+                ${col("financial_currency", "financialCurrency")}, ${col("total_assets", "totalAssets")},
+                ${col("total_liabilities", "totalLiabilities")}, ${col("balance_date", "balanceDate")}
+         FROM companies WHERE symbol = ?`,
+      )
+      .get(symbol.toUpperCase()) as CompanyProfile | undefined;
+    // Copied into a plain object: node:sqlite rows can't be passed to Client Components.
+    return row ? { ...row } : null;
+  });
+}
+
 export type CompanyMatch = Pick<Company, "symbol" | "name">;
 
 // Symbols starting with `prefix`, so "A" finds AAPL and AMZN.
@@ -127,6 +171,41 @@ export async function findCompanies(prefix: string, limit = 10): Promise<Company
         .all(`${escaped}%`, limit) as CompanyMatch[],
   );
   // node:sqlite rows have a null prototype, which server actions can't send to the client.
+  return (matches ?? []).map(({ symbol, name }) => ({ symbol, name }));
+}
+
+// Companies and ETFs whose name contains `text` (any case), best matches first: names that
+// start with it, then names with a word that starts with it, then the rest; shorter names
+// first within each, so "apple" finds Apple Inc. before Pineapple Energy. With etfsOnly,
+// only ETFs that have a composition (the Holdings Map's search, like findEtfs).
+export async function findCompaniesByName(
+  text: string,
+  limit = 10,
+  etfsOnly = false,
+): Promise<CompanyMatch[]> {
+  const escaped = text.replace(/[!%_]/g, (ch) => `!${ch}`);
+  const matches = await withDb((db) => {
+    if (etfsOnly && !hasTable(db, "etf_breakdown")) return [];
+    return db
+      .prepare(
+        `SELECT symbol, name FROM companies
+           WHERE name LIKE :contains ESCAPE '!'
+             ${etfsOnly ? "AND symbol IN (SELECT etf FROM etf_breakdown)" : ""}
+           ORDER BY CASE
+                      WHEN name LIKE :starts ESCAPE '!' THEN 0
+                      WHEN name LIKE :word ESCAPE '!' THEN 1
+                      ELSE 2
+                    END,
+                    length(name), name
+           LIMIT :limit`,
+      )
+      .all({
+        contains: `%${escaped}%`,
+        starts: `${escaped}%`,
+        word: `% ${escaped}%`,
+        limit,
+      }) as CompanyMatch[];
+  });
   return (matches ?? []).map(({ symbol, name }) => ({ symbol, name }));
 }
 

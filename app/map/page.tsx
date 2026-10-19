@@ -1,5 +1,5 @@
 import Link from "next/link";
-import CompanyPicker from "@/components/CompanyPicker";
+import SearchBox from "@/components/SearchBox";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import HoldingsMap from "@/components/HoldingsMap";
 import KeyStats from "@/components/KeyStats";
@@ -54,12 +54,12 @@ export default async function MapPage({
             Explore an ETF&rsquo;s underlying holdings, level by level.
           </p>
           <div className="max-w-xl">
-            <CompanyPicker
-              key={`picker-${etf?.symbol}`}
-              selected={etf?.symbol ?? null}
-              label="Enter an ETF's symbol"
-              hideLabel
-              placeholder="e.g. XEQT.TO"
+            {/* Find an ETF by its ticker or by (part of) its name, with a switch. */}
+            <SearchBox
+              symbol={etf?.symbol ?? null}
+              name={etf?.name ?? null}
+              lead="Find an ETF by"
+              placeholders={{ symbol: "e.g. XEQT.TO", name: "e.g. iShares" }}
               etfsOnly
             />
           </div>

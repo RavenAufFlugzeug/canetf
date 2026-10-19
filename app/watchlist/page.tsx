@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/watchlist";
-import CompanyPicker from "@/components/CompanyPicker";
+import Prompt from "@/components/Prompt";
+import SearchBox from "@/components/SearchBox";
 import WatchlistTable from "@/components/WatchlistTable";
 import { getAppDb } from "@/lib/appDb";
 import { getCompanies } from "@/lib/db";
@@ -31,18 +31,21 @@ export default async function WatchlistPage() {
           <h1 className="text-2xl font-bold text-slate-900">Watch List</h1>
 
           {!user ? (
-            <p className="mt-4 text-slate-600">
-              <Link href="/login?next=/watchlist" className="text-blue-600 hover:underline">
-                Log in
-              </Link>{" "}
-              to build your watch list of companies and ETFs.
-            </p>
+            // Signed out: the same login prompt as the Sandbox page's.
+            <div className="mt-4 max-w-xl">
+              <Prompt
+                text="Log in to build your watch list of companies and ETFs."
+                href="/login?next=/watchlist"
+                action="Log in"
+              />
+            </div>
           ) : (
             <>
               <div className="max-w-xl">
-                <CompanyPicker
-                  label="Add a company or ETF"
-                  placeholder="e.g. AAPL or XEQT.TO"
+                {/* Add a company or ETF, found by its ticker or by (part of) its name. */}
+                <SearchBox
+                  lead="Add a company or ETF by"
+                  placeholders={{ symbol: "e.g. AAPL or XEQT.TO", name: "e.g. Apple or iShares" }}
                   onChoose={addToWatchlist}
                   added={symbols}
                 />

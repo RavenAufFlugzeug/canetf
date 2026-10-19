@@ -1,10 +1,18 @@
 import Link from "next/link";
-import CompanyPicker from "@/components/CompanyPicker";
+import CompanyAbout from "@/components/CompanyAbout";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import KeyStats from "@/components/KeyStats";
 import MapMark from "@/components/MapMark";
 import PriceChart from "@/components/PriceChart";
-import { getCompany, getEtfBreakdown, getExchange, getKeyStats, getPriceHistory } from "@/lib/db";
+import SearchBox from "@/components/SearchBox";
+import {
+  getCompany,
+  getCompanyProfile,
+  getEtfBreakdown,
+  getExchange,
+  getKeyStats,
+  getPriceHistory,
+} from "@/lib/db";
 
 export default async function SearchPage({
   searchParams,
@@ -18,18 +26,15 @@ export default async function SearchPage({
   const stats = company ? await getKeyStats(company.symbol) : null;
   const exchange = company ? await getExchange(company.symbol) : null;
   const breakdown = company ? await getEtfBreakdown(company.symbol) : null;
+  const profile = company ? await getCompanyProfile(company.symbol) : null;
 
   return (
     <main className="flex-1 bg-slate-50">
       <section className="mx-auto max-w-2xl px-6 pt-10 pb-12">
         <div className="rounded-2xl bg-white p-8 shadow">
           <h1 className="text-2xl font-bold text-slate-900">Search</h1>
-          <CompanyPicker
-            key={`picker-${company?.symbol}`}
-            selected={company?.symbol ?? null}
-            hideLabel
-          />
-
+          {/* Find a company or ETF by its ticker or by (part of) its name, with a switch. */}
+          <SearchBox symbol={company?.symbol ?? null} name={company?.name ?? null} />
           {company && history ? (
             // Keyed by symbol, so each newly chosen company plays its entrance.
             <div key={`company-${company.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
@@ -42,6 +47,11 @@ export default async function SearchPage({
                 <PriceChart history={history} currency={company.currency} exchange={exchange} />
               </div>
               {stats && <KeyStats stats={stats} currency={company.currency} />}
+              {/* A company (not a fund) gets an About section: sector, where it is based,
+                  size, website and what it does. */}
+              {profile && !breakdown && !profile.fundFamily && (
+                <CompanyAbout name={company.name ?? company.symbol} profile={profile} />
+              )}
               {breakdown && (
                 <div className="rise-in" style={{ animationDelay: "400ms" }}>
                   <EtfBreakdown breakdown={breakdown} />
@@ -63,7 +73,7 @@ export default async function SearchPage({
             <p className="rise-in mt-4 text-slate-600">
               {typeof symbol === "string" && symbol
                 ? `No company with the symbol ${symbol.toUpperCase()} in our database.`
-                : "Enter a symbol to see the company's price chart and key figures."}
+                : "Search for a company or ETF by its ticker or name to see its price chart and key figures."}
             </p>
           )}
         </div>

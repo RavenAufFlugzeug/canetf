@@ -1,5 +1,6 @@
 import Link from "next/link";
-import CompanyPicker from "@/components/CompanyPicker";
+import Prompt from "@/components/Prompt";
+import SearchBox from "@/components/SearchBox";
 import PriceChart from "@/components/PriceChart";
 import WatchMark from "@/components/WatchMark";
 import { getAppDb } from "@/lib/appDb";
@@ -40,14 +41,14 @@ export default async function SandboxPage({
             data. Start by choosing a company or ETF, by searching for it or from your watch list.
           </p>
 
-          <CompanyPicker key={`picker-${company?.symbol}`} selected={company?.symbol ?? null} hideLabel />
+          {/* Find a company or ETF by its ticker or by (part of) its name, with a switch. */}
+          <SearchBox symbol={company?.symbol ?? null} name={company?.name ?? null} />
 
           {/* The watch list as chips: choosing one shows it below, like the picker does. */}
           <div className="mt-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">From your watch list</p>
             {!user ? (
               <Prompt
-                icon={<KeyIcon />}
                 text="Log in to choose from the companies and ETFs on your watch list."
                 href="/login?next=/sandbox"
                 action="Log in"
@@ -118,50 +119,6 @@ export default async function SandboxPage({
   );
 }
 
-// The watch list section's message when there are no chips to show (signed out, or an
-// empty watch list): an icon, a line of text and a button. The panel rises in; pointing at
-// it brightens its border and stirs the icon (each icon below says how; a navbar mark,
-// being in a `group`, plays its own animation), and the button lifts with its arrow
-// sliding forward, like the Search page's map button.
-function Prompt({
-  icon,
-  text,
-  href,
-  action,
-}: {
-  icon: React.ReactNode;
-  text: string;
-  href: string;
-  action: string;
-}) {
-  return (
-    <div
-      className="rise-in group group/prompt mt-2 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-sm"
-      style={{ animationDelay: "120ms" }}
-    >
-      {icon}
-      <p className="min-w-0 flex-1 text-sm text-slate-600">{text}</p>
-      <Link
-        href={href}
-        className="group/button inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-300 ease-out hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:translate-y-0 active:shadow-sm motion-safe:hover:-translate-y-0.5"
-      >
-        {action}
-        <svg
-          aria-hidden
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="size-3.5 transition-transform duration-300 ease-out motion-safe:group-hover/button:translate-x-1"
-        >
-          <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
-        </svg>
-      </Link>
-    </div>
-  );
-}
 
 // An icon in a round white badge (the empty watch list's book and pen); it darkens and
 // lifts a touch when its panel is pointed at.
@@ -170,26 +127,5 @@ function BadgeIcon({ children }: { children: React.ReactNode }) {
     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200 transition duration-300 ease-out group-hover/prompt:text-slate-900 group-hover/prompt:ring-slate-300 motion-safe:group-hover/prompt:-translate-y-0.5 motion-safe:group-hover/prompt:scale-105">
       {children}
     </span>
-  );
-}
-
-// The login prompt's icon: a solid dark key, all sharp edges to match the page's triangle
-// mark. Its bow is a diamond with a smaller diamond cut through it; its shaft is a straight
-// bar with a square end, and its two teeth are rectangles. When its panel is pointed at, it
-// gives a small turn, as if unlocking.
-function KeyIcon() {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      className="size-9 shrink-0 fill-slate-900 transition-transform duration-500 ease-out motion-safe:group-hover/prompt:-rotate-[20deg]"
-    >
-      {/* The bow: a diamond, with a smaller diamond cut out of its middle. */}
-      <path fillRule="evenodd" d="M0.6 12 6.2 6.4l5.6 5.6-5.6 5.6L0.6 12Zm3.5 0 2.1-2.1 2.1 2.1-2.1 2.1L4.1 12Z" />
-      {/* The shaft, a straight bar with a square end, and two rectangular teeth. */}
-      <path d="M10.8 10.7h12.6v2.6H10.8Z" />
-      <path d="M16.6 13.3h2v3h-2Z" />
-      <path d="M20.6 13.3h2.8v3.6h-2.8Z" />
-    </svg>
   );
 }

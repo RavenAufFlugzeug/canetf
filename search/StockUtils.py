@@ -44,11 +44,22 @@ CREATE TABLE IF NOT EXISTS companies (          -- one row per company (latest i
     exchange    TEXT,                           -- where it trades: Yahoo's exchange code,
                                                 --   e.g. TOR (Toronto), NMS (Nasdaq)
     hq_city     TEXT,                           -- where a company is based (NULL for funds)
+    hq_state    TEXT,                           --   its state or province, where Yahoo has one
     hq_country  TEXT,
     fund_family TEXT,                           -- a fund's provider, e.g. BlackRock (NULL for
                                                 --   companies)
-    category    TEXT                            -- a fund's category, e.g. Large Blend, when
+    category    TEXT,                           -- a fund's category, e.g. Large Blend, when
                                                 --   Yahoo has one
+    website     TEXT,                           -- a company's website
+    employees   INTEGER,                        -- a company's full-time employees
+    description TEXT,                           -- what it does: Yahoo's business summary
+    revenue     REAL,                           -- a company's revenue over the last 12 months,
+    financial_currency TEXT,                    --   in the currency it reports in (which can
+                                                --   differ from the one it trades in)
+    total_assets      REAL,                     -- from its latest balance sheet (quarterly,
+    total_liabilities REAL,                     --   else yearly), in financial_currency
+    balance_date       TEXT,                    -- the date that balance sheet is for
+    balance_checked_at TEXT                     -- when it was last looked up (BALANCE_MAX_AGE)
 );""" + QUOTES_TABLE + """;
 CREATE TABLE IF NOT EXISTS prices (             -- one row per company per day
     symbol TEXT NOT NULL REFERENCES companies(symbol),
@@ -94,10 +105,20 @@ CREATE TABLE IF NOT EXISTS holding_symbols (    -- how ETF holdings map to compa
 # Columns added to holding_symbols after it was first created, for _migrate_columns.
 HOLDING_SYMBOLS_ADDED = [("reason", "TEXT"), ("last_trade", "TEXT")]
 COMPANIES_ADDED = [("exchange", "TEXT"), ("hq_city", "TEXT"), ("hq_country", "TEXT"),
-                   ("fund_family", "TEXT"), ("category", "TEXT")]
+                   ("fund_family", "TEXT"), ("category", "TEXT"), ("hq_state", "TEXT"),
+                   ("website", "TEXT"), ("employees", "INTEGER"), ("description", "TEXT"),
+                   ("revenue", "REAL"), ("financial_currency", "TEXT"), ("total_assets", "REAL"),
+                   ("total_liabilities", "REAL"), ("balance_date", "TEXT"),
+                   ("balance_checked_at", "TEXT")]
 # The company columns get_company_info fills from Yahoo's profile beyond the original ones
 # (save_company and fill_company_details write them; a missing value keeps the old one).
-PROFILE_EXTRAS = ["exchange", "hq_city", "hq_country", "fund_family", "category"]
+PROFILE_EXTRAS = ["exchange", "hq_city", "hq_country", "fund_family", "category",
+                  "hq_state", "website", "employees", "description", "revenue",
+                  "financial_currency"]
+# The ones added for the Search page's About section (where a company is based in more
+# detail, its website, size and what it does): fill_company_details looks these up for the
+# companies that have none of them yet.
+ABOUT_EXTRAS = ["hq_state", "website", "employees", "description"]
 
 # How much daily price history every company gets: everything Yahoo has (the website's
 # "All" chart range shows it).
@@ -106,6 +127,11 @@ HISTORY_PERIOD = "max"
 # (max days since the last stored price, yfinance period to download).
 # Each limit is a bit shorter than its period, so the download always overlaps the data we already have.
 UPDATE_STEPS = [(1, "1d"), (7, "5d"), (28, "1mo"), (89, "3mo"), (180, "6mo"), (360, "1y")]
+
+# A company's balance sheet (total assets and liabilities) changes once a quarter, and
+# costs a request of its own, so a profile refresh looks it up again only once this much
+# time has passed since the last look.
+BALANCE_MAX_AGE = timedelta(days=7)
 
 # Intraday bars behind the website's 1D and 5D charts. Replaced in full on every refresh.
 INTRADAY_PERIOD, INTRADAY_INTERVAL = "5d", "5m"
@@ -186,7 +212,60 @@ def get_company_info(symbol, info=None):
         "hq_country": info.get("country"),
         "fund_family": info.get("fundFamily"),
         "category": info.get("category"),
+        "hq_state": info.get("state"),
+        "website": info.get("website"),
+        "employees": _num(info.get("fullTimeEmployees"), int),
+        "description": info.get("longBusinessSummary"),
+        "revenue": _num(info.get("totalRevenue")),
+        "financial_currency": info.get("financialCurrency"),
     }
+
+
+# The balance sheet rows for total liabilities, preferred first (Yahoo names it either way).
+LIABILITY_ROWS = ["Total Liabilities Net Minority Interest", "Total Liabilities"]
+
+
+def get_balance_sheet(symbol):
+    """A company's latest total assets and liabilities -> dict, from its latest quarterly
+    balance sheet, else its latest yearly one; None when Yahoo has neither (funds have
+    none). Amounts are in the currency the company reports in.
+    """
+    t = yf.Ticker(symbol)
+    for sheet in (t.quarterly_balance_sheet, t.balance_sheet):
+        if sheet is None or sheet.empty or "Total Assets" not in sheet.index:
+            continue
+        for date in sheet.columns:                      # newest first
+            assets = _num(sheet.at["Total Assets", date])
+            if assets is None:
+                continue
+            row = next((r for r in LIABILITY_ROWS if r in sheet.index
+                        and _num(sheet.at[r, date]) is not None), None)
+            return {"total_assets": assets,
+                    "total_liabilities": _num(sheet.at[row, date]) if row else None,
+                    "balance_date": pd.Timestamp(date).date().isoformat()}
+    return None
+
+
+def save_balance_sheet(conn, symbol, balance):
+    """Store a company's balance sheet (from get_balance_sheet; None keeps the old one) and
+    note that it was looked up now."""
+    now = datetime.now().isoformat(timespec="seconds")
+    if balance:
+        conn.execute(
+            """UPDATE companies SET total_assets = ?, total_liabilities = ?, balance_date = ?,
+                                     balance_checked_at = ? WHERE symbol = ?""",
+            (balance["total_assets"], balance["total_liabilities"], balance["balance_date"],
+             now, symbol))
+    else:
+        conn.execute("UPDATE companies SET balance_checked_at = ? WHERE symbol = ?", (now, symbol))
+
+
+def _balance_due(conn, symbol):
+    """Whether a company's balance sheet hasn't been looked up within BALANCE_MAX_AGE."""
+    row = conn.execute("SELECT balance_checked_at FROM companies WHERE symbol = ?",
+                       (symbol.upper(),)).fetchone()
+    return (not row or not row[0]
+            or datetime.now() - datetime.fromisoformat(row[0]) > BALANCE_MAX_AGE)
 
 
 def get_history(symbol, period="1y", interval="1d", start=None, end=None):
@@ -422,6 +501,10 @@ def _refresh_company(conn, symbol, period, replace_prices=False, profile=True):
     raw_info = _get_info(yf.Ticker(symbol)) if profile else {}
     info = get_company_info(symbol, raw_info) if profile else None
     breakdown = _get_etf_breakdown(symbol, raw_info) if profile else None
+    # A company's (not a fund's) balance sheet, when it is due another look.
+    check_balance = (profile and raw_info.get("quoteType") == "EQUITY"
+                     and _balance_due(conn, symbol))
+    balance = get_balance_sheet(symbol) if check_balance else None
     # The latest daily bar's close is the current price while the market is open.
     price = history["Close"].iloc[-1]
     avg_volume = raw_info.get("averageVolume")
@@ -438,6 +521,8 @@ def _refresh_company(conn, symbol, period, replace_prices=False, profile=True):
             save_intraday(conn, symbol, intraday)
         if breakdown is not None:
             save_etf_breakdown(conn, symbol, breakdown)
+        if check_balance:
+            save_balance_sheet(conn, symbol.upper(), balance)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -790,7 +875,8 @@ def extend_history(db_path=DB_PATH, period=HISTORY_PERIOD, starting_after=None):
 
 def fill_company_details(db_path=DB_PATH):
     """Store the PROFILE_EXTRAS (where a company trades and is based, a fund's provider and
-    category) for the companies that have none of them yet.
+    category, a company's website, size and description) for the companies missing them:
+    those with none of the original extras, no exchange, or none of the ABOUT_EXTRAS.
 
     For databases built before those columns existed; update_database fills them in anyway
     as each profile is refreshed, but only about PROFILES_PER_RUN a run. Downloads each
@@ -798,10 +884,12 @@ def fill_company_details(db_path=DB_PATH):
     next call. Returns the symbols that failed.
     """
     conn = init_db(db_path)
+    original = [c for c in PROFILE_EXTRAS if c != "exchange" and c not in ABOUT_EXTRAS]
     todo = [r[0] for r in conn.execute(
         f"""SELECT symbol FROM companies
-            WHERE {" AND ".join(f"{c} IS NULL" for c in PROFILE_EXTRAS if c != "exchange")}
+            WHERE ({" AND ".join(f"{c} IS NULL" for c in original)})
                OR exchange IS NULL
+               OR ({" AND ".join(f"{c} IS NULL" for c in ABOUT_EXTRAS)})
             ORDER BY symbol""")]
     print(f"Looking up the details of {len(todo)} companies\n")
     failed = []
@@ -815,11 +903,54 @@ def fill_company_details(db_path=DB_PATH):
                         f"""UPDATE companies SET {", ".join(f"{c} = COALESCE(?, {c})" for c in found)}
                             WHERE symbol = ?""", (*found.values(), symbol))
                     conn.commit()
-                print(f"✓ {symbol}: " + (", ".join(f"{c}={v}" for c, v in found.items()) or "nothing from Yahoo"))
+                shown = {c: (f"{len(v)} characters" if c == "description" else v) for c, v in found.items()}
+                print(f"✓ {symbol}: " + (", ".join(f"{c}={v}" for c, v in shown.items()) or "nothing from Yahoo"))
             except Exception as e:
                 conn.rollback()
                 failed.append(symbol)
                 print(f"✗ {symbol}: {e}")
+            time.sleep(UPDATE_PAUSE_SECONDS)
+    finally:
+        conn.close()
+    print("\nDone." + (f" Failed: {failed}" if failed else ""))
+    return failed
+
+
+def fill_company_financials(db_path=DB_PATH):
+    """Store each company's revenue (with the currency it reports in) and latest balance
+    sheet, for the companies (not funds) whose balance sheet hasn't been looked up yet.
+
+    For databases built before those columns existed; update_database fills them in anyway
+    as each profile is refreshed. Downloads each company's profile and balance sheet.
+    Returns the symbols that failed.
+    """
+    conn = init_db(db_path)
+    todo = [r[0] for r in conn.execute(
+        """SELECT symbol FROM companies
+           WHERE fund_family IS NULL AND sector IS NOT NULL AND balance_checked_at IS NULL
+           ORDER BY symbol""")]
+    print(f"Looking up the financials of {len(todo)} companies\n", flush=True)
+    failed = []
+    try:
+        for symbol in todo:
+            try:
+                info = get_company_info(symbol)
+                balance = get_balance_sheet(symbol)
+                conn.execute(
+                    """UPDATE companies SET revenue = COALESCE(?, revenue),
+                                            financial_currency = COALESCE(?, financial_currency)
+                       WHERE symbol = ?""",
+                    (info["revenue"], info["financial_currency"], symbol))
+                save_balance_sheet(conn, symbol, balance)
+                conn.commit()
+                print(f"✓ {symbol}: revenue {info['revenue']} {info['financial_currency']}, "
+                      + (f"assets {balance['total_assets']}, liabilities "
+                         f"{balance['total_liabilities']} ({balance['balance_date']})"
+                         if balance else "no balance sheet"), flush=True)
+            except Exception as e:
+                conn.rollback()
+                failed.append(symbol)
+                print(f"✗ {symbol}: {e}", flush=True)
             time.sleep(UPDATE_PAUSE_SECONDS)
     finally:
         conn.close()

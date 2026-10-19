@@ -1,13 +1,21 @@
 "use server";
 
-import { findCompanies, findEtfs, type CompanyMatch } from "@/lib/db";
+import { findCompanies, findCompaniesByName, findEtfs, type CompanyMatch } from "@/lib/db";
 
-const MAX_QUERY_LENGTH = 12;
+// Longest search accepted: a symbol, or a (part of a) company's name.
+const MAX_LENGTH = { symbol: 12, name: 60 };
 
-// With etfsOnly, only ETFs that have a composition are found.
-export async function searchCompanies(query: unknown, etfsOnly: unknown = false): Promise<CompanyMatch[]> {
+// By symbol (those starting with the query), or by name (those containing it). With
+// etfsOnly, only ETFs that have a composition are found.
+export async function searchCompanies(
+  query: unknown,
+  etfsOnly: unknown = false,
+  by: unknown = "symbol",
+): Promise<CompanyMatch[]> {
   if (typeof query !== "string") return [];
-  const prefix = query.trim();
-  if (!prefix || prefix.length > MAX_QUERY_LENGTH) return [];
-  return etfsOnly === true ? findEtfs(prefix) : findCompanies(prefix);
+  const text = query.trim();
+  const byName = by === "name";
+  if (!text || text.length > MAX_LENGTH[byName ? "name" : "symbol"]) return [];
+  if (byName) return findCompaniesByName(text, 10, etfsOnly === true);
+  return etfsOnly === true ? findEtfs(text) : findCompanies(text);
 }
