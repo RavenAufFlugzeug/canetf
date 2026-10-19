@@ -1,54 +1,36 @@
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import AccountMark from "@/components/AccountMark";
+import MapMark from "@/components/MapMark";
+import SearchMark from "@/components/SearchMark";
+import WatchMark from "@/components/WatchMark";
 import { getCurrentUser } from "@/lib/session";
 
-// What the site offers, one card each. Icons are 24×24 line drawings.
+// What the site offers, one card each, each with its page's mark, which plays its
+// animation while the card is pointed at.
 const FEATURES = [
   {
     title: "Search ETFs & companies",
     text: "Look up any Canadian ETF or company to see its price history, key figures and what each fund holds.",
     href: "/search",
-    icon: (
-      <>
-        <circle cx="11" cy="11" r="6.5" />
-        <path d="m16 16 4.5 4.5" />
-      </>
-    ),
+    icon: <SearchMark className="size-6" />,
   },
   {
     title: "Holdings Map",
     text: "Follow an ETF down through the funds it owns to the companies underneath, level by level.",
     href: "/map",
-    icon: (
-      <>
-        <rect x="9" y="3" width="6" height="5" rx="1" />
-        <rect x="3" y="16" width="6" height="5" rx="1" />
-        <rect x="15" y="16" width="6" height="5" rx="1" />
-        <path d="M12 8v4M6 16v-4h12v4" />
-      </>
-    ),
+    icon: <MapMark className="size-6" />,
   },
   {
     title: "Watch List",
     text: "Keep the ETFs you care about in one place and check how they are doing at a glance.",
     href: "/watchlist",
-    icon: (
-      <>
-        <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </>
-    ),
+    icon: <WatchMark id="watch-mark-welcome" className="size-6" />,
   },
   {
     title: "Investor Profile",
     text: "Answer a few questions about your goals and comfort with risk to build a plan that suits you.",
     href: "/onboarding",
-    icon: (
-      <>
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
-      </>
-    ),
+    icon: <AccountMark className="size-6" />,
   },
 ];
 
@@ -56,9 +38,7 @@ export default async function Home() {
   const user = await getCurrentUser();
 
   return (
-    <main className="min-h-screen bg-white">
-      <Navbar />
-
+    <main className="flex-1 bg-white">
       {/* Hero */}
       <section className="relative px-6 pb-24 pt-16 text-center sm:pt-24">
         <div className="relative mx-auto max-w-3xl">
@@ -66,7 +46,7 @@ export default async function Home() {
             className="rise-in text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl"
             style={{ animationDelay: "100ms" }}
           >
-            Welcome to CanETF
+            Welcome to LitterBox
           </h1>
 
           <p
@@ -89,18 +69,11 @@ export default async function Home() {
               className="rise-in group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-300/50"
               style={{ animationDelay: `${400 + i * 100}ms` }}
             >
-              <span className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-900 group-hover:text-white">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="size-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {feature.icon}
-                </svg>
+              {/* The badge turns dark when the card is pointed at; --mark-paper follows its
+                  background, so the parts of a mark drawn in the background colour turn
+                  with it. */}
+              <span className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition [--mark-paper:var(--color-slate-100)] group-hover:bg-slate-900 group-hover:text-white group-hover:[--mark-paper:var(--color-slate-900)]">
+                {feature.icon}
               </span>
               <h3 className="mt-4 font-semibold text-slate-900">{feature.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-slate-600">{feature.text}</p>

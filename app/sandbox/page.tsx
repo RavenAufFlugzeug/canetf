@@ -1,8 +1,7 @@
 import Link from "next/link";
 import CompanyPicker from "@/components/CompanyPicker";
-import Navbar from "@/components/Navbar";
 import PriceChart from "@/components/PriceChart";
-import SandboxMark from "@/components/SandboxMark";
+import WatchMark from "@/components/WatchMark";
 import { getAppDb } from "@/lib/appDb";
 import { getCompanies, getCompany, getExchange, getPriceHistory } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -32,16 +31,10 @@ export default async function SandboxPage({
   );
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <section className="mx-auto max-w-2xl px-6 pb-12">
+    <main className="flex-1 bg-slate-50">
+      <section className="mx-auto max-w-2xl px-6 pt-10 pb-12">
         <div className="rounded-2xl bg-white p-8 shadow">
-          {/* The mark sits on the heading's baseline, about as tall as its capitals. */}
-          <div className="flex items-baseline gap-2.5">
-            <SandboxMark className="size-[20px] text-slate-900" popIn />
-            <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
-          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
           <p className="mt-1 text-slate-600">
             A workspace for testing your ideas, forecasts and expectations against real market
             data. Start by choosing a company or ETF, by searching for it or from your watch list.
@@ -62,10 +55,9 @@ export default async function SandboxPage({
             ) : watched.length === 0 ? (
               <Prompt
                 icon={
-                  // An eye: the watch list.
+                  // The Watch List's own mark, the book and pen.
                   <BadgeIcon>
-                    <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
-                    <circle cx="12" cy="12" r="3" />
+                    <WatchMark id="watch-mark-sandbox" className="size-4.5" />
                   </BadgeIcon>
                 }
                 text="Your watch list is empty. Add companies and ETFs to it, and they will appear here."
@@ -128,8 +120,9 @@ export default async function SandboxPage({
 
 // The watch list section's message when there are no chips to show (signed out, or an
 // empty watch list): an icon, a line of text and a button. The panel rises in; pointing at
-// it brightens its border and stirs the icon (each icon below says how), and the button
-// lifts with its arrow sliding forward, like the Search page's map button.
+// it brightens its border and stirs the icon (each icon below says how; a navbar mark,
+// being in a `group`, plays its own animation), and the button lifts with its arrow
+// sliding forward, like the Search page's map button.
 function Prompt({
   icon,
   text,
@@ -143,7 +136,7 @@ function Prompt({
 }) {
   return (
     <div
-      className="rise-in group/prompt mt-2 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-sm"
+      className="rise-in group group/prompt mt-2 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-sm"
       style={{ animationDelay: "120ms" }}
     >
       {icon}
@@ -170,14 +163,12 @@ function Prompt({
   );
 }
 
-// A line icon in a round white badge (the empty watch list's eye); it darkens and lifts
-// a touch when its panel is pointed at.
+// An icon in a round white badge (the empty watch list's book and pen); it darkens and
+// lifts a touch when its panel is pointed at.
 function BadgeIcon({ children }: { children: React.ReactNode }) {
   return (
     <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200 transition duration-300 ease-out group-hover/prompt:text-slate-900 group-hover/prompt:ring-slate-300 motion-safe:group-hover/prompt:-translate-y-0.5 motion-safe:group-hover/prompt:scale-105">
-      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-4.5">
-        {children}
-      </svg>
+      {children}
     </span>
   );
 }

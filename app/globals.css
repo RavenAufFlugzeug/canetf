@@ -25,6 +25,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* The navbar sits outside the pages (it is built once, in app/layout.tsx), so a page with
+   a light grey background lends it to the whole body, to show through the navbar's frosted
+   backdrop as it did when the navbar was part of the page. */
+body:has(> main.bg-slate-50) {
+  background: var(--color-slate-50); /* the page's own grey */
+}
+
 /* Price chart: the axes and caption fade in when the range changes (components/PriceChart.tsx). */
 @keyframes chart-fade {
   from {
@@ -441,7 +448,27 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transition-delay: 150ms;
 }
 
-/* The Sandbox mark (components/SandboxMark.tsx, a 2 × 2 chessboard). Pointed at (or its
+/* The Holdings Map's treemap (components/MapMark.tsx). Pointed at (or its card is), its
+   tiles pop one after another, each swelling and settling, in a quick wave (each tile's
+   delay is set on it). */
+.map-mark-tile {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.map-mark:hover .map-mark-tile,
+.group:hover .map-mark .map-mark-tile,
+.group:focus-visible .map-mark .map-mark-tile {
+  animation: map-mark-pop 480ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+
+@keyframes map-mark-pop {
+  40% { /* the swell, before it springs back */
+    transform: scale(1.22);
+  }
+}
+
+/* The Sandbox mark (components/SandboxMark.tsx, a cube with a chessboard on top). Pointed at (or its
    link is), it rolls over a little, tilting with a slight spring, and rolls back when let
    go. The scale transition is kept for the navbar, which also grows it a touch. */
 .sandbox-mark {
@@ -456,11 +483,9 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   rotate: -15deg;
 }
 
-/* The chess-piece marks, the account's pawn (components/AccountMark.tsx) and Home's rook
-   (components/HomeMark.tsx), do the same, but pivot on their base, so they tip over to the
-   left a little like a nudged chess piece and right themselves. */
-.account-mark,
-.home-mark {
+/* The account's pawn (components/AccountMark.tsx) does the same, but pivots on its base, so
+   it tips over to the left a little like a nudged chess piece and rights itself. */
+.account-mark {
   transform-origin: 50% 100%;
   transition:
     rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
@@ -469,18 +494,64 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 .account-mark:hover,
 .group:hover .account-mark,
-.group:focus-visible .account-mark,
-.home-mark:hover,
-.group:hover .home-mark,
-.group:focus-visible .home-mark {
+.group:focus-visible .account-mark {
   rotate: -12deg;
 }
 
-/* Search's magnifying glass (components/SearchMark.tsx). Pointed at (or its link is), it
-   swings a little about its lens, with the same slight spring, and swings back when let
-   go. */
+/* LitterBox's logo, the open box (components/LogoMark.tsx). Its cat sits hidden behind the
+   front of the box. Pointed at (or the logo's link is), it peeks: only its ears and the top
+   of its head come up over the rim, its eyes still below. Clicked (data-peek, set by
+   NavLogo until the pointer leaves), its whole head comes up, eyes and all, its chin just
+   behind the rim so it sits in the box rather than floating above it. Each time with a
+   springy bounce; it ducks back down when let go. */
+.logo-mark-cat {
+  transform: translateY(46px);
+  transition: transform 500ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.logo-mark:hover .logo-mark-cat,
+.group:hover .logo-mark .logo-mark-cat,
+.group:focus-visible .logo-mark .logo-mark-cat {
+  transform: translateY(22px);
+}
+
+.group[data-peek] .logo-mark .logo-mark-cat {
+  transform: translateY(6px); /* the head out, its chin just behind the rim */
+}
+
+/* Clicked once more, she gets cross: an angry mark by her head pops up from nothing,
+   overshooting a little, then throbs for as long as she stays cross. */
+.logo-mark-angry {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0);
+}
+
+.group[data-angry] .logo-mark .logo-mark-angry {
+  transform: none;
+  animation:
+    logo-mark-angry-pop 320ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    logo-mark-angry-throb 700ms ease-in-out 320ms infinite alternate;
+}
+
+@keyframes logo-mark-angry-pop {
+  from {
+    transform: scale(0);
+  }
+}
+
+@keyframes logo-mark-angry-throb {
+  to {
+    transform: scale(1.18);
+  }
+}
+
+/* Search's magnifying glass and star (components/SearchMark.tsx). Pointed at (or its link
+   is), the glass swings a little about its lens, with the same slight spring, and swings
+   back when let go; meanwhile the star twinkles, popping bigger as it turns a quarter
+   turn, which brings it back to the same shape. */
 .search-mark {
-  transform-origin: 40% 40%; /* the lens's centre */
+  transform-origin: 39.7% 39.7%; /* the lens's centre */
   transition:
     rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1),
     scale 500ms ease-out;
@@ -490,6 +561,26 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 .group:hover .search-mark,
 .group:focus-visible .search-mark {
   rotate: -15deg;
+}
+
+.search-mark-star {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.search-mark:hover .search-mark-star,
+.group:hover .search-mark .search-mark-star,
+.group:focus-visible .search-mark .search-mark-star {
+  animation: search-mark-twinkle 700ms cubic-bezier(0.45, 0, 0.25, 1);
+}
+
+@keyframes search-mark-twinkle {
+  45% {
+    transform: rotate(45deg) scale(1.35);
+  }
+  to {
+    transform: rotate(90deg);
+  }
 }
 
 /* Log out's door (components/DoorMark.tsx). Pointed at (or its button is), the door swings
@@ -507,73 +598,19 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform: scaleX(0.55) skewY(-10deg);
 }
 
-/* The Watch List's book and pen (components/WatchMark.tsx). It stands straight at rest.
-   Pointed at (or its link is), the whole mark tilts a little as the book opens: the cover
-   folds away to its spine on the left, then the two pages spread out from the middle,
-   left then right; the pen dips towards the page about its nib. All of it reverses when
-   let go, the pages closing first. */
-.watch-mark {
-  transition: rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1);
-}
-
-.watch-mark:hover,
-.group:hover .watch-mark,
-.group:focus-visible .watch-mark {
-  rotate: -8deg;
-}
-
-.watch-mark-cover {
-  transform-box: view-box;
-  transform-origin: 4px 57px; /* the spine, at the cover's left edge */
-  transition:
-    transform 380ms cubic-bezier(0.4, 0, 0.2, 1) 120ms,
-    opacity 260ms ease 160ms;
-}
-
-.watch-mark-page {
-  transform-box: view-box;
-  transform-origin: 45px 58px; /* the middle of the open book */
-  transform: scaleX(0);
-  opacity: 0;
-  transition:
-    transform 380ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 200ms ease;
-}
-
+/* The Watch List's pen and book (components/WatchMark.tsx). Pointed at (or its link is),
+   the pen dips about its nib as if to write, with a slight spring, and rises again when
+   let go. */
 .watch-mark-pen {
   transform-box: view-box;
-  transform-origin: 52px 86px; /* the nib */
+  transform-origin: 40px 80px; /* the nib */
   transition: transform 500ms cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-
-.watch-mark:hover .watch-mark-cover,
-.group:hover .watch-mark .watch-mark-cover,
-.group:focus-visible .watch-mark .watch-mark-cover {
-  transform: scaleX(0);
-  opacity: 0;
-  transition-delay: 0ms;
-}
-
-.watch-mark:hover .watch-mark-page,
-.group:hover .watch-mark .watch-mark-page,
-.group:focus-visible .watch-mark .watch-mark-page {
-  transform: none;
-  opacity: 1;
-  transition:
-    transform 460ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms,
-    opacity 220ms ease 180ms;
-}
-
-.watch-mark:hover .watch-mark-page-right,
-.group:hover .watch-mark .watch-mark-page-right,
-.group:focus-visible .watch-mark .watch-mark-page-right {
-  transition-delay: 240ms;
 }
 
 .watch-mark:hover .watch-mark-pen,
 .group:hover .watch-mark .watch-mark-pen,
 .group:focus-visible .watch-mark .watch-mark-pen {
-  transform: rotate(-10deg);
+  transform: rotate(-12deg);
 }
 
 /* The strip under the price chart (ListingStrip in components/PriceChart.tsx): pointing at
@@ -703,36 +740,44 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .account-mark,
   .account-mark:hover,
   .group:hover .account-mark,
-  .group:focus-visible .account-mark,
-  .home-mark,
-  .home-mark:hover,
-  .group:hover .home-mark,
-  .group:focus-visible .home-mark {
+  .group:focus-visible .account-mark {
     rotate: none;
     transition: none;
   }
 
-  /* Search's magnifying glass and the Watch List's book stay level. */
+  /* The logo's cat still pokes its head out, but at once. */
+  .logo-mark-cat {
+    transition: none;
+  }
+
+  /* Her angry mark appears at once and holds still. */
+  .group[data-angry] .logo-mark .logo-mark-angry {
+    animation: none;
+  }
+
+
+  /* Search's magnifying glass stays level. */
   .search-mark,
   .search-mark:hover,
   .group:hover .search-mark,
-  .group:focus-visible .search-mark,
-  .watch-mark,
-  .watch-mark:hover,
-  .group:hover .watch-mark,
-  .group:focus-visible .watch-mark {
+  .group:focus-visible .search-mark {
     rotate: none;
     transition: none;
   }
 
-  /* Log out's door and the Watch List's book still open when pointed at, but at once. */
+  /* The Holdings Map's tiles don't pop. */
+  .map-mark .map-mark-tile {
+    animation: none !important;
+  }
+
+  /* Search's star doesn't twinkle. */
+  .search-mark .search-mark-star {
+    animation: none !important;
+  }
+
+  /* Log out's door still opens, and the Watch List's pen still dips, but at once. */
   .door-mark-panel,
-  .watch-mark-cover,
-  .watch-mark-page,
-  .watch-mark-pen,
-  .watch-mark:hover .watch-mark-page,
-  .group:hover .watch-mark .watch-mark-page,
-  .group:focus-visible .watch-mark .watch-mark-page {
+  .watch-mark-pen {
     transition: none;
   }
 }

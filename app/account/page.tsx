@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
 import { getAppDb } from "@/lib/appDb";
 import { questions, type Answers } from "@/lib/questions";
 import { requireUser } from "@/lib/session";
@@ -24,10 +23,8 @@ export default async function AccountPage() {
   const answers: Answers | null = profile ? JSON.parse(profile.answers) : null;
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <section className="mx-auto max-w-2xl space-y-6 px-6 pb-12">
+    <main className="flex-1 bg-slate-50">
+      <section className="mx-auto max-w-2xl space-y-6 px-6 pt-10 pb-12">
         <div className="rounded-2xl bg-white p-8 shadow">
           <h1 className="text-2xl font-bold text-slate-900">Your account</h1>
           <p className="mt-2 text-slate-600">{user.username}</p>

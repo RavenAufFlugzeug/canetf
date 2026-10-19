@@ -1,48 +1,62 @@
-// The Watch List's mark: a book with a feather pen, in the navbar's sharp-edged style.
-// Closed, the book shows its cover, with a thin line marking the spine on the left; at its
-// right stands the pen, leaning in across it: a big, wide feather narrowing into a fine
-// quill that ends in a sharp nib on the book. A thin gap is cut around the pen (an SVG
-// mask) so it stays clear against the book. It takes the colour of the text around it.
+// The Watch List's mark: a feather pen laid across a closed book. The book is solid, with
+// rounded corners, tilted back a little to the left, the edge of its pages showing along
+// its bottom and round its bottom right corner. The pen, slender and curving, crosses it
+// from beyond its top corner to its nib by its bottom left corner, a thin gap cut around
+// it to keep it clear of the book. The pen is split down its vein into two halves: the
+// left half is solid, with a notch in its edge, and runs on into the quill, which ends in
+// a fine nib; the right half is the colour of the background, its edge broken into barbs.
+// A thin line of the background colour between them is the vein. It takes the colour of the text around it.
 //
-// It stands straight at rest. Pointed at, or when a surrounding `group` is, the mark tilts
-// a little and the book opens (globals.css, .watch-mark-*): the cover folds away to its
-// spine on the left while the two pages, white inside a dark outline, spread out from the
-// middle, and the pen dips towards the page as if to write. All of it reverses when let
-// go. `id` names the mask; it must be unique on the page.
+// Pointed at, or when a surrounding `group` is, the pen dips about its nib as if to write,
+// and rises again when let go (.watch-mark-pen in globals.css). Its tip may swing past the
+// drawing's box, so it is let show outside it. `id` names the gap's mask; it must be
+// unique on the page.
 
-// The pen, from its tip: the feather widens, then narrows into the quill, down to the nib.
-const PEN = "99,2 96.2,33.5 73.4,51.7 52,86 70,49.7 73.6,20.9";
+// The pen's left half and quill, from the tip: down the left edge, in and out of the
+// notch, down the quill to the nib, then back up the vein to the tip.
+const LEFT =
+  "M88.1 2.3C75.6 5.4 64.7 11.7 58.4 19.5C52.2 27.3 46 35.1 43.2 43.2L46.6 45.2 42.5 48.9C41.7 55.4 42.5 63.2 43.6 67.8L40 80 48.2 67.5Q63.1 31 88.1 2.3Z";
+
+// The pen's right half, from the foot of its vane: up the vein to the tip, then down the
+// right edge, in and out between the barbs, and back to the vein.
+const RIGHT =
+  "M51.9 58.9Q66.1 27.6 88.1 2.3C89.6 11.7 87.3 20.3 81.8 28.1L75.6 29.6 77.9 39 70.1 41.3 70.9 49.9 63.1 51.5 60 58.5Z";
+
+// The book, before it is tilted: its cover, and the edge of its pages along its bottom,
+// wrapping a little way round the corner on the right.
+const COVER = "M30 17H70Q76 17 76 23V73Q76 79 70 79H30Q24 79 24 73V23Q24 17 30 17Z";
+const EDGE = "M36 85H76Q82 85 82 79V68";
+
+// The colour of whatever the mark sits on, for the pen's light half and vein: white unless
+// the surroundings set --mark-paper (as the welcome page's cards do, whose badge changes
+// colour), so they always read as the background showing through.
+const PAPER = "var(--mark-paper, white)";
 
 export default function WatchMark({ id, className = "" }: { id: string; className?: string }) {
   return (
-    // The drawing is framed on the book alone (open or closed), so the book lines up with
-    // the navbar's other icons; the pen reaches out past the frame's top.
-    <svg aria-hidden viewBox="-2 12 92 90" className={`watch-mark shrink-0 overflow-visible fill-current ${className}`}>
+    <svg aria-hidden viewBox="12 6.7 86.9 86.9" className={`watch-mark shrink-0 overflow-visible fill-current ${className}`}>
       <defs>
-        {/* The gap around the pen, cut out of the book. */}
-        <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-          <rect width="100" height="100" fill="white" />
-          <polygon
-            points={PEN}
-            className="watch-mark-pen"
-            fill="black"
-            stroke="black"
-            strokeWidth="7"
-            strokeLinejoin="miter"
-          />
+        {/* A thin gap around the pen, cut out of the book; it dips with the pen. */}
+        <mask id={id} maskUnits="userSpaceOnUse" x="-20" y="-20" width="140" height="140">
+          <rect x="-20" y="-20" width="140" height="140" fill="white" />
+          <g className="watch-mark-pen" fill="black" stroke="black" strokeWidth="4.5" strokeLinejoin="round">
+            <path d={RIGHT} />
+            <path d={LEFT} />
+          </g>
         </mask>
       </defs>
+      {/* The book, tilted back a little to the left. */}
       <g mask={`url(#${id})`}>
-        {/* Closed: the cover, with the spine's line cut through it near the left edge. */}
-        <path className="watch-mark-cover" fillRule="evenodd" d="M4 16h66v82H4Zm7 0h3v82h-3Z" />
-        {/* Open: two white pages in a dark outline, either side of the middle, which sits
-            lower than their outer edges, so the book opens up into a shallow V. */}
-        <g fill="white" stroke="currentColor" strokeWidth="5" strokeLinejoin="miter">
-          <polygon className="watch-mark-page" points="2.5,19 43,25 43,98 2.5,93" />
-          <polygon className="watch-mark-page watch-mark-page-right" points="47,25 87.5,19 87.5,93 47,98" />
+        <g transform="rotate(-28 50 48)">
+          <path d={COVER} />
+          <path d={EDGE} fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
         </g>
       </g>
-      <polygon points={PEN} className="watch-mark-pen" />
+      <g className="watch-mark-pen">
+        <path d={RIGHT} style={{ fill: PAPER }} />
+        {/* The vein: a light rim drawn under the left half, so only its outer half shows. */}
+        <path d={LEFT} style={{ stroke: PAPER }} strokeWidth="2.5" strokeLinejoin="round" paintOrder="stroke" />
+      </g>
     </svg>
   );
 }

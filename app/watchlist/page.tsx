@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/watchlist";
 import CompanyPicker from "@/components/CompanyPicker";
-import Navbar from "@/components/Navbar";
 import WatchlistTable from "@/components/WatchlistTable";
 import { getAppDb } from "@/lib/appDb";
 import { getCompanies } from "@/lib/db";
@@ -25,10 +24,8 @@ export default async function WatchlistPage() {
   const companies = (await getCompanies(symbols)) ?? [];
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <section className="mx-auto max-w-5xl space-y-6 px-6 pb-12">
+    <main className="flex-1 bg-slate-50">
+      <section className="mx-auto max-w-5xl space-y-6 px-6 pt-10 pb-12">
         {/* The same card as the Company lookup's search. */}
         <div className="rounded-2xl bg-white p-8 shadow">
           <h1 className="text-2xl font-bold text-slate-900">Watch List</h1>

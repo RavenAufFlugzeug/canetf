@@ -4,7 +4,6 @@ import EtfBreakdown from "@/components/EtfBreakdown";
 import HoldingsMap from "@/components/HoldingsMap";
 import KeyStats from "@/components/KeyStats";
 import MapDetail from "@/components/MapDetail";
-import Navbar from "@/components/Navbar";
 import PriceChart from "@/components/PriceChart";
 import { getCompany, getEtfBreakdown, getExchange, getEtfTree, getKeyStats, getPriceHistory } from "@/lib/db";
 
@@ -28,10 +27,8 @@ export default async function MapPage({
   const breakdown = picked ? await getEtfBreakdown(picked.symbol) : null;
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <Navbar />
-
-      <section className="mx-auto max-w-6xl px-6 pb-12">
+    <main className="flex-1 bg-slate-50">
+      <section className="mx-auto max-w-6xl px-6 pt-10 pb-12">
         <div className="rounded-2xl bg-white p-8 shadow">
           {/* Back to the Search page, showing the ETF that is on the map (if any). */}
           <Link

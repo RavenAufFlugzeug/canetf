@@ -100,7 +100,7 @@ export default function AuthForm({ mode, next }: Props) {
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-600">
-        {isLogin ? "New to CanETF? " : "Already have an account? "}
+        {isLogin ? "New to LitterBox? " : "Already have an account? "}
         <Link href={otherHref} className="font-medium text-blue-600 hover:underline">
           {isLogin ? "Create an account" : "Log in"}
         </Link>

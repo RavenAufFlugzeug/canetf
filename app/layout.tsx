@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CanEFT",
+  title: "LitterBox",
   description: "Investment action plan",
 };
 
@@ -27,7 +28,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* The navbar is built once, here, and stays in place as the pages change below it
+            (app/template.tsx), so it never resets mid-way: its logo's cat keeps her state. */}
+        <Navbar />
+        {children}
+      </body>
     </html>
   );
 }

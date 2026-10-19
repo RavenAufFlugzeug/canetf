@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import AuthForm from "@/components/AuthForm";
-import Navbar from "@/components/Navbar";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function SignupPage({
@@ -15,9 +14,7 @@ export default async function SignupPage({
   const { next } = await searchParams;
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <Navbar />
-
+    <main className="flex-1 bg-slate-50">
       <section className="flex justify-center px-6 py-12">
         <AuthForm mode="signup" next={typeof next === "string" ? next : undefined} />
       </section>

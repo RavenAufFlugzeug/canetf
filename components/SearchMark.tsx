@@ -1,19 +1,28 @@
-// Search's mark: a magnifying glass in the navbar's sharp-edged style. Its lens is an
-// eight-sided ring rather than a circle, and its handle a square-ended bar running down to
-// the right from the rim. It takes the colour of the text around it.
+// Search's mark: a magnifying glass with a star. Its lens is a round ring left open at the
+// top right, where a four-pointed star sits, drawn in outline; a square-ended handle runs
+// down to the right. It takes the colour of the text around it.
 //
-// Pointed at, or when a surrounding `group` is, it swings a little about the lens, with
-// the other marks' slight spring (.search-mark in globals.css).
+// Pointed at, or when a surrounding `group` is, the glass swings a little about its lens
+// and the star twinkles, popping as it turns a quarter turn (.search-mark and
+// .search-mark-star in globals.css).
+const LENS = "M64.5 53.7A26.8 26.8 0 1 1 43.6 23.8";
+const STAR = "67,7 72.3,17.7 83,23 72.3,28.3 67,39 61.7,28.3 51,23 61.7,17.7";
+const HANDLE = "M54.9 66.9 83 95";
+
 export default function SearchMark({ className = "" }: { className?: string }) {
   return (
-    <svg aria-hidden viewBox="0 0 100 100" className={`search-mark shrink-0 fill-current ${className}`}>
-      {/* The lens: an octagon with a smaller octagon cut out of it. */}
-      <path
-        fillRule="evenodd"
-        d="M73.3 53.8 53.8 73.3H26.2L6.7 53.8V26.2L26.2 6.7h27.6l19.5 19.5ZM61.2 48.8 48.8 61.2H31.2L18.8 48.8V31.2l12.4-12.4h17.6l12.4 12.4Z"
-      />
-      {/* The handle: a bar from inside the rim, down and to the right. */}
-      <polygon points="57,66 66,57 98,89 89,98" />
+    <svg
+      aria-hidden
+      viewBox="3.6 15.6 86.6 86.6"
+      className={`search-mark shrink-0 overflow-visible fill-none stroke-current ${className}`}
+      strokeLinejoin="miter"
+    >
+      {/* The lens: a ring, open at the top right. */}
+      <path d={LENS} strokeWidth="10" strokeLinecap="round" />
+      {/* The star in the opening. */}
+      <polygon points={STAR} strokeWidth="6" className="search-mark-star" />
+      {/* The handle. */}
+      <path d={HANDLE} strokeWidth="13" />
     </svg>
   );
 }
