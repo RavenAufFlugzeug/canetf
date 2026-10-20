@@ -252,12 +252,20 @@ export default function CompanyAbout({ name, profile }: { name: string; profile:
                 >
                   {value}
                 </dd>
+                {/* The card looks like the Holdings Map's hover card: white, with the row's
+                    name over where its figure comes from, and a small pointer (a square
+                    turned on its corner, half hidden behind the card) towards the label. */}
                 <span
                   id={tip}
                   role="tooltip"
-                  className={`pointer-events-none absolute top-full z-20 mt-1 w-72 ${rightColumn[i] ? "left-0 sm:right-0 sm:left-auto" : "left-0"} max-w-[85vw] translate-y-1 rounded-lg bg-slate-900 px-3 py-2.5 text-xs leading-relaxed font-normal text-white opacity-0 shadow-lg shadow-slate-900/20 transition duration-200 ease-out group-focus-within/row:translate-y-0 group-focus-within/row:opacity-100 group-hover/row:translate-y-0 group-hover/row:opacity-100`}
+                  className={`pointer-events-none absolute top-full z-20 mt-2.5 w-72 ${rightColumn[i] ? "left-0 sm:right-0 sm:left-auto" : "left-0"} max-w-[85vw] translate-y-1 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed font-normal text-slate-600 opacity-0 shadow-lg shadow-slate-300/50 transition duration-200 ease-out group-focus-within/row:translate-y-0 group-focus-within/row:opacity-100 group-hover/row:translate-y-0 group-hover/row:opacity-100`}
                 >
-                  {SOURCES[label]}
+                  <span
+                    aria-hidden
+                    className={`absolute -top-[5.5px] left-[18px] size-2.5 rotate-45 border-t border-l border-slate-200 bg-white ${rightColumn[i] ? "sm:right-[18px] sm:left-auto" : ""}`}
+                  />
+                  <span className="block font-semibold leading-snug text-slate-900">{label}</span>
+                  <span className="mt-1 block border-t border-slate-100 pt-1.5">{SOURCES[label]}</span>
                 </span>
               </div>
             );

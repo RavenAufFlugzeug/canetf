@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as Database } from "node:sqlite";
 import { connection } from "next/server";
+
+// Loaded from Node itself rather than imported: when this file changes, the dev server's
+// hot reload can't load an imported node:sqlite again ("require is not defined"), and
+// every page that reads the database fails until it is restarted.
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+type DatabaseSync = Database;
 
 // Same file the Python pipeline writes (search/StockUtils.py DB_PATH).
 export const DB_PATH =
@@ -247,6 +253,85 @@ export async function getPriceHistory(symbol: string): Promise<PriceHistory> {
     };
   });
   return history ?? { daily: [], intraday: [] };
+}
+
+// A random company or ETF with at least `days` daily closes -> its symbol, or null if none
+// has that many. Only listings in Canadian or US dollars, which the Sandbox's dollar
+// amounts can buy.
+export async function pickRandomListing(days: number): Promise<string | null> {
+  const pick = await withDb(
+    (db) =>
+      db
+        .prepare(
+          // Whether a listing has a `days`-th close, looked up rather than counting every
+          // close (millions of rows; this reads a few per listing).
+          `SELECT c.symbol FROM companies c
+           WHERE c.currency IN ('CAD', 'USD')
+             AND (SELECT date FROM prices p WHERE p.symbol = c.symbol AND p.close IS NOT NULL
+                  ORDER BY date LIMIT 1 OFFSET ?) IS NOT NULL
+           ORDER BY RANDOM() LIMIT 1`,
+        )
+        .get(days - 1) as { symbol: string } | undefined,
+  );
+  return pick?.symbol ?? null;
+}
+
+// How many daily closes `symbol` has.
+export async function countPriceDays(symbol: string): Promise<number> {
+  const row = await withDb(
+    (db) =>
+      db.prepare("SELECT COUNT(*) AS n FROM prices WHERE symbol = ? AND close IS NOT NULL").get(symbol) as {
+        n: number;
+      },
+  );
+  return row?.n ?? 0;
+}
+
+// The first day of a run of `days` of `symbol`'s daily closes -> "YYYY-MM-DD", or null if
+// it has fewer than that. `share` (0 to 1) says where in its history the run starts: 0 at
+// its first day, 1 as late as it can, so the same share always gives the same day.
+export async function getStartDay(symbol: string, days: number, share: number): Promise<string | null> {
+  const first = await withDb((db) => {
+    const { n } = db
+      .prepare("SELECT COUNT(*) AS n FROM prices WHERE symbol = ? AND close IS NOT NULL")
+      .get(symbol) as { n: number };
+    if (n < days) return undefined;
+    const offset = Math.min(Math.floor(share * (n - days + 1)), n - days);
+    return db
+      .prepare(
+        `SELECT date FROM prices WHERE symbol = ? AND close IS NOT NULL
+         ORDER BY date LIMIT 1 OFFSET ?`,
+      )
+      .get(symbol, Math.max(offset, 0)) as { date: string };
+  });
+  return first?.date ?? null;
+}
+
+// Every daily close of `symbol` before the trading day `from`, oldest first.
+export async function getPricesBefore(symbol: string, from: string): Promise<number[]> {
+  const closes = await withDb((db) => {
+    const rows = db
+      .prepare("SELECT close FROM prices WHERE symbol = ? AND date < ? AND close IS NOT NULL ORDER BY date")
+      .all(symbol, from) as { close: number }[];
+    const scale = priceScale(db, symbol);
+    return rows.map((r) => r.close / scale);
+  });
+  return closes ?? [];
+}
+
+// Up to `days` daily closes of `symbol` from the trading day `from` on, oldest first.
+export async function getPriceWindow(symbol: string, from: string, days: number): Promise<PricePoint[]> {
+  const points = await withDb((db) => {
+    const rows = db
+      .prepare(
+        `SELECT date, close FROM prices
+         WHERE symbol = ? AND date >= ? AND close IS NOT NULL ORDER BY date LIMIT ?`,
+      )
+      .all(symbol, from, days) as { date: string; close: number }[];
+    const scale = priceScale(db, symbol);
+    return rows.map((r) => ({ t: r.date, close: r.close / scale }));
+  });
+  return points ?? [];
 }
 
 export type KeyStats = {

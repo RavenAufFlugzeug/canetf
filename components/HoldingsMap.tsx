@@ -273,7 +273,16 @@ function linkPath(fund: Point, held: Point) {
 const linkWidth = (p: Placed) => Math.max(1.5, Math.sqrt(p.share) * 12);
 
 // `detail` is the product whose chart and figures are showing under the map, if any.
-export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode; detail?: string | null }) {
+// Without `links` (the Sandbox, where the ETF is kept hidden), tickers don't link to it.
+export default function HoldingsMap({
+  tree,
+  detail = null,
+  links = true,
+}: {
+  tree: EtfTreeNode;
+  detail?: string | null;
+  links?: boolean;
+}) {
   // Funds folded shut (their holdings hidden), by id: `to` is how the map is set, `from`
   // how it was before the last change, `ms` how long that change takes to play, and
   // `changed` whether there has been one yet.
@@ -653,7 +662,7 @@ export default function HoldingsMap({ tree, detail = null }: { tree: EtfTreeNode
                 }}
               >
                 {node.symbol &&
-                  (node.stored ? (
+                  (node.stored && links ? (
                     // Shows this product's chart and figures under the map (the page reads
                     // ?detail=), without leaving the map or moving it.
                     <Link

@@ -2,7 +2,12 @@ import "server-only";
 
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as Database } from "node:sqlite";
+
+// Loaded from Node itself rather than imported, so the dev server's hot reload keeps
+// working when this file changes (see lib/db.ts).
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+type DatabaseSync = Database;
 
 // User accounts live in their own database, separate from the pipeline's stocks.db.
 export const APP_DB_PATH =
