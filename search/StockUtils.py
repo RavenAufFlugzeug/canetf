@@ -1,9 +1,11 @@
 """Shared helpers: fetch stock data with yfinance and keep it in a SQLite database."""
 
+import logging
 import os
 import re
 import sqlite3
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -669,13 +671,26 @@ def _holding_variants(holding, name=None):
     return out
 
 
+@contextmanager
+def _quiet_yfinance():
+    """Hide yfinance's own error messages, e.g. 'HTTP Error 404' for spellings Yahoo doesn't know."""
+    logger = logging.getLogger("yfinance")
+    level = logger.level
+    logger.setLevel(logging.CRITICAL)
+    try:
+        yield
+    finally:
+        logger.setLevel(level)
+
+
 def _check_listing(symbol):
     """Yahoo's view of a ticker -> dict, or None if it isn't a priced stock or ETF."""
     try:
-        t = yf.Ticker(symbol)
-        info = t.info or {}
-        if info.get("quoteType") not in ("EQUITY", "ETF") or len(t.history(period="1mo")) < 10:
-            return None
+        with _quiet_yfinance():
+            t = yf.Ticker(symbol)
+            info = t.info or {}
+            if info.get("quoteType") not in ("EQUITY", "ETF") or len(t.history(period="1mo")) < 10:
+                return None
     except Exception:
         return None
     return {"symbol": symbol, "type": info["quoteType"], "country": info.get("country"),
@@ -693,11 +708,12 @@ def _why_unlisted(holding, name=None):
     if name and re.search(r"\b(cash|money market|sl agency|t-bill)", name, re.IGNORECASE):
         return "cash", None
     try:
-        t = yf.Ticker(holding)
-        info = t.info or {}
-        if info.get("quoteType") == "MONEYMARKET":
-            return "cash", None
-        past = t.history(period="1y")
+        with _quiet_yfinance():
+            t = yf.Ticker(holding)
+            info = t.info or {}
+            if info.get("quoteType") == "MONEYMARKET":
+                return "cash", None
+            past = t.history(period="1y")
         if not past.empty:
             return "stopped", past.index[-1].strftime("%Y-%m-%d")
     except Exception:
