@@ -308,15 +308,51 @@ export async function getStartDay(symbol: string, days: number, share: number): 
 }
 
 // Every daily close of `symbol` before the trading day `from`, oldest first.
-export async function getPricesBefore(symbol: string, from: string): Promise<number[]> {
-  const closes = await withDb((db) => {
+export async function getPricesBefore(symbol: string, from: string): Promise<PricePoint[]> {
+  const points = await withDb((db) => {
     const rows = db
-      .prepare("SELECT close FROM prices WHERE symbol = ? AND date < ? AND close IS NOT NULL ORDER BY date")
-      .all(symbol, from) as { close: number }[];
+      .prepare("SELECT date, close FROM prices WHERE symbol = ? AND date < ? AND close IS NOT NULL ORDER BY date")
+      .all(symbol, from) as { date: string; close: number }[];
     const scale = priceScale(db, symbol);
-    return rows.map((r) => r.close / scale);
+    return rows.map((r) => ({ t: r.date, close: r.close / scale }));
   });
-  return closes ?? [];
+  return points ?? [];
+}
+
+// The trading days `symbol` has intraday (5-minute) bars for, oldest first, with how many
+// bars each has (a whole regular session has 78).
+export async function getIntradayDays(symbol: string): Promise<{ date: string; bars: number }[]> {
+  const days = await withDb((db) =>
+    hasTable(db, "intraday")
+      ? (db
+          .prepare(
+            `SELECT date, COUNT(*) AS bars FROM intraday
+             WHERE symbol = ? AND close IS NOT NULL GROUP BY date ORDER BY date`,
+          )
+          .all(symbol) as { date: string; bars: number }[])
+      : [],
+  );
+  return days ?? [];
+}
+
+// `symbol`'s intraday bars on the trading day `date`, in order: each bar's start (in
+// exchange time, e.g. "2026-10-07T09:30:00-04:00") and its open and close.
+export async function getIntradayBars(
+  symbol: string,
+  date: string,
+): Promise<{ ts: string; open: number | null; close: number }[]> {
+  const bars = await withDb((db) => {
+    if (!hasTable(db, "intraday")) return [];
+    const rows = db
+      .prepare(
+        `SELECT ts, open, close FROM intraday
+         WHERE symbol = ? AND date = ? AND close IS NOT NULL ORDER BY ts`,
+      )
+      .all(symbol, date) as { ts: string; open: number | null; close: number }[];
+    const scale = priceScale(db, symbol);
+    return rows.map((r) => ({ ts: r.ts, open: r.open === null ? null : r.open / scale, close: r.close / scale }));
+  });
+  return bars ?? [];
 }
 
 // Up to `days` daily closes of `symbol` from the trading day `from` on, oldest first.

@@ -1,7 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import ChoiceChips from "@/components/ChoiceChips";
 import CompanyAbout from "@/components/CompanyAbout";
 import HoldingsMap from "@/components/HoldingsMap";
+import PickButton from "@/components/PickButton";
+import { SandboxSwapProvider, Swap } from "@/components/SandboxSwap";
 import SandboxTest from "@/components/SandboxTest";
 import {
   countPriceDays,
@@ -12,55 +14,43 @@ import {
   pickRandomListing,
 } from "@/lib/db";
 import { hideName } from "@/lib/hideName";
+import {
+  AMOUNTS,
+  DEFAULT_AMOUNT,
+  DEFAULT_RANGE,
+  newSeed,
+  otherSeed,
+  sandboxHref,
+  SEEDS,
+  SHORTEST,
+  TIMEFRAMES,
+} from "@/lib/sandbox";
 
-// How long a run of price data each timeframe loads, in trading days (one close per day).
-const TIMEFRAMES = [
-  { key: "7d", label: "7 days", days: 7 },
-  { key: "1m", label: "1 month", days: 21 },
-  { key: "3m", label: "3 months", days: 63 },
-  { key: "6m", label: "6 months", days: 126 },
-  { key: "12m", label: "12 months", days: 252 },
-];
-// A pick has at least this many days, so it always has a timeframe to offer.
-const SHORTEST = Math.min(...TIMEFRAMES.map((t) => t.days));
-
-// What the test can start with, in Canadian dollars.
-const AMOUNTS = [1_000, 10_000, 100_000];
 const cad = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 
-// A choice chip: the chosen one is dark; the others lift a touch when pointed at.
-const chipClass = (chosen: boolean) =>
-  `inline-block rounded-full border px-3 py-1 text-sm font-semibold transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-    chosen
-      ? "border-slate-900 bg-slate-900 text-white"
-      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 hover:shadow-sm motion-safe:hover:-translate-y-0.5"
-  }`;
-// A pick's seed: a whole number below this, saying where in its history each timeframe's
-// Day 1 falls (as a share of the way through it).
-const SEEDS = 1_000_000;
-const newSeed = () => Math.floor(Math.random() * SEEDS);
-
-const BUTTON =
-  "inline-block shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400";
-
-type Choices = { pick?: boolean; symbol?: string; seed?: number; range?: string; amount?: number };
-
-// The Sandbox's address for these choices; those left out aren't made yet.
-function sandboxHref({ pick, symbol, seed, range, amount }: Choices) {
-  const params = new URLSearchParams();
-  if (pick) params.set("pick", "1");
-  if (symbol) params.set("symbol", symbol);
-  if (seed !== undefined) params.set("seed", String(seed));
-  if (range) params.set("range", range);
-  if (amount) params.set("amount", String(amount));
-  const query = params.toString();
-  return query ? `/sandbox?${query}` : "/sandbox";
-}
-
-// One step of the Sandbox, numbered and titled, with a rule above it.
-function Step({ n, title, delay = 0, children }: { n: number; title: string; delay?: number; children: React.ReactNode }) {
+// One step of the Sandbox, numbered and titled, with a rule above it. Its entrance gives it
+// a layer of its own, which the steps after it would cover; so while it is pointed at (or
+// tabbed into) it is lifted above them, and a hover card that drops below it (the About
+// section's) stays on top of the next step's choices.
+function Step({
+  n,
+  title,
+  delay = 0,
+  id,
+  children,
+}: {
+  n: number;
+  title: string;
+  delay?: number;
+  id?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rise-in mt-6 border-t border-slate-200 pt-6" style={{ animationDelay: `${delay}ms` }}>
+    <section
+      id={id}
+      className="rise-in relative mt-6 scroll-mt-24 border-t border-slate-200 pt-6 focus-within:z-10 hover:z-10"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <h2 className="flex items-center gap-2.5 text-lg font-semibold text-slate-900">
         <span className="grid size-6 place-items-center rounded-full bg-slate-900 text-xs font-bold text-white">
           {n}
@@ -79,7 +69,9 @@ function Step({ n, title, delay = 0, children }: { n: number; title: string; del
 // price history is long enough for, each with a random Day 1 in that history (set by the
 // pick's seed, so switching timeframes is an ordinary link, like choosing an amount, and
 // leaves the rest of the page as it is). 3: a starting amount. 4: the testing ground,
-// trading it day by day (SandboxTest).
+// trading it day by day (SandboxTest). Once there is a pick, all four show at once: the
+// timeframe and amount start at their defaults (7 days and $500), so the test can start
+// straight away, and either can be changed first.
 export default async function SandboxPage({
   searchParams,
 }: {
@@ -87,10 +79,11 @@ export default async function SandboxPage({
 }) {
   const params = await searchParams;
   const asked = TIMEFRAMES.find((t) => t.key === params.range) ?? null;
-  const start = AMOUNTS.find((a) => String(a) === params.amount) ?? null;
-  const amount = start ?? undefined;
+  const start = AMOUNTS.find((a) => String(a) === params.amount) ?? DEFAULT_AMOUNT;
+  const amount = start;
 
-  // A new pick, asked for, with a seed of its own. It's kept in the address so a refresh
+  // A new pick asked for by address (the page's own button asks the server for one instead,
+  // and goes straight to it), with a seed of its own. It's kept in the address so a refresh
   // keeps it, along with the timeframe (if the new pick has the days for it) and amount.
   if (params.pick) {
     const symbol = await pickRandomListing(SHORTEST);
@@ -105,7 +98,11 @@ export default async function SandboxPage({
   const picked = company && available >= SHORTEST ? company : null;
   // The timeframes its price history is long enough for.
   const offered = TIMEFRAMES.filter((t) => t.days <= available);
-  const timeframe = offered.find((t) => t.key === asked?.key) ?? null;
+  const timeframe =
+    offered.find((t) => t.key === asked?.key) ??
+    offered.find((t) => t.key === DEFAULT_RANGE) ??
+    offered[offered.length - 1] ??
+    null;
 
   // The pick's seed; an address typed without one gets one.
   const seed = Number(params.seed);
@@ -128,151 +125,156 @@ export default async function SandboxPage({
   // A fund has a provider (fund family) or a composition; a company has neither.
   const kind = profile?.fundFamily || tree ? "ETF" : "Company";
   const ready = picked && timeframe && from;
-
-  // Asks for a new pick (made fresh each time, so not prefetched), keeping the other choices.
-  const pickHref = sandboxHref({ pick: true, range: timeframe?.key ?? asked?.key, amount });
+  // The pick shown, for the area below it to change with.
+  const pickKey = picked?.symbol;
+  // The test's choices, for the testing ground to change with: every new timeframe, amount
+  // or Day 1 (seed) makes a new one.
+  const testKey = `test-${timeframe?.key ?? "none"}-${start}-${seed}`;
+  // Trying the pick again: the same pick, timeframe and amount, but a different Day 1.
+  const againHref =
+    picked && timeframe
+      ? sandboxHref({
+          symbol: picked.symbol,
+          seed: otherSeed(seed, available - timeframe.days + 1),
+          range: timeframe.key,
+          amount: start,
+        })
+      : "/sandbox";
+  // Below the pick, everything rises in top to bottom: the map, then the About section's
+  // rows one after another, then the steps after.
+  const aboutDelay = tree ? 120 : 40;
+  const stepsDelay = profile ? aboutDelay + 300 : tree ? 160 : 40;
 
   return (
     <main className="flex-1 bg-slate-50">
       {/* One width for every pick, company or ETF, so the page doesn't jump between them:
           wide enough for three levels of an ETF's map (deeper ones scroll sideways). */}
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-12">
-        <div className="rounded-2xl bg-white p-8 shadow">
-          <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
-          <p className="mt-1 text-slate-600">
-            A workspace for testing your ideas, forecasts and expectations against real market
-            data: trade a mystery company or ETF day by day, and see how you do.
-          </p>
+        <SandboxSwapProvider>
+          <div className="rounded-2xl bg-white p-8 shadow">
+            <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
+            <p className="mt-1 text-slate-600">
+              A workspace for testing your ideas, forecasts and expectations against real market data: trade a
+              mystery company or ETF day by day, and see how you do.
+            </p>
 
-          <Step n={1} title="Company or ETF">
-            {/* Keyed by the pick, so each new one plays its entrance. */}
-            <div key={picked?.symbol ?? "none"} className="rise-in mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
-              <div className="min-w-0">
-                {picked ? (
-                  <>
-                    <p className="font-semibold text-slate-900">{kind} ??? selected</p>
-                    <p className="text-sm text-slate-500">
-                      Its name stays hidden. {available.toLocaleString("en-CA")} trading days of
-                      prices on record.
+            <Step n={1} title="Company or ETF">
+              {/* It stays in place as picks change; only what is below it is new each time. */}
+              <div className="rise-in mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
+                <div className="min-w-0">
+                  {picked ? (
+                    <>
+                      <p className="font-semibold text-slate-900">{kind} ??? selected</p>
+                      <p className="text-sm text-slate-500">
+                        Its name stays hidden. {available.toLocaleString("en-CA")} trading days of prices on
+                        record.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      {typeof params.symbol === "string"
+                        ? "That pick isn't in our database. Pick another."
+                        : "Pick a random company or ETF to test with. Its name stays hidden."}
                     </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-slate-600">
-                    {typeof params.symbol === "string"
-                      ? "That pick isn't in our database. Pick another."
-                      : "Pick a random company or ETF to test with. Its name stays hidden."}
-                  </p>
-                )}
+                  )}
+                </div>
+                <PickButton current={pickKey} range={timeframe?.key ?? asked?.key} amount={amount} />
               </div>
-              <Link
-                href={pickHref}
-                prefetch={false}
-                replace
-                scroll={false}
-                className={`${BUTTON} ${
-                  picked
-                    ? "border border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
-                    : "bg-slate-900 text-white hover:bg-slate-700"
-                }`}
-              >
-                {picked ? "↻ Pick another" : "Pick a company or ETF"}
-              </Link>
-            </div>
-
-            {/* What the pick is like, without its name. */}
-            {picked && (
-              <div key={`info-${picked.symbol}`}>
-                {tree && (
-                  <div className="rise-in mt-4" style={{ animationDelay: "80ms" }}>
-                    <HoldingsMap tree={tree} links={false} />
-                  </div>
-                )}
-                {profile && (
-                  <CompanyAbout
-                    name="???"
-                    profile={{
-                      ...profile,
-                      website: null,
-                      description: profile.description && hideName(profile.description, picked.name, picked.symbol),
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </Step>
-
-          {picked && (
-            <Step n={2} title="Timeframe" delay={40}>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {offered.map((t) => {
-                  const chosen = t.key === timeframe?.key;
-                  return (
-                    <li key={t.key}>
-                      <Link
-                        href={sandboxHref({ symbol: picked.symbol, seed, range: t.key, amount })}
-                        replace
-                        scroll={false}
-                        aria-current={chosen ? "true" : undefined}
-                        className={chipClass(chosen)}
-                      >
-                        {t.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-2 text-sm text-slate-500">
-                {timeframe
-                  ? `Day 1 – Day ${timeframe.days} loaded, from a random point in its history.`
-                  : "Choose how long the test runs."}
-                {offered.length < TIMEFRAMES.length &&
-                  ` Longer timeframes need more than its ${available.toLocaleString("en-CA")} days of prices.`}
-              </p>
             </Step>
-          )}
 
-          {ready && (
-            <Step n={3} title="Starting amount" delay={80}>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {AMOUNTS.map((a) => (
-                  <li key={a}>
-                    <Link
-                      href={sandboxHref({ symbol: picked.symbol, seed, range: timeframe.key, amount: a })}
-                      replace
-                      scroll={false}
-                      aria-current={a === start ? "true" : undefined}
-                      className={chipClass(a === start)}
-                    >
-                      {cad.format(a)} CAD
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-sm text-slate-500">
-                {start ? `You'll start the test with ${cad.format(start)} CAD.` : "Choose how much to start with."}
-              </p>
-            </Step>
-          )}
-
-          {picked && (
-            <Step n={4} title="Testing ground" delay={120}>
-              {ready && start ? (
-                // Changing any choice starts the test over.
-                <SandboxTest
-                  key={`${picked.symbol}-${from}-${timeframe.key}-${start}`}
-                  symbol={picked.symbol}
-                  from={from}
-                  days={timeframe.days}
-                  amount={start}
-                />
-              ) : (
-                <p className="mt-2 text-sm text-slate-500">
-                  Choose a timeframe and a starting amount above to begin.
-                </p>
+            {/* Everything below the pick, which changes smoothly with it (Swap). */}
+            <Swap swapKey={pickKey ?? "none"}>
+              {/* What the pick is like, without its name; lifted over the next step while pointed
+              at, like a step, so the About section's hover cards stay on top. */}
+              {picked && (
+                <div className="relative focus-within:z-10 hover:z-10">
+                  {tree && (
+                    <div className="rise-in mt-4">
+                      <HoldingsMap tree={tree} links={false} />
+                    </div>
+                  )}
+                  {profile && (
+                    <CompanyAbout
+                      name="???"
+                      delay={aboutDelay}
+                      stagger={25}
+                      profile={{
+                        ...profile,
+                        website: null,
+                        description:
+                          profile.description && hideName(profile.description, picked.name, picked.symbol),
+                      }}
+                    />
+                  )}
+                </div>
               )}
-            </Step>
-          )}
-        </div>
+
+              {picked && (
+                <Step n={2} title="Timeframe" delay={stepsDelay} id="sandbox-timeframe">
+                  <ChoiceChips
+                    label="Timeframe"
+                    swaps={testKey}
+                    chosen={timeframe?.key}
+                    choices={offered.map((t) => ({
+                      key: t.key,
+                      label: t.label,
+                      href: sandboxHref({ symbol: picked.symbol, seed, range: t.key, amount }),
+                    }))}
+                  />
+                  <p key={timeframe?.key ?? "none"} className="text-fade-in mt-2 text-sm text-slate-500">
+                    {timeframe
+                      ? `Day 1 – Day ${timeframe.days} loaded, from a random point in its history.`
+                      : "Choose how long the test runs."}
+                    {offered.length < TIMEFRAMES.length &&
+                      ` Longer timeframes need more than its ${available.toLocaleString("en-CA")} days of prices.`}
+                  </p>
+                </Step>
+              )}
+
+              {ready && (
+                <Step n={3} title="Starting amount" delay={stepsDelay + 40}>
+                  <ChoiceChips
+                    label="Starting amount"
+                    swaps={testKey}
+                    chosen={String(start)}
+                    choices={AMOUNTS.map((a) => ({
+                      key: String(a),
+                      label: `${cad.format(a)} CAD`,
+                      href: sandboxHref({ symbol: picked.symbol, seed, range: timeframe.key, amount: a }),
+                    }))}
+                  />
+                  <p key={start} className="text-fade-in mt-2 text-sm text-slate-500">
+                    You&apos;ll start the test with {cad.format(start)} CAD.
+                  </p>
+                </Step>
+              )}
+
+              {picked && (
+                <Step n={4} title="Testing ground" delay={stepsDelay + 80}>
+                  {/* Changing any choice starts the test over, smoothly (Swap). */}
+                  <Swap swapKey={testKey}>
+                    {ready ? (
+                      <SandboxTest
+                        key={`${picked.symbol}-${from}-${timeframe.key}-${start}`}
+                        symbol={picked.symbol}
+                        from={from}
+                        days={timeframe.days}
+                        amount={start}
+                        pickKey={picked.symbol}
+                        testKey={testKey}
+                        againHref={againHref}
+                      />
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">
+                        This pick&apos;s prices couldn&apos;t be loaded. Pick another.
+                      </p>
+                    )}
+                  </Swap>
+                </Step>
+              )}
+            </Swap>
+          </div>
+        </SandboxSwapProvider>
       </div>
     </main>
   );
