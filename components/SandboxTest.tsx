@@ -1,8 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { getSandboxHistory, getSandboxPrices } from "@/app/actions/sandbox";
+import { getSandboxSetHistory, getSandboxSetPrices } from "@/app/actions/sandbox";
 import DiamondLoader from "@/components/DiamondLoader";
+import FoldButton from "@/components/FoldButton";
+import HoldingsDeck from "@/components/HoldingsDeck";
+import KindMark from "@/components/KindMark";
+import PickBoard from "@/components/PickBoard";
+import {
+  type Figures,
+  amountText,
+  countText as figureCount,
+  dayText as figureDay,
+} from "@/components/PickCards";
+import { AliasName, useAliases } from "@/components/SandboxAliases";
+import { useStage } from "@/components/SandboxStage";
 import SandboxChart from "@/components/SandboxChart";
 import { EaseHeight, useSandboxSwap } from "@/components/SandboxSwap";
 import StartMark from "@/components/StartMark";
@@ -18,38 +30,63 @@ import {
   WarnMark,
   WeekMark,
 } from "@/components/TestMarks";
+import TradeLog from "@/components/TradeLog";
 import Tween from "@/components/Tween";
+import { newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
 
-// The Sandbox's trading test. Starting with `amount` dollars, the player sees Day 1's
-// closing price of the hidden company or ETF, buys or sells whole shares at it, then moves
-// on a day, a week (5 trading days) or a month (21) at a time to Day `days`, seeing how
-// their holdings change and a chart of every day so far, and is rated at the end. Prices
-// count as dollars as they are (no exchange rate). Each day's price is fetched only when
-// that day comes, so the days ahead aren't in the page. Moving on is smooth: the day, the
-// price and what the holdings are worth count to their new figures (Tween) as the chart's
-// new days slide in (SandboxChart) and the progress bar fills. Trading is by order tickets,
-// one to buy and one to sell (OrderTicket), one in use at a time (clicking the other switches,
-// each keeping its number until the test moves on): a number of shares, typed in or stepped
-// up and down by 1 or 10, its estimated cost or proceeds and where the cash and the
-// shares would end up shown as it changes (MoneyTiles); then reviewed and confirmed
-// (ConfirmTrade), which places the order, for good: once made,
-// a badge floats up from the holdings, the figures count to their new values, the trade
-// slides into the log and a mark pops up on the chart where it was made.
-type Trade = { day: number; side: "Bought" | "Sold"; shares: number; price: number };
+// The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
+// not their names) all trading through the same stretch of time. Starting with `amount`
+// dollars, the player sees Day 1's closing prices, buys or sells whole shares of any of them
+// at those prices, then moves on a day, a week (5 trading days) or a month (21) at a time to
+// Day `days`, seeing how the account does and a chart of whichever pick is chosen, and is
+// rated at the end on the account's value. Prices count as dollars as they are (no exchange
+// rate). Each day's prices are fetched only when that day comes, so the days ahead aren't in
+// the page. Moving on is smooth: the day, the prices and what the account is worth count to
+// their new figures (Tween) as the chart's new days slide in (SandboxChart). The picks sit in a
+// grid (their prices, the day's change and the shares held); choosing one shows its chart and
+// its order tickets, one to buy and one to sell (OrderTicket), one in use at a time (clicking
+// the other switches, each keeping its number until the test moves on): a number of shares,
+// typed in or stepped up and down by 1 or 10, its estimated cost or proceeds and where the
+// cash and the position would end up shown as it changes (MoneyTiles); then reviewed and
+// confirmed (ConfirmTrade), which places the order, for good: once made, a badge floats up
+// from the position, the figures count to their new values, the trade slides into the log
+// and a mark pops up on the chart where it was made.
+// A pick: its symbol, its name ("TechCompany (1)": the player may give it an alias), the
+// trading day its test starts on, for its card in the holdings deck its kind and its sector's
+// colour and ink, and its general figures today (for a company; null for a fund).
+type Pick = {
+  symbol: string;
+  name: string;
+  from: string;
+  kind: string;
+  color: string;
+  ink: string;
+  mark: string; // its kind's mark's colour, on its colour
+  line: string; // its industry and place
+  about: string | null; // what it does, its name hidden
+  sector: string | null; // its NAICS group's name
+  currency: string | null; // what it trades in
+  figures: Figures;
+};
+type Side = "Bought" | "Sold";
+type Trade = { symbol: string; name: string; day: number; side: Side; shares: number; price: number };
 // A trade waiting to be confirmed.
-type Ask = { side: "Bought" | "Sold"; shares: number };
-// What happened over the days just passed, shown before they come in: from Day `from` (at
-// `start`) to Day `to` (at `end`), their closes, their lowest and highest, and the shares
-// held throughout; and which of those days (by number) begin a new year.
+type Ask = { symbol: string; name: string; side: Side; shares: number };
+// What is held of a pick: how many shares, and what they cost (for their average price; a sale
+// takes its shares out at that average).
+type Holding = { shares: number; cost: number };
+// What happened over the days just passed, shown before they come in: from Day `from` to
+// Day `to`, the account's value on each of those days (at the shares held throughout), how
+// each pick moved, and how each position did; with each pick's new closes and which of
+// those days (by number) begin a new year, to bring in once it is seen.
 type Recap = {
   from: number;
   to: number;
-  start: number;
-  end: number;
-  closes: number[];
-  shares: number;
-  yearStarts: number[];
+  values: number[];
+  moves: { name: string; pct: number }[];
+  positions: { name: string; shares: number; gain: number }[];
+  days: Record<string, { closes: number[]; yearStarts: number[] }>;
 };
 
 // How long a recap stays up before the test moves on by itself (unless pointed at), and how
@@ -111,6 +148,8 @@ const LAUNCH_MS = 380;
 // to the trading panel over GROW_MS as the trading panel's parts rise in one by one.
 const START_WAIT_MS = 1100;
 const LEAVE_MS = 350;
+// How long the shown pick's parts take to fade out when another is chosen (.pick-swap-out).
+const SWAP_OUT_MS = 260;
 const GROW_MS = 750;
 const pause = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
@@ -120,67 +159,70 @@ const enter = (i: number) => ({
   style: { animationDelay: `${120 + i * 110}ms`, animationDuration: "700ms" },
 });
 
+const NO_ORDERS: Record<Side, string> = { Bought: "", Sold: "" };
+const sizeOf = (text: string) => {
+  const n = Number(text);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+};
+
 export default function SandboxTest({
-  symbol,
-  from,
+  picks,
   days,
   amount,
-  pickKey,
-  testKey,
-  againHref,
+  setKey,
+  choices,
 }: {
-  symbol: string;
-  from: string;
+  picks: Pick[];
   days: number;
   amount: number;
-  // The keys of the Sandbox's areas this test is in (the pick's, and the test's own: see
-  // SandboxSwap), and the address for trying the pick again (the same choices, another Day 1).
-  pickKey: string;
-  testKey: string;
-  againHref: string;
+  // The key of the Sandbox's area this test is in (the set's: see SandboxSwap), and the
+  // choices it was made with, for trying again (a new set) or leaving (no set).
+  setKey: string;
+  choices: Choices;
 }) {
   const { change } = useSandboxSwap();
+  // Whether the test is under way, for the set-up above to fold away (SetupArea); said as it
+  // starts, as it is left, and when this test goes (a new set, a new amount).
+  const { setTesting } = useStage();
+  useEffect(() => () => setTesting(false), [setTesting]);
   const [status, setStatus] = useState<"ready" | "trading" | "done">("ready");
-  // The closes of every day so far, Day 1 first: today is the last.
-  const [prices, setPrices] = useState<number[]>([]);
-  // Every close before Day 1, loaded when the test starts, for the chart to look back on.
-  const [history, setHistory] = useState<number[]>([]);
-  // Where each year begins among every day (the history, then the test's days), by index,
-  // for the chart's YTD range.
-  const [yearStarts, setYearStarts] = useState<number[]>([]);
+  // Whether the card asking to leave the test early is up, and whether it is going away.
+  const [quitting, setQuitting] = useState(false);
+  const [quitLeaving, setQuitLeaving] = useState(false);
+  const panelTop = useRef<HTMLDivElement>(null);
+  // Each pick's closes so far, Day 1 first (today is the last); its closes before Day 1, for
+  // the chart to look back on; and where each year begins among them all (by index), for
+  // the chart's YTD range.
+  const [prices, setPrices] = useState<Record<string, number[]>>({});
+  const [history, setHistory] = useState<Record<string, number[]>>({});
+  const [yearStarts, setYearStarts] = useState<Record<string, number[]>>({});
   const [cash, setCash] = useState(amount);
-  const [shares, setShares] = useState(0);
-  // What the shares held cost, for their average price (a sale takes its shares out at that
-  // average).
-  const [cost, setCost] = useState(0);
+  const [holdings, setHoldings] = useState<Record<string, Holding>>({});
+  // The pick shown (its chart and its order tickets).
+  const [selected, setSelected] = useState(picks[0].symbol);
+  // Which way the last change of pick went (1: to a later pick, -1: an earlier one), for the
+  // pick's parts to slide in from that side.
+  const [swapDir, setSwapDir] = useState(1);
+  // The pick being changed to while the shown one's parts fade out, before it is shown.
+  const [swapTo, setSwapTo] = useState<string | null>(null);
+  const swapTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(swapTimer.current), []);
+  // Whether the chosen pick's general info is open (hidden to begin with).
+  const [infoOpen, setInfoOpen] = useState(false);
   // A trade asked for and waiting to be confirmed, and whether its card is going away.
   const [ask, setAsk] = useState<Ask | null>(null);
   const [askLeaving, setAskLeaving] = useState(false);
-  // The badge that floats up from the holdings after a trade ("+10", "−5"), keyed so each
+  // The badge that floats up from the position after a trade ("+10", "−5"), keyed so each
   // trade starts a new one; and how many errors there have been, so each one comes in anew.
-  const [flash, setFlash] = useState<{ key: number; text: string; side: Ask["side"] } | null>(null);
+  const [flash, setFlash] = useState<{ key: number; text: string; side: Side; symbol: string } | null>(null);
   const [errors, setErrors] = useState(0);
-  // The two order tickets' numbers of shares, as typed (or stepped), and their boxes, which
-  // give a little bump when stepped so the change is seen.
-  const [orders, setOrders] = useState<Record<Ask["side"], string>>({ Bought: "", Sold: "" });
-  // The ticket in use (clicking the other switches to it); the other keeps its number, locked.
-  const [working, setWorking] = useState<Ask["side"]>("Bought");
+  // Each pick's two order tickets' numbers of shares, as typed (or stepped), kept until the
+  // test moves on; the ticket in use (clicking the other switches to it); and the tickets'
+  // boxes, which give a little bump when stepped so the change is seen.
+  const [orders, setOrders] = useState<Record<string, Record<Side, string>>>({});
+  const [working, setWorking] = useState<Side>("Bought");
   const boxes = { Bought: useRef<HTMLInputElement>(null), Sold: useRef<HTMLInputElement>(null) };
-  const noOrders = { Bought: "", Sold: "" };
-
-  // Steps a ticket's number of shares: by `by` (never below none), or to `to`.
-  function step(side: Ask["side"], { by, to }: { by?: number; to?: number }) {
-    const next = Math.max(to ?? sizes[side] + (by ?? 0), 0);
-    setOrders((o) => ({ ...o, [side]: next ? String(next) : "" }));
-    setError(null);
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      boxes[side].current?.animate(
-        [{ transform: "scale(1)" }, { transform: "scale(1.08)" }, { transform: "scale(1)" }],
-        { duration: 260, easing: "ease-out" },
-      );
-    }
-  }
-  // What everything was worth on the day moved on from (0 before Day 1), for the change since.
+  // What the account was worth on the day moved on from (Day 0: the start), for the change since.
   const [before, setBefore] = useState({ day: 0, value: amount });
   const [trades, setTrades] = useState<Trade[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +236,29 @@ export default function SandboxTest({
   // The days just loaded, summed up before they come in, and whether that summary is fading.
   const [recap, setRecap] = useState<Recap | null>(null);
   const [recapLeaving, setRecapLeaving] = useState(false);
+
+  const entries = picks.map(({ symbol, from }) => ({ symbol, from }));
+  // A pick's name, or the alias the player has given it.
+  const { aliases } = useAliases();
+  const nameOf = (symbol: string) =>
+    aliases[symbol] ?? picks.find((p) => p.symbol === symbol)?.name ?? symbol;
+  const day = prices[picks[0].symbol]?.length ?? 0;
+  // A pick's price today, to the cent, as shown (what its shares are bought and sold at), and
+  // the day before's.
+  const priceOf = (symbol: string) => cents(prices[symbol]?.[day - 1] ?? 0);
+  const lastOf = (symbol: string) => cents(prices[symbol]?.[day - 2] ?? history[symbol]?.at(-1) ?? 0);
+  const heldOf = (symbol: string) => holdings[symbol] ?? { shares: 0, cost: 0 };
+  const invested = picks.reduce((sum, p) => sum + heldOf(p.symbol).shares * priceOf(p.symbol), 0);
+  const value = cents(cash + invested);
+  const sinceStart = ((value - amount) / amount) * 100;
+
+  // The pick shown, and its figures.
+  const pick = picks.find((p) => p.symbol === selected) ?? picks[0];
+  const price = priceOf(pick.symbol);
+  const { shares, cost } = heldOf(pick.symbol);
+  const affordable = price > 0 ? Math.floor(cash / price) : 0;
+  const ticket = orders[pick.symbol] ?? NO_ORDERS;
+  const sizes = { Bought: sizeOf(ticket.Bought), Sold: sizeOf(ticket.Sold) };
 
   function start(event: React.MouseEvent<HTMLButtonElement>) {
     const box = event.currentTarget.getBoundingClientRect();
@@ -209,15 +274,15 @@ export default function SandboxTest({
     begin();
   }
 
-  // Starts the test: loads Day 1's price and the history before it, with the loading mark
-  // showing for a moment at least, then fades the start panel's contents away and moves on
-  // to trading. With reduced motion, it moves on as soon as the prices are in.
+  // Starts the test: loads every pick's Day 1 price and the history before it, with the
+  // loading mark showing for a moment at least, then fades the start panel's contents away
+  // and moves on to trading. With reduced motion, it moves on as soon as the prices are in.
   function begin() {
     setError(null);
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     startTransition(async () => {
       const [[dayOne, past]] = await Promise.all([
-        Promise.all([getSandboxPrices(symbol, from, 1, 1), getSandboxHistory(symbol, from)]),
+        Promise.all([getSandboxSetPrices(entries, 1, 1), getSandboxSetHistory(entries)]),
         pause(calm ? 0 : START_WAIT_MS),
       ]);
       if (dayOne === null || past === null) {
@@ -228,50 +293,83 @@ export default function SandboxTest({
         setLeaving(true);
         await pause(LEAVE_MS);
       }
-      setHistory(past.closes);
-      setYearStarts(past.yearStarts);
+      const each = <T,>(f: (symbol: string) => T) =>
+        Object.fromEntries(picks.map((p) => [p.symbol, f(p.symbol)]));
+      setHistory(each((s) => past[s].closes));
+      setYearStarts(each((s) => past[s].yearStarts));
       setBefore({ day: 0, value: amount });
-      setPrices(dayOne.closes);
-      setOrders(noOrders);
+      setPrices(each((s) => dayOne[s].closes));
+      setOrders({});
       setStatus("trading");
       setLeaving(false);
+      setTesting(true);
+      // The set-up folds away above; keep the test in sight as it does.
+      window.setTimeout(
+        () => panelTop.current?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" }),
+        60,
+      );
     });
   }
 
-  const day = prices.length;
-  // Today's price, to the cent, as shown: what shares are bought and sold at.
-  const price = cents(prices[day - 1] ?? 0);
-  const value = cents(cash + shares * price);
-  const sinceStart = ((value - amount) / amount) * 100;
-  const affordable = price > 0 ? Math.floor(cash / price) : 0;
-  // Each ticket's number of shares, as a count (0 while none is set). Both are kept until the
-  // test moves on.
-  const sizeOf = (text: string) => {
-    const n = Number(text);
-    return Number.isInteger(n) && n > 0 ? n : 0;
-  };
-  const sizes = { Bought: sizeOf(orders.Bought), Sold: sizeOf(orders.Sold) };
+  // Steps the shown pick's ticket's number of shares: by `by` (never below none), or to `to`.
+  // Each step builds on the latest number, so quick clicks all count.
+  function step(side: Side, { by, to }: { by?: number; to?: number }) {
+    const symbol = pick.symbol;
+    setOrders((o) => {
+      const now = sizeOf((o[symbol] ?? NO_ORDERS)[side]);
+      const next = Math.max(to ?? now + (by ?? 0), 0);
+      return { ...o, [symbol]: { ...(o[symbol] ?? NO_ORDERS), [side]: next ? String(next) : "" } };
+    });
+    setError(null);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      boxes[side].current?.animate(
+        [{ transform: "scale(1)" }, { transform: "scale(1.08)" }, { transform: "scale(1)" }],
+        { duration: 260, easing: "ease-out" },
+      );
+    }
+  }
 
   // Moves on to Day `next`, in two beats: the days since are loaded and summed up first (a
-  // recap over the panel: how the price went and what it did to the shares held); then, as
-  // it fades, they come in (moveOn), the chart sliding on and the figures counting.
+  // recap over the panel: how the account went, how the picks moved, and how each position
+  // did); then, as it fades, they come in (moveOn), the chart sliding on and the figures
+  // counting.
   function goTo(next: number) {
     setError(null);
     startTransition(async () => {
-      const days = await getSandboxPrices(symbol, from, day + 1, next);
-      if (days === null) {
+      const loaded = await getSandboxSetPrices(entries, day + 1, next);
+      if (loaded === null) {
         setError("Those days' prices couldn't be loaded. Try again.");
         return;
       }
-      const { closes } = days;
+      const steps = next - day;
+      const values = Array.from({ length: steps + 1 }, (_, k) =>
+        cents(
+          cash +
+            picks.reduce(
+              (sum, p) =>
+                sum +
+                heldOf(p.symbol).shares * (k === 0 ? priceOf(p.symbol) : loaded[p.symbol].closes[k - 1]),
+              0,
+            ),
+        ),
+      );
+      const endOf = (s: string) => loaded[s].closes[steps - 1];
       setRecap({
         from: day,
         to: next,
-        start: price,
-        end: closes[closes.length - 1],
-        closes,
-        shares,
-        yearStarts: days.yearStarts,
+        values,
+        moves: picks.map((p) => ({
+          name: nameOf(p.symbol),
+          pct: ((endOf(p.symbol) - priceOf(p.symbol)) / priceOf(p.symbol)) * 100,
+        })),
+        positions: picks
+          .filter((p) => heldOf(p.symbol).shares > 0)
+          .map((p) => ({
+            name: nameOf(p.symbol),
+            shares: heldOf(p.symbol).shares,
+            gain: cents(heldOf(p.symbol).shares * (endOf(p.symbol) - priceOf(p.symbol))),
+          })),
+        days: loaded,
       });
     });
   }
@@ -283,25 +381,90 @@ export default function SandboxTest({
     setRecapLeaving(true);
     window.setTimeout(() => {
       setBefore({ day: done.from, value });
-      setPrices((p) => [...p, ...done.closes]);
-      setYearStarts((y) => [...y, ...done.yearStarts.map((d) => history.length + d - 1)]);
-      setOrders(noOrders);
+      setPrices((all) =>
+        Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].closes]])),
+      );
+      setYearStarts((all) =>
+        Object.fromEntries(
+          picks.map((p) => [
+            p.symbol,
+            [
+              ...all[p.symbol],
+              ...done.days[p.symbol].yearStarts.map((d) => history[p.symbol].length + d - 1),
+            ],
+          ]),
+        ),
+      );
+      setOrders({});
       setRecap(null);
       setRecapLeaving(false);
     }, RECAP_OUT_MS);
   }
 
-  // After the test: the same pick again, from another Day 1, the page gliding up to its
-  // timeframe so it can be chosen afresh (the testing ground fades meanwhile); or out, back
-  // to before any pick (everything below the pick fades).
+  // After the test: a new set, with the same choices (the page gliding up to the picks as the
+  // set below them fades and the new one comes in); or out, back to before any set.
   function tryAgain() {
-    change(testKey, () => againHref);
-    document.getElementById("sandbox-timeframe")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTesting(false);
+    change(setKey, () => sandboxHref({ ...choices, seed: newSeed() }));
+    document.getElementById("sandbox-picks")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function exit() {
-    change(pickKey, () => "/sandbox");
+    setTesting(false);
+    change(setKey, () => sandboxHref(choices));
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Leaving the test early, once the player has said so on the card that warns them: the test
+  // goes back to just before it started (the same picks and choices, the Start button ready),
+  // everything done in it gone; the set-up opens again above, and the page glides up to it.
+  function quit(confirmed: boolean) {
+    if (quitLeaving) return;
+    setQuitLeaving(true);
+    window.setTimeout(() => {
+      setQuitting(false);
+      setQuitLeaving(false);
+      if (!confirmed) return;
+      setStatus("ready");
+      setPrices({});
+      setHistory({});
+      setYearStarts({});
+      setCash(amount);
+      setHoldings({});
+      setSelected(picks[0].symbol);
+      setAsk(null);
+      setFlash(null);
+      setOrders({});
+      setWorking("Bought");
+      setBefore({ day: 0, value: amount });
+      setTrades([]);
+      setError(null);
+      setRecap(null);
+      setRipple(null);
+      setTesting(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, RECAP_OUT_MS);
+  }
+
+  // Changing the pick shown: its parts fade out and slide away first (SWAP_OUT_MS), then the
+  // new pick's fade and slide in from its side. Choosing again meanwhile just changes where it
+  // is going; the board and the deck mark the new choice at once.
+  function choosePick(symbol: string) {
+    if (symbol === (swapTo ?? pick.symbol)) return;
+    const at = (s: string) => picks.findIndex((p) => p.symbol === s);
+    setSwapDir(at(symbol) < at(pick.symbol) ? -1 : 1);
+    setError(null);
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (calm) {
+      setSelected(symbol);
+      return;
+    }
+    setSwapTo(symbol);
+    window.clearTimeout(swapTimer.current);
+    swapTimer.current = window.setTimeout(() => {
+      setSelected(symbol);
+      setSwapTo(null);
+    }, SWAP_OUT_MS);
   }
 
   function fail(message: string) {
@@ -309,15 +472,15 @@ export default function SandboxTest({
     setErrors((n) => n + 1);
   }
 
-  // Asks to buy or sell `n` shares at today's price: if it can be done, the confirming card
-  // comes up; if not, why not.
-  function request(side: Ask["side"], n: number) {
+  // Asks to buy or sell `n` shares of the pick shown at today's price: if it can be done, the
+  // confirming card comes up; if not, why not.
+  function request(side: Side, n: number) {
     if (!Number.isInteger(n) || n < 1) return fail("Enter a whole number of shares.");
     if (side === "Bought" && n > affordable)
       return fail(`You can afford at most ${affordable} ${sharesWord(affordable)} today.`);
     if (side === "Sold" && n > shares) return fail(`You only hold ${shares} ${sharesWord(shares)}.`);
     setError(null);
-    setAsk({ side, shares: n });
+    setAsk({ symbol: pick.symbol, name: nameOf(pick.symbol), side, shares: n });
   }
 
   // Closes the confirming card; confirmed, the trade is made as it goes, for good.
@@ -327,13 +490,20 @@ export default function SandboxTest({
     setAskLeaving(true);
     window.setTimeout(() => {
       if (confirmed) {
-        const { side, shares: n } = done;
-        const average = shares ? cost / shares : 0;
-        setCash((c) => cents(side === "Bought" ? c - n * price : c + n * price));
-        setShares((s) => (side === "Bought" ? s + n : s - n));
-        setCost((c) => (side === "Bought" ? c + n * price : shares === n ? 0 : c - n * average));
-        setTrades((t) => [...t, { day, side, shares: n, price }]);
-        setFlash({ key: Date.now(), text: `${side === "Bought" ? "+" : "−"}${n}`, side });
+        const { symbol, name, side, shares: n } = done;
+        const at = priceOf(symbol);
+        const held = heldOf(symbol);
+        const average = held.shares ? held.cost / held.shares : 0;
+        setCash((c) => cents(side === "Bought" ? c - n * at : c + n * at));
+        setHoldings((h) => ({
+          ...h,
+          [symbol]:
+            side === "Bought"
+              ? { shares: held.shares + n, cost: held.cost + n * at }
+              : { shares: held.shares - n, cost: held.shares === n ? 0 : held.cost - n * average },
+        }));
+        setTrades((t) => [...t, { symbol, name, day, side, shares: n, price: at }]);
+        setFlash({ key: Date.now(), text: `${side === "Bought" ? "+" : "−"}${n}`, side, symbol });
       }
       setAsk(null);
       setAskLeaving(false);
@@ -380,8 +550,8 @@ export default function SandboxTest({
             <p
               className={`min-w-0 flex-1 text-sm text-slate-600 transition-opacity duration-300 ${pending ? "opacity-50" : ""}`}
             >
-              Day 1&apos;s price will be shown. Buy as many shares as you like with your{" "}
-              {money.format(amount)}, then go day by day to Day {days}.
+              Day 1&apos;s prices will be shown. Buy as many shares of your {picks.length} picks as you like
+              with your {money.format(amount)}, then go day by day to Day {days}.
             </p>
             {error && <p className="w-full text-sm text-red-600">{error}</p>}
           </div>
@@ -391,6 +561,17 @@ export default function SandboxTest({
 
     if (status === "done") {
       const result = verdict(sinceStart);
+      // How each pick did over the test, and what trading it made (sales and what is still
+      // held, less what was paid).
+      const rows = picks.map((p) => {
+        const first = prices[p.symbol][0];
+        const last = priceOf(p.symbol);
+        const traded = trades.filter((t) => t.symbol === p.symbol);
+        const made =
+          traded.reduce((sum, t) => sum + (t.side === "Sold" ? 1 : -1) * t.shares * t.price, 0) +
+          heldOf(p.symbol).shares * last;
+        return { ...p, pct: ((last - first) / first) * 100, made: traded.length ? cents(made) : null };
+      });
       return (
         <div className="rise-in mt-5 rounded-xl bg-slate-50 p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Result</p>
@@ -405,35 +586,53 @@ export default function SandboxTest({
               note={signed(value - amount, money.format(Math.abs(value - amount)))}
             />
           </dl>
-          <div {...enter(1)}>
-            <SandboxChart
-              symbol={symbol}
-              history={history}
-              prices={prices}
-              yearStarts={yearStarts}
-              trades={trades}
-            />
+          {/* How each pick did, and what trading it made. */}
+          <div
+            {...enter(1)}
+            className="rise-in mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white"
+          >
+            <table className="w-full text-sm tabular-nums">
+              <thead className="bg-slate-50 text-xs text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Pick</th>
+                  <th className="px-3 py-2 text-right font-medium">Over the test</th>
+                  <th className="px-3 py-2 text-right font-medium">Your trading</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.symbol} className="border-t border-slate-100">
+                    <td className="px-3 py-1.5 text-slate-900">{nameOf(r.symbol)}</td>
+                    <td className={`px-3 py-1.5 text-right ${tone(r.pct)}`}>{pctText(r.pct)}</td>
+                    <td
+                      className={`px-3 py-1.5 text-right ${r.made === null ? "text-slate-400" : tone(r.made)}`}
+                    >
+                      {r.made === null ? "—" : changeText(r.made)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          {/* What next: the same pick again (choosing its timeframe and amount afresh, and
-              always from another Day 1), or out, back to before any pick. */}
+          {/* What next: a new set with the same choices, or out, back to before any set. */}
           <div {...enter(2)} className="rise-in mt-5 flex flex-wrap items-center gap-2">
             <button type="button" onClick={tryAgain} className={`${DARK} ${ACTION}`}>
               <RetryMark className="size-4" />
-              Try this pick again
+              Try a new set
             </button>
             <button type="button" onClick={exit} className={`${LIGHT} ${ACTION}`}>
               <ExitMark className="size-4" />
               Exit
             </button>
             <p className="text-xs text-slate-500">
-              Trying again keeps this pick; you&apos;ll start from another point in its history.
+              A new set: {picks.length} more picks, from another stretch of time.
             </p>
           </div>
         </div>
       );
     }
 
-    const change = cents(value - before.value);
+    const sinceBefore = cents(value - before.value);
     const left = days - day;
     const canTrade = !pending && !recap && !ask;
     // Moving on: a day, a week or a month, each while that many days are left.
@@ -443,7 +642,7 @@ export default function SandboxTest({
       { label: "Next month", days: 21, Mark: MonthMark },
     ].filter((s) => s.days <= left);
     return (
-      <div className="rise-in relative mt-5 rounded-xl bg-slate-50 p-5">
+      <div ref={panelTop} className="rise-in relative mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5">
         <div {...enter(0)}>
           <div className="flex items-baseline justify-between gap-4">
             <p className="text-lg font-semibold text-slate-900">
@@ -451,9 +650,9 @@ export default function SandboxTest({
               <span className="font-normal text-slate-500">of {days}</span>
             </p>
             <p className="text-sm text-slate-500">
-              Price{" "}
+              Account{" "}
               <span className="text-lg font-semibold tabular-nums text-slate-900">
-                <Tween value={price} format={moneyText} />
+                <Tween value={value} format={moneyText} />
               </span>
             </p>
           </div>
@@ -466,135 +665,249 @@ export default function SandboxTest({
           </div>
         </div>
 
-        <div {...enter(1)}>
-          <SandboxChart
-            symbol={symbol}
-            history={history}
-            prices={prices}
-            yearStarts={yearStarts}
-            trades={trades}
-          />
+        {/* The picks: each one's price, the day's change and the shares held; choosing one
+            shows its chart and its order tickets below. */}
+        <div {...enter(1)} className="rise-in mt-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your picks</p>
+            <p className="text-[11px] text-slate-400">
+              Choose one to trade it. Give it a name of your own with{" "}
+              <span className="font-semibold text-slate-500">✎ Add alias</span>.
+            </p>
+          </div>
+          <div className="mt-2">
+            <PickBoard
+              chosen={swapTo ?? pick.symbol}
+              onChoose={choosePick}
+              picks={picks.map((p) => {
+                const then = lastOf(p.symbol);
+                const now = priceOf(p.symbol);
+                return {
+                  symbol: p.symbol,
+                  name: nameOf(p.symbol),
+                  kind: p.kind,
+                  color: p.color,
+                  ink: p.mark,
+                  currency: p.currency,
+                  price: now,
+                  move: day > 1 && then ? ((now - then) / then) * 100 : null,
+                  held: heldOf(p.symbol).shares,
+                };
+              })}
+            />
+          </div>
         </div>
 
-        <dl {...enter(2)} className="rise-in mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <Stat label="Cash" value={<Tween value={cash} format={moneyText} />} />
-          <Stat
-            label="Shares held"
-            value={
-              <span className="relative">
-                <Tween value={shares} format={countText} />
-                {flash && (
+        {/* The pick shown: its name, its general figures and its chart. Choosing another, its
+            parts slide in from that side as they fade up (.pick-swap-in), and the space they
+            take eases to the new size rather than jumping. */}
+        <div {...enter(2)} className="rise-in mt-5">
+          <EaseHeight changeKey={pick.symbol} duration={600}>
+            <div
+              key={pick.symbol}
+              className={`pick-swap-in ${swapTo ? "pick-swap-out" : ""}`}
+              style={{ "--dir": swapDir } as React.CSSProperties}
+            >
+              <div className="flex items-baseline justify-between gap-4">
+                <AliasName
+                  symbol={pick.symbol}
+                  name={pick.name}
+                  className="text-base font-semibold text-slate-900"
+                />
+                <p className="text-sm text-slate-500">
+                  Price{" "}
+                  <span className="text-lg font-semibold tabular-nums text-slate-900">
+                    <Tween value={price} format={moneyText} />
+                  </span>
+                  {pick.currency && (
+                    <span className="ml-1 rounded bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
+                      {pick.currency}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {/* Its general info, as the Search page's About has it (but with its name hidden):
+                folded away to begin with, a line saying it opens. */}
+              <PickInfo pick={pick} open={infoOpen} onToggle={() => setInfoOpen(!infoOpen)} />
+              <SandboxChart
+                symbol={pick.symbol}
+                history={history[pick.symbol] ?? []}
+                prices={prices[pick.symbol] ?? []}
+                yearStarts={yearStarts[pick.symbol] ?? []}
+                trades={trades.filter((t) => t.symbol === pick.symbol)}
+              />
+            </div>
+          </EaseHeight>
+        </div>
+
+        {/* Where the money is: the cash, what is invested, the account, and the change since
+            the last move; then what is held, as a deck of cards. */}
+        <div {...enter(3)} className="rise-in mt-5 border-t border-slate-200 pt-4">
+          <dl className="mt-0 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <Stat label="Cash" value={<Tween value={cash} format={moneyText} />} />
+            <Stat label="Invested" value={<Tween value={invested} format={moneyText} />} />
+            <Stat
+              label="Account value"
+              value={<Tween value={value} format={moneyText} />}
+              note={
+                <span className={`transition-colors duration-500 ${tone(sinceStart)}`}>
+                  <Tween value={sinceStart} format={pctText} /> since Day 1
+                </span>
+              }
+            />
+            <Stat
+              label={before.day ? `Since Day ${before.day}` : "Since the start"}
+              value={
+                <span className={`transition-colors duration-500 ${tone(sinceBefore)}`}>
+                  <Tween value={sinceBefore} format={changeText} />
+                </span>
+              }
+              note={<Tween value={before.value ? (sinceBefore / before.value) * 100 : 0} format={pctText} />}
+            />
+          </dl>
+
+          {/* What is held, as a deck of cards (HoldingsDeck); clicking one chooses its pick. */}
+          <div className="mt-5">
+            <HoldingsDeck
+              cards={picks
+                .filter((p) => heldOf(p.symbol).shares > 0)
+                .map((p) => ({
+                  symbol: p.symbol,
+                  name: nameOf(p.symbol),
+                  short: aliases[p.symbol] ?? p.kind.replace(/(.)Company$/, "$1"),
+                  number: p.name.match(/\((\d+)\)$/)?.[1] ?? "",
+                  kind: p.kind,
+                  color: p.color,
+                  ink: p.ink,
+                  mark: p.mark,
+                  shares: heldOf(p.symbol).shares,
+                  value: heldOf(p.symbol).shares * priceOf(p.symbol),
+                  gain: cents(heldOf(p.symbol).shares * priceOf(p.symbol) - heldOf(p.symbol).cost),
+                }))}
+              selected={swapTo ?? pick.symbol}
+              onSelect={choosePick}
+            />
+          </div>
+        </div>
+
+        {/* What is held of the pick shown, then trading it: likewise, a beat behind. */}
+        <div {...enter(4)} className="rise-in mt-5">
+          <EaseHeight changeKey={pick.symbol} duration={600}>
+            <div
+              key={pick.symbol}
+              className={`pick-swap-in ${swapTo ? "pick-swap-out" : ""}`}
+              style={{ "--dir": swapDir, animationDelay: "70ms" } as React.CSSProperties}
+            >
+              {/* What is held of it: how many shares, what they cost on average, and how they're
+                doing; and the badge that floats up after a trade. */}
+              <div className="relative mt-4 rounded-lg bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                {flash && flash.symbol === pick.symbol && (
                   <span
                     key={flash.key}
                     aria-hidden
-                    className={`trade-flash pointer-events-none absolute -top-1 left-full ml-2 rounded-full px-1.5 text-xs font-bold ${
+                    className={`trade-flash pointer-events-none absolute -top-2 right-3 rounded-full px-1.5 text-xs font-bold ${
                       flash.side === "Bought" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
                     }`}
                   >
                     {flash.text}
                   </span>
                 )}
-              </span>
-            }
-            note={<Tween value={shares * price} format={moneyText} />}
-          />
-          <Stat
-            label="Total value"
-            value={<Tween value={value} format={moneyText} />}
-            note={
-              <span className={`transition-colors duration-500 ${tone(sinceStart)}`}>
-                <Tween value={sinceStart} format={pctText} /> since Day 1
-              </span>
-            }
-          />
-          <Stat
-            label={before.day ? `Since Day ${before.day}` : "Since the start"}
-            value={
-              <span className={`transition-colors duration-500 ${tone(change)}`}>
-                <Tween value={change} format={changeText} />
-              </span>
-            }
-            note={<Tween value={before.value ? (change / before.value) * 100 : 0} format={pctText} />}
-          />
-        </dl>
+                {shares > 0 ? (
+                  <p key="holding" className="text-fade-in">
+                    You hold{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      <Tween value={shares} format={countText} /> {sharesWord(shares)}
+                    </span>
+                    , bought at an average of{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      <Tween value={cost / shares} format={moneyText} />
+                    </span>{" "}
+                    each: worth{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      <Tween value={shares * price} format={moneyText} />
+                    </span>{" "}
+                    today,{" "}
+                    <span
+                      className={`font-semibold tabular-nums transition-colors duration-500 ${tone(shares * price - cost)}`}
+                    >
+                      <Tween value={shares * price - cost} format={changeText} />
+                    </span>{" "}
+                    on what you paid.
+                  </p>
+                ) : (
+                  <p key="none" className="text-fade-in">
+                    You hold none of it. Today&apos;s price is{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {money.format(price)}
+                      {pick.currency ? ` ${pick.currency}` : ""}
+                    </span>
+                    : you can afford up to{" "}
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {affordable.toLocaleString("en-CA")} {sharesWord(affordable)}
+                    </span>
+                    .
+                  </p>
+                )}
+              </div>
+            </div>
 
-        {/* What is held: how many shares, what they cost on average, and how they're doing. */}
-        <div
-          {...enter(3)}
-          className="rise-in mt-5 rounded-lg bg-white px-4 py-3 text-sm text-slate-600 shadow-sm"
-        >
-          {shares > 0 ? (
-            <p key="holding" className="text-fade-in">
-              You hold{" "}
-              <span className="font-semibold tabular-nums text-slate-900">
-                <Tween value={shares} format={countText} /> {sharesWord(shares)}
-              </span>
-              , bought at an average of{" "}
-              <span className="font-semibold tabular-nums text-slate-900">
-                <Tween value={cost / shares} format={moneyText} />
-              </span>{" "}
-              each: worth{" "}
-              <span className="font-semibold tabular-nums text-slate-900">
-                <Tween value={shares * price} format={moneyText} />
-              </span>{" "}
-              today,{" "}
-              <span
-                className={`font-semibold tabular-nums transition-colors duration-500 ${tone(shares * price - cost)}`}
-              >
-                <Tween value={shares * price - cost} format={changeText} />
-              </span>{" "}
-              on what you paid.
-            </p>
-          ) : (
-            <p key="none" className="text-fade-in">
-              You hold no shares. Today&apos;s price is{" "}
-              <span className="font-semibold tabular-nums text-slate-900">{money.format(price)}</span>: you
-              can afford up to{" "}
-              <span className="font-semibold tabular-nums text-slate-900">
-                {affordable.toLocaleString("en-CA")} {sharesWord(affordable)}
-              </span>
-              .
-            </p>
-          )}
+            {/* Trading it at today's price: where the money is (and would be, after the order
+              being entered), then a ticket to buy and a ticket to sell, side by side. */}
+            <div className="mt-3 rounded-lg bg-white p-4 shadow-sm">
+              <MoneyTiles
+                cash={cash}
+                shares={shares}
+                price={price}
+                account={value}
+                side={working}
+                size={sizes[working]}
+                fills={working === "Sold" ? sizes.Sold <= shares : sizes.Bought <= affordable}
+              />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {(["Bought", "Sold"] as const).map((side) => (
+                  <OrderTicket
+                    key={side}
+                    side={side}
+                    text={ticket[side]}
+                    size={sizes[side]}
+                    most={side === "Bought" ? affordable : shares}
+                    price={price}
+                    box={boxes[side]}
+                    locked={working !== side}
+                    onActivate={() => {
+                      setWorking(side);
+                      setError(null);
+                    }}
+                    usable={canTrade}
+                    onText={(text) => {
+                      setOrders((o) => ({
+                        ...o,
+                        [pick.symbol]: { ...(o[pick.symbol] ?? NO_ORDERS), [side]: text },
+                      }));
+                      setError(null);
+                    }}
+                    onStep={(change) => step(side, change)}
+                    onReview={() => request(side, sizes[side])}
+                  />
+                ))}
+              </div>
+              <Notice message={error} attempt={errors} />
+            </div>
+          </EaseHeight>
         </div>
 
-        {/* Trading at today's price: where the money is (and would be, after the order being
-            entered), then a ticket to buy and a ticket to sell, side by side. */}
-        <div {...enter(4)} className="rise-in mt-3 rounded-lg bg-white p-4 shadow-sm">
-          <MoneyTiles
-            cash={cash}
-            shares={shares}
-            price={price}
-            side={working}
-            size={sizes[working]}
-            fills={working === "Sold" ? sizes.Sold <= shares : sizes.Bought <= affordable}
+        {/* Every trade so far, to read by holding and by day (TradeLog). */}
+        <div {...enter(5)} className="rise-in mt-5">
+          <TradeLog
+            trades={trades}
+            looks={Object.fromEntries(
+              picks.map((p) => [
+                p.symbol,
+                { kind: p.kind, color: p.color, ink: p.mark, currency: p.currency },
+              ]),
+            )}
+            nameOf={nameOf}
           />
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {(["Bought", "Sold"] as const).map((side) => (
-              <OrderTicket
-                key={side}
-                side={side}
-                text={orders[side]}
-                size={sizes[side]}
-                most={side === "Bought" ? affordable : shares}
-                price={price}
-                box={boxes[side]}
-                locked={working !== side}
-                onActivate={() => {
-                  setWorking(side);
-                  setError(null);
-                }}
-                usable={canTrade}
-                onText={(text) => {
-                  setOrders((o) => ({ ...o, [side]: text }));
-                  setError(null);
-                }}
-                onStep={(change) => step(side, change)}
-                onReview={() => request(side, sizes[side])}
-              />
-            ))}
-          </div>
-          <Notice message={error} attempt={errors} />
         </div>
 
         {/* Moving on: by a day, a week or a month while that many are left; then finishing. */}
@@ -602,8 +915,18 @@ export default function SandboxTest({
           {...enter(5)}
           className="rise-in mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4"
         >
+          {/* Leaving the test early (it asks first: nothing done in it is kept). */}
+          <button
+            type="button"
+            onClick={() => setQuitting(true)}
+            disabled={pending || recap !== null || ask !== null}
+            className={`${LIGHT} ${ACTION} mr-auto`}
+          >
+            <ExitMark className="size-4" />
+            Exit test
+          </button>
           {pending && (
-            <span className="mr-auto flex items-center gap-2 text-sm text-slate-500">
+            <span className="flex items-center gap-2 text-sm text-slate-500">
               <DiamondLoader className="size-3.5" />
               Loading…
             </span>
@@ -627,52 +950,16 @@ export default function SandboxTest({
             </button>
           )}
         </div>
-        {/* Every trade so far, the latest first: each new one slides in, lit up a moment. */}
-        {trades.length > 0 && (
-          <div className="mt-5 border-t border-slate-200 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your trades</p>
-            <ol className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
-              {trades
-                .map((t, i) => (
-                  <li
-                    key={i}
-                    className="trade-row flex items-center justify-between gap-4 rounded-md px-2 py-1.5 tabular-nums"
-                  >
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                          t.side === "Bought" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                        }`}
-                      >
-                        {t.side === "Bought" ? "BUY" : "SELL"}
-                      </span>
-                      <span>
-                        Day {t.day}:{" "}
-                        <span className="font-semibold text-slate-900">
-                          {t.shares.toLocaleString("en-CA")} {sharesWord(t.shares)}
-                        </span>{" "}
-                        at {money.format(t.price)}
-                      </span>
-                    </span>
-                    <span className={t.side === "Bought" ? "text-slate-900" : "text-green-700"}>
-                      {t.side === "Bought" ? "−" : "+"}
-                      {money.format(t.shares * t.price)}
-                    </span>
-                  </li>
-                ))
-                .reverse()}
-            </ol>
-          </div>
-        )}
-
         {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} />}
+        {quitting && <QuitCard day={day} trades={trades.length} leaving={quitLeaving} onDone={quit} />}
         {ask && (
           <ConfirmTrade
             ask={ask}
             day={day}
-            price={price}
+            price={priceOf(ask.symbol)}
+            currency={picks.find((p) => p.symbol === ask.symbol)?.currency ?? null}
             cash={cash}
-            shares={shares}
+            shares={heldOf(ask.symbol).shares}
             leaving={askLeaving}
             onDone={settle}
           />
@@ -682,41 +969,242 @@ export default function SandboxTest({
   }
 }
 
-// The recap of the days just passed, over the trading panel (which it dims): how long
-// passed, the price then and now, a little chart of those days and their low and high (over
-// more than one day), and what the move did to the shares held. It comes alive as it opens: its day, week or month mark
+// The chosen pick's general info, above its chart, as the Search page's About has it but with
+// nothing that names it (its name, its website): its sector (its badge and NAICS group), its
+// industry and place, what it does, and its figures with what funds it. Folded away to begin
+// with under a line saying what it holds; its Fold / Open button (or that line) opens it, and
+// it stays open or folded as other picks are chosen.
+function PickInfo({ pick, open, onToggle }: { pick: Pick; open: boolean; onToggle: () => void }) {
+  const f = pick.figures;
+  const funded =
+    f && f.totalAssets && f.totalLiabilities !== null && f.totalAssets > 0
+      ? Math.min(100, Math.max(0, (f.totalLiabilities / f.totalAssets) * 100))
+      : null;
+  return (
+    <div className="mt-2 rounded-lg bg-white px-3 py-2.5 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span
+          className="kind-badge kind-badge-plain grid size-8 shrink-0 place-items-center rounded-lg shadow-sm"
+          style={{ background: pick.color, color: pick.mark, ["--badge" as string]: pick.color }}
+        >
+          <KindMark kind={pick.kind} className="size-4" />
+        </span>
+        <button type="button" onClick={onToggle} className="group min-w-0 flex-1 text-left">
+          <span className="block text-sm font-semibold text-slate-900">General info</span>
+          <span className="block truncate text-xs text-slate-500 transition group-hover:text-slate-900">
+            {open
+              ? pick.line || "About this pick"
+              : `${pick.sector ?? (pick.kind === "ETF" ? "A fund" : "Sector unknown")} · open to see what it does${
+                  f ? " and its figures" : ""
+                }`}
+          </span>
+        </button>
+        <FoldButton open={open} controls={`info-${pick.symbol}`} onClick={onToggle} className="text-xs" />
+      </div>
+      <div
+        id={`info-${pick.symbol}`}
+        className="legend-fold"
+        data-closed={open ? undefined : ""}
+        inert={!open}
+      >
+        <div>
+          <dl className="mt-3 grid gap-x-6 gap-y-2.5 border-t border-slate-100 pt-3 text-xs sm:grid-cols-2">
+            <div className="legend-row" style={{ "--d": open ? "60ms" : "0ms" } as React.CSSProperties}>
+              <dt className="text-slate-500">Sector</dt>
+              <dd className="font-semibold text-slate-900">
+                {pick.sector ?? (pick.kind === "ETF" ? "A fund (no NAICS group)" : "Unknown")}
+              </dd>
+            </div>
+            <div className="legend-row" style={{ "--d": open ? "100ms" : "0ms" } as React.CSSProperties}>
+              <dt className="text-slate-500">Industry and place</dt>
+              <dd className="font-semibold text-slate-900">{pick.line || "—"}</dd>
+            </div>
+            {pick.about && (
+              <div
+                className="legend-row sm:col-span-2"
+                style={{ "--d": open ? "140ms" : "0ms" } as React.CSSProperties}
+              >
+                <dt className="text-slate-500">What it does</dt>
+                <dd className="mt-0.5 line-clamp-4 text-slate-700">{pick.about}</dd>
+              </div>
+            )}
+          </dl>
+          <div
+            className="legend-row mt-3 border-t border-slate-100 pt-3"
+            style={{ "--d": open ? "180ms" : "0ms" } as React.CSSProperties}
+          >
+            {f ? (
+              <>
+                <FigureRow figures={f} />
+                {funded !== null && (
+                  <div className="mt-2.5">
+                    <p className="text-xs text-slate-500">Funded by</p>
+                    <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full bg-slate-700 transition-[width] duration-700 ease-out"
+                        style={{ width: open ? `${funded}%` : "0%" }}
+                      />
+                    </div>
+                    <p className="mt-1 flex justify-between text-[11px] tabular-nums text-slate-600">
+                      <span>Liabilities {Math.round(funded)}%</span>
+                      <span>Equity {100 - Math.round(funded)}%</span>
+                    </p>
+                  </div>
+                )}
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  Today&apos;s figures
+                  {f.balanceDate ? ` (balance sheet as of ${figureDay(f.balanceDate)})` : ""}, not from your
+                  test&apos;s stretch of time: none are on record for then.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">A fund: no company figures.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A company's general figures in a row, above its chart: revenue, total assets, total
+// liabilities and employees, counting up as they come into view.
+function FigureRow({ figures }: { figures: NonNullable<Figures> }) {
+  const items: [string, string][] = [
+    ["Total assets", amountText(figures.totalAssets, figures.currency)],
+    ["Revenue", amountText(figures.revenue, figures.currency)],
+    ["Total liabilities", amountText(figures.totalLiabilities, figures.currency)],
+    ["Employees", figureCount(figures.employees)],
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs tabular-nums sm:grid-cols-4">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-slate-500">{label}</dt>
+          <dd className="text-sm font-semibold text-slate-900">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// The card that asks before the test is left early, over the trading panel (which it dims),
+// as the order card does: a warning that nothing done in the test is kept (how far it got,
+// how many trades), and that the set-up comes back with the same picks and choices. Keep
+// testing (or Escape, or a click beside it) closes it; Exit test leaves.
+function QuitCard({
+  day,
+  trades,
+  leaving,
+  onDone,
+}: {
+  day: number;
+  trades: number;
+  leaving: boolean;
+  onDone: (confirmed: boolean) => void;
+}) {
+  const button = useRef<HTMLButtonElement>(null);
+
+  // Ready for the keyboard (on the safe choice), and in sight, without jumping the page.
+  useEffect(() => {
+    const el = button.current;
+    el?.focus({ preventScroll: true });
+    el?.closest("[role=dialog]")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  return (
+    <div
+      className={`absolute inset-0 z-20 grid place-items-center rounded-xl bg-slate-50/70 p-4 backdrop-blur-[2px] ${
+        leaving ? "recap-out" : "recap-in"
+      }`}
+      onClick={() => onDone(false)}
+      onKeyDown={(e) => e.key === "Escape" && onDone(false)}
+    >
+      <div
+        role="dialog"
+        aria-label="Leave the test?"
+        className="recap-card w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-600">
+            <WarnMark className="warn-pop size-5" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Day {day} · leaving early
+            </p>
+            <p className="text-lg font-semibold text-slate-900">Leave the test?</p>
+          </div>
+        </div>
+        <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
+          Your progress won&apos;t be saved:{" "}
+          {day > 1 ? `the ${day - 1} ${day === 2 ? "day" : "days"} gone by` : "this day"}
+          {trades ? ` and your ${trades} ${trades === 1 ? "trade" : "trades"}` : ""} will be lost.
+        </p>
+        <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
+          You&apos;ll go back to the set-up with the same picks and choices, ready to start again.
+        </p>
+        <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
+          <button
+            ref={button}
+            type="button"
+            onClick={() => onDone(false)}
+            className={`${DARK} ${ACTION} flex-1 justify-center`}
+          >
+            Keep testing
+          </button>
+          <button
+            type="button"
+            onClick={() => onDone(true)}
+            className={`${LIGHT} ${ACTION} flex-1 justify-center hover:border-red-300 hover:text-red-700`}
+          >
+            <ExitMark className="size-4" />
+            Exit test
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The recap of the days just passed, over the trading panel (which it dims): how long passed;
+// what the account was worth then and now, with a little chart of it over those days (over
+// more than one day, while anything was held); the biggest risers and fallers among the
+// picks; and how each position did. It comes alive as it opens: its day, week or month mark
 // plays, its rows rise in one after another, and its figures count from where the days began
-// to where they ended (the day, the price, the change, the shares' gain or loss) as the
-// little chart draws itself and the end of the low-to-high bar slides from the start to now.
-// Pointing along the little chart shows each day's price. It moves on by itself once its
-// timer bar runs out (paused while pointed at, and it says so), or at once when clicked
-// anywhere, or with Escape.
+// to where they ended as the little chart draws itself. Pointing along the little chart shows
+// each day's value. It moves on by itself once its timer bar runs out (paused while pointed
+// at), or at once when clicked anywhere, or with Escape.
 function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
-  const { from, to, start, end, closes, shares } = recap;
+  const { from, to, values, moves, positions } = recap;
   const button = useRef<HTMLButtonElement>(null);
   const chart = useRef<HTMLDivElement>(null);
   // Whether the figures have moved on to where the days ended (just after it opens), and the
-  // day pointed at along the little chart (an index into `path`), if any.
+  // day pointed at along the little chart (an index into `values`), if any.
   const [after, setAfter] = useState(false);
   const [spot, setSpot] = useState<number | null>(null);
   const passed = to - from;
+  const start = values[0];
+  const end = values[values.length - 1];
   const move = end - start;
   const pct = start ? (move / start) * 100 : 0;
-  const held = cents(shares * move);
-  const low = Math.min(start, ...closes);
-  const high = Math.max(start, ...closes);
   const Mark = passed === 1 ? MoonMark : passed <= 5 ? WeekMark : MonthMark;
+  // The biggest riser and faller among the picks (just the one, with a single pick).
+  const ranked = [...moves].sort((a, b) => b.pct - a.pct);
+  const movers = ranked.length > 1 ? [ranked[0], ranked[ranked.length - 1]] : ranked;
+  const SHOWN = 4;
 
-  // The little chart: Day `from` (the start) and every day since, in a 100 by 36 box.
-  const path = [start, ...closes];
+  // The little chart: the account's value on Day `from` and every day since, in a 100 by 36
+  // box.
+  const low = Math.min(...values);
+  const high = Math.max(...values);
   const span = high - low || 1;
-  const px = (i: number) => (path.length === 1 ? 50 : (i / (path.length - 1)) * 100);
+  const px = (i: number) => (values.length === 1 ? 50 : (i / (values.length - 1)) * 100);
   const py = (v: number) => 32 - ((v - low) / span) * 28;
-  const line = path.map((v, i) => `${i ? "L" : "M"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join("");
+  const line = values.map((v, i) => `${i ? "L" : "M"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join("");
   const color = move >= 0 ? "#15803d" : "#dc2626";
-  const shown = spot ?? path.length - 1;
-  // Where a price sits between the low and the high, as a share of the way.
-  const along = (v: number) => (high === low ? 50 : ((v - low) / (high - low)) * 100);
+  const shown = spot ?? values.length - 1;
 
   // Ready for the keyboard, and in sight, without jumping the page; then the figures move on.
   useEffect(() => {
@@ -732,7 +1220,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
     const rect = chart.current?.getBoundingClientRect();
     if (!rect) return;
     const share = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-    setSpot(Math.round(share * (path.length - 1)));
+    setSpot(Math.round(share * (values.length - 1)));
   }
 
   // One row of the card rising in, `i` rows after the first.
@@ -771,7 +1259,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
           <div {...row(0)}>
             <div className="mt-4 flex items-end justify-between gap-4">
               <div>
-                <p className="text-xs text-slate-500">Price</p>
+                <p className="text-xs text-slate-500">Account value</p>
                 <p className="tabular-nums text-slate-900">
                   {money.format(start)} <span className="text-slate-400">→</span>{" "}
                   <span className="font-semibold">
@@ -792,9 +1280,9 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
             </div>
           </div>
 
-          {/* The days just passed, drawn as a little line; pointing along it shows each day.
-              Not for a single day, whose line would be just the price then and now. */}
-          {passed > 1 && (
+          {/* The account over the days just passed, as a little line; pointing along it shows
+              each day. Not for a single day, nor while nothing was held (it would be flat). */}
+          {passed > 1 && positions.length > 0 && (
             <div {...row(1)}>
               <div
                 ref={chart}
@@ -827,12 +1315,11 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
                     className="recap-draw"
                   />
                 </svg>
-                {/* The day shown: today at first, or the one pointed at. */}
                 <span
                   className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
                   style={{
                     left: `${px(shown)}%`,
-                    top: `${(py(path[shown]) / 36) * 100}%`,
+                    top: `${(py(values[shown]) / 36) * 100}%`,
                     backgroundColor: color,
                   }}
                 />
@@ -842,50 +1329,55 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
                   }`}
                   style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
                 >
-                  Day {from + shown}: {money.format(path[shown])}
+                  Day {from + shown}: {money.format(values[shown])}
                 </span>
               </div>
             </div>
           )}
 
-          {/* Where the days began and ended, between their low and high. */}
-          {passed > 1 && (
-            <div {...row(2)}>
-              <div className="mt-3">
-                <div className="relative h-1.5 rounded-full bg-slate-200">
-                  <span
-                    className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-400 bg-white"
-                    style={{ left: `${along(start)}%` }}
-                    title="Where it began"
-                  />
-                  <span
-                    className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                    style={{ left: `${along(after ? end : start)}%`, backgroundColor: color }}
-                    title="Where it ended"
-                  />
-                </div>
-                <p className="mt-1.5 flex justify-between text-xs tabular-nums text-slate-500">
-                  <span>Low {money.format(low)}</span>
-                  <span>High {money.format(high)}</span>
-                </p>
-              </div>
+          {/* The biggest riser and faller among the picks. */}
+          <div {...row(2)}>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-xs text-slate-500">Biggest moves</p>
+              <ul className="mt-1 space-y-0.5 text-sm tabular-nums">
+                {movers.map((m) => (
+                  <li key={m.name} className="flex justify-between gap-3">
+                    <span className="truncate text-slate-700">{m.name}</span>
+                    <span className={`font-semibold ${tone(m.pct)}`}>
+                      <Tween value={after ? m.pct : 0} format={pctText} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
-          )}
+          </div>
 
+          {/* How each position did. */}
           <div {...row(3)}>
-            <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-              {shares > 0 ? (
+            <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+              {positions.length ? (
                 <>
-                  Your {shares.toLocaleString("en-CA")} {sharesWord(shares)} {held >= 0 ? "gained" : "lost"}{" "}
-                  <span className={`font-semibold tabular-nums ${tone(held)}`}>
-                    <Tween value={after ? Math.abs(held) : 0} format={moneyText} />
-                  </span>
-                  .
+                  <p className="text-xs text-slate-500">Your positions</p>
+                  <ul className="mt-1 space-y-0.5 tabular-nums">
+                    {positions.slice(0, SHOWN).map((p) => (
+                      <li key={p.name} className="flex justify-between gap-3">
+                        <span className="truncate">
+                          {p.name} · {p.shares.toLocaleString("en-CA")} {sharesWord(p.shares)}
+                        </span>
+                        <span className={`font-semibold ${tone(p.gain)}`}>
+                          <Tween value={after ? p.gain : 0} format={changeText} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {positions.length > SHOWN && (
+                    <p className="mt-0.5 text-xs text-slate-400">and {positions.length - SHOWN} more</p>
+                  )}
                 </>
               ) : (
                 "You held no shares, so your money stayed as it was."
               )}
-            </p>
+            </div>
           </div>
 
           <div {...row(4)}>
@@ -923,7 +1415,8 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   );
 }
 
-// Where the money is: the cash, what the shares held are worth, and the two together. While
+// Where the money is: the cash, what the shares held of the pick shown are worth, and the
+// whole account (`account`: the cash and every position). While
 // an order is being entered (that can be filled), the cash and the shares show where they
 // would end up after it, and by how much, below their figures; it all counts to each new
 // value, and the projections open and close smoothly.
@@ -931,6 +1424,7 @@ function MoneyTiles({
   cash,
   shares,
   price,
+  account,
   side,
   size,
   fills,
@@ -938,7 +1432,8 @@ function MoneyTiles({
   cash: number;
   shares: number;
   price: number;
-  side: Ask["side"] | null;
+  account: number;
+  side: Side | null;
   size: number;
   fills: boolean;
 }) {
@@ -986,7 +1481,7 @@ function MoneyTiles({
       <div className={tile}>
         <dt className="text-xs text-slate-500">Account value</dt>
         <dd className="font-semibold text-slate-900">
-          <Tween value={cash + shares * price} format={moneyText} />
+          <Tween value={account} format={moneyText} />
         </dd>
       </div>
     </dl>
@@ -1252,6 +1747,7 @@ function ConfirmTrade({
   ask,
   day,
   price,
+  currency,
   cash,
   shares,
   leaving,
@@ -1260,6 +1756,7 @@ function ConfirmTrade({
   ask: Ask;
   day: number;
   price: number;
+  currency: string | null; // what it trades in
   cash: number;
   shares: number;
   leaving: boolean;
@@ -1327,6 +1824,7 @@ function ConfirmTrade({
             <p className="text-lg font-semibold text-slate-900">
               {buying ? "Buy" : "Sell"} {ask.shares.toLocaleString("en-CA")} {sharesWord(ask.shares)}?
             </p>
+            <p className="text-xs text-slate-500">{ask.name}</p>
           </div>
         </div>
 
@@ -1334,7 +1832,10 @@ function ConfirmTrade({
           <div {...row(0)}>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Price per share</dt>
-              <dd className="text-slate-900">{money.format(price)}</dd>
+              <dd className="text-slate-900">
+                {money.format(price)}
+                {currency && <span className="ml-1 text-xs font-semibold text-slate-500">{currency}</span>}
+              </dd>
             </div>
           </div>
           <div {...row(1)}>

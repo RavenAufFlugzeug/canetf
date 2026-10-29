@@ -17,6 +17,9 @@ export type Company = {
   symbol: string;
   name: string | null;
   sector: string | null;
+  industry: string | null;
+  fundFamily: string | null;
+  category: string | null;
   currency: string | null;
   marketCap: number | null;
   peTrailing: number | null;
@@ -47,7 +50,8 @@ function inMajorUnits(c: Company): Company {
 }
 
 const COMPANY_SELECT = `
-  SELECT c.symbol, c.name, c.sector, c.currency,
+  SELECT c.symbol, c.name, c.sector, c.industry,
+         c.fund_family AS fundFamily, c.category, c.currency,
          c.market_cap  AS marketCap,
          c.pe_trailing AS peTrailing,
          q.price, (q.price - prev.close) / prev.close * 100 AS changePct,
@@ -137,6 +141,7 @@ export type CompanyProfile = {
   totalAssets: number | null;
   totalLiabilities: number | null;
   balanceDate: string | null;
+  marketCap: number | null; // its market value today, in what it trades in
 };
 
 export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
@@ -152,7 +157,8 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
                 ${col("employees", "employees")}, ${col("description", "description")},
                 ${col("fund_family", "fundFamily")}, ${col("revenue", "revenue")},
                 ${col("financial_currency", "financialCurrency")}, ${col("total_assets", "totalAssets")},
-                ${col("total_liabilities", "totalLiabilities")}, ${col("balance_date", "balanceDate")}
+                ${col("total_liabilities", "totalLiabilities")}, ${col("balance_date", "balanceDate")},
+                ${col("market_cap", "marketCap")}
          FROM companies WHERE symbol = ?`,
       )
       .get(symbol.toUpperCase()) as CompanyProfile | undefined;
@@ -274,6 +280,124 @@ export async function pickRandomListing(days: number): Promise<string | null> {
         .get(days - 1) as { symbol: string } | undefined,
   );
   return pick?.symbol ?? null;
+}
+
+// A listing that can be picked for the Sandbox: what it is (to name it without its name), and
+// the trading day its test starts on.
+export type SandboxPick = {
+  symbol: string;
+  name: string | null;
+  sector: string | null;
+  industry: string | null;
+  fundFamily: string | null;
+  category: string | null;
+  currency: string | null; // what it trades in (CAD or USD)
+  from: string;
+};
+
+// Every Sandbox listing's first and last day of prices, read once in a while: looking up
+// each listing's ends through the index is quick, but not something to do on every pick.
+type Span = Omit<SandboxPick, "from"> & { first: string; last: string };
+let spans: { at: number; list: Span[] } | null = null;
+const SPANS_TTL = 60 * 60 * 1000;
+
+// A random number generator that always gives the same numbers for the same seed
+// (mulberry32), so a Sandbox address picks the same set every time it is opened.
+function seeded(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const addDays = (date: string, n: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+// `count` listings for the Sandbox, picked at random (by `seed`) from those trading through
+// the same stretch of time: a start date is picked first, from the months when at least
+// `count` listings have prices from two months before it until well after it, then listings that have
+// a close on each of `days` trading days from that date. Each one's test starts on its own
+// first trading day on or after that date (exchanges keep different holidays). Null if there
+// aren't `count` listings for any stretch of `days` days.
+export async function pickSandboxSet(
+  count: number,
+  days: number,
+  seed: number,
+): Promise<{ start: string; picks: SandboxPick[] } | null> {
+  const picked = await withDb((db) => {
+    if (!spans || Date.now() - spans.at > SPANS_TTL) {
+      const list = db
+        .prepare(
+          `SELECT c.symbol, c.name, c.sector, c.industry,
+                  ${hasColumn(db, "fund_family") ? "c.fund_family" : "NULL"} AS fundFamily,
+                  ${hasColumn(db, "category") ? "c.category" : "NULL"} AS category, c.currency,
+                  (SELECT MIN(date) FROM prices p WHERE p.symbol = c.symbol) AS first,
+                  (SELECT MAX(date) FROM prices p WHERE p.symbol = c.symbol) AS last
+           FROM companies c WHERE c.currency IN ('CAD', 'USD')`,
+        )
+        .all() as (Span & { first: string | null; last: string | null })[];
+      spans = { at: Date.now(), list: list.filter((s): s is Span => Boolean(s.first && s.last)) };
+    }
+    const list = spans.list;
+    const random = seeded(seed);
+    // About how many calendar days `days` trading days take, with room for holidays; and how
+    // long before the start each listing must have prices, so its chart has a past to show.
+    const reach = Math.ceil(days * 1.5) + 10;
+    const HISTORY = 60;
+    // The months a test could start in: those with enough listings trading through it.
+    const earliest = list.reduce((a, s) => (s.first < a ? s.first : a), "9999-12-31");
+    const months: string[] = [];
+    const today = new Date().toISOString().slice(0, 10);
+    for (let d = `${earliest.slice(0, 7)}-01`; addDays(d, reach) < today; ) {
+      const next = addDays(d, 31).slice(0, 7) + "-01";
+      if (list.filter((s) => s.first <= addDays(d, -HISTORY) && s.last >= addDays(d, reach)).length >= count)
+        months.push(d);
+      d = next;
+    }
+    const startOf = db.prepare(
+      "SELECT date FROM prices WHERE symbol = ? AND date >= ? AND close IS NOT NULL ORDER BY date LIMIT 1",
+    );
+    const lastOf = db.prepare(
+      "SELECT date FROM prices WHERE symbol = ? AND date >= ? AND close IS NOT NULL ORDER BY date LIMIT 1 OFFSET ?",
+    );
+    // A few tries, in case a month's listings turn out to have gaps.
+    for (let tries = 0; tries < 8 && months.length; tries++) {
+      const month = months[Math.floor(random() * months.length)];
+      const start = `${month.slice(0, 8)}${String(1 + Math.floor(random() * 28)).padStart(2, "0")}`;
+      const pool = list.filter((s) => s.first <= addDays(start, -HISTORY) && s.last >= addDays(start, reach));
+      // Shuffled (Fisher-Yates, by the seed), then taken in turn while they have every day.
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      const picks: SandboxPick[] = [];
+      for (const s of pool) {
+        if (picks.length === count) break;
+        if (!lastOf.get(s.symbol, start, days - 1)) continue;
+        const first = startOf.get(s.symbol, start) as { date: string } | undefined;
+        if (!first) continue;
+        const { first: _f, last: _l, ...about } = s;
+        void _f;
+        void _l;
+        picks.push({ ...about, from: first.date });
+      }
+      if (picks.length === count) return { start, picks };
+    }
+    return null;
+  });
+  return picked ?? null;
+}
+
+// Whether the companies table has a column (databases the pipeline hasn't migrated lack some).
+function hasColumn(db: DatabaseSync, name: string) {
+  return (db.prepare("PRAGMA table_info(companies)").all() as { name: string }[]).some((c) => c.name === name);
 }
 
 // How many daily closes `symbol` has.

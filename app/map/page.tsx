@@ -3,6 +3,7 @@ import SearchBox from "@/components/SearchBox";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import HoldingsMap from "@/components/HoldingsMap";
 import KeyStats from "@/components/KeyStats";
+import KindBadge from "@/components/KindBadge";
 import MapDetail from "@/components/MapDetail";
 import PriceChart from "@/components/PriceChart";
 import { getCompany, getEtfBreakdown, getExchange, getEtfTree, getKeyStats, getPriceHistory } from "@/lib/db";
@@ -67,11 +68,23 @@ export default async function MapPage({
           {etf && tree ? (
             // Keyed by symbol, so each newly chosen ETF plays its entrance.
             <div key={`map-${etf.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
-              <p className="rise-in text-lg font-semibold text-slate-900">
-                {/* Name, then the ticker on its own line, so a long name never splits them. */}
-                {etf.name ?? etf.symbol}
-                <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
-              </p>
+              <div className="rise-in flex items-center gap-3">
+                {/* Its badge, as on the Search page: its sector's colour and its kind's mark. */}
+                <KindBadge
+                  sector={etf.sector}
+                  industry={etf.industry}
+                  fundFamily={etf.fundFamily}
+                  category={etf.category}
+                  className="size-10 rounded-xl"
+                  markClassName="size-5"
+                  shine={false}
+                />
+                <p className="text-lg font-semibold text-slate-900">
+                  {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                  {etf.name ?? etf.symbol}
+                  <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
+                </p>
+              </div>
               <div className="rise-in mt-2" style={{ animationDelay: "80ms" }}>
                 <HoldingsMap tree={tree} detail={picked?.symbol ?? null} />
               </div>
@@ -82,6 +95,17 @@ export default async function MapPage({
                   key={`detail-${picked.symbol}`}
                   name={picked.name ?? picked.symbol}
                   symbol={picked.symbol}
+                  badge={
+                    <KindBadge
+                      sector={picked.sector}
+                      industry={picked.industry}
+                      fundFamily={picked.fundFamily}
+                      category={picked.category}
+                      className="size-10 rounded-xl"
+                      markClassName="size-5"
+                      shine={false}
+                    />
+                  }
                   closeHref={`/map?symbol=${encodeURIComponent(etf.symbol)}`}
                 >
                   <div className="rise-in" style={{ animationDelay: "80ms" }}>

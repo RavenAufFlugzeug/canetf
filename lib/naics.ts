@@ -10,15 +10,20 @@
 // wholesale light green-teal. Information is green, finance dark blue,
 // real estate dark purple, professional services purple, management purple-blue, and
 // Other plain grey. The blues and purples differ in lightness as well as hue, so they stay
-// apart. Each colour carries whichever text reads better on it (`ink`, at least 4.5:1).
-export type NaicsGroup = { code: string; name: string; color: string; ink: string };
+// apart. Each colour carries whichever text reads better on it (`ink`, at least 4.5:1), and
+// the colour of a kind's mark drawn on it (`mark`): its ink, but white on the orange of mining
+// and oil and gas, where a white outline looks better than a dark one.
+export type NaicsGroup = { code: string; name: string; color: string; ink: string; mark?: string };
+
+// The colour of a mark on a group's colour.
+export const markOn = (g: NaicsGroup) => g.mark ?? g.ink;
 
 const DARK_INK = "#0f172a";
 const WHITE_INK = "#ffffff";
 
 export const NAICS_GROUPS: NaicsGroup[] = [
   { code: "11", name: "Agriculture, forestry, fishing and hunting", color: "oklch(0.83 0.15 80)", ink: DARK_INK },
-  { code: "21", name: "Mining, quarrying, and oil and gas extraction", color: "oklch(0.70 0.17 50)", ink: DARK_INK },
+  { code: "21", name: "Mining, quarrying, and oil and gas extraction", color: "oklch(0.70 0.17 50)", ink: DARK_INK, mark: WHITE_INK },
   { code: "22-23", name: "Utilities and construction", color: "oklch(0.80 0.10 18)", ink: DARK_INK },
   { code: "31-33", name: "Manufacturing", color: "oklch(0.56 0.21 25)", ink: WHITE_INK },
   { code: "41", name: "Wholesale trade", color: "oklch(0.89 0.08 170)", ink: DARK_INK },

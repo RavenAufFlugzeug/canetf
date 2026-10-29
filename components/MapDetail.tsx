@@ -8,13 +8,14 @@ const CLOSE_MS = 500; // matches .detail-fold in globals.css
 type Props = {
   name: string;
   symbol: string;
+  badge?: React.ReactNode; // its badge (KindBadge), before its name
   closeHref: string; // the map's address without this product
   children: React.ReactNode; // its chart, key figures and composition
 };
 
 // The details under the Holdings Map for the product that was last clicked. It scrolls
 // into view when it appears; Close fades it and folds it shut before it is removed.
-export default function MapDetail({ name, symbol, closeHref, children }: Props) {
+export default function MapDetail({ name, symbol, badge, closeHref, children }: Props) {
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const [closing, setClosing] = useState(false);
@@ -37,12 +38,15 @@ export default function MapDetail({ name, symbol, closeHref, children }: Props) 
       <div>
         <div className="mt-8 border-t border-slate-200 pt-6">
           <div className="mx-auto max-w-2xl">
-            <div className="rise-in flex items-start justify-between gap-4">
-              <p className="text-lg font-semibold text-slate-900">
-                {/* Name, then the ticker on its own line, so a long name never splits them. */}
-                {name}
-                <span className="block text-base font-normal text-slate-500">{symbol}</span>
-              </p>
+            <div className="rise-in flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {badge}
+                <p className="text-lg font-semibold text-slate-900">
+                  {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                  {name}
+                  <span className="block text-base font-normal text-slate-500">{symbol}</span>
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={close}

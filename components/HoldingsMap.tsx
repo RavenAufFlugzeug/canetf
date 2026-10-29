@@ -5,7 +5,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { EtfTreeNode, MissingReason } from "@/lib/db";
 import { listingOf } from "@/lib/exchanges";
-import { NAICS_GROUPS, naicsOf, type NaicsGroup } from "@/lib/naics";
+import FoldButton, { FOLD_BUTTON } from "@/components/FoldButton";
+import KindMark from "@/components/KindMark";
+import { KINDS } from "@/lib/kinds";
+import { NAICS_GROUPS, markOn, naicsOf, type NaicsGroup } from "@/lib/naics";
+import { kindOf } from "@/lib/sandbox";
 
 // The map reads left to right: the chosen ETF, then what it holds, then what those hold,
 // until a branch ends in a company, a credit rating, or the part of a fund its holdings
@@ -382,6 +386,24 @@ export default function HoldingsMap({
   const ends = all.filter(({ node }) => node.kind === "holding" || node.kind === "rating").length;
   // Whether any company's sector is unknown (the legend then lists that too).
   const unclassified = all.some(({ node }) => node.kind === "holding" && node.details && !sectorOf(node));
+  // The kinds of mark on the map (KindMark): each fund's, and each company's we have details on.
+  const kindsShown = new Set(
+    all.flatMap(({ node }) =>
+      node.kind === "fund"
+        ? ["ETF"]
+        : node.kind === "holding" && node.details
+          ? [
+              kindOf({
+                sector: node.details.sector ?? null,
+                industry: node.details.industry ?? null,
+                fundFamily: null,
+                category: null,
+              }),
+            ]
+          : [],
+    ),
+  );
+  const marks = KINDS.filter((k) => kindsShown.has(k.kind));
 
   // What React draws: the finished map, or the first frame of a change.
   const shown = plan.moves.map((m) => ({ ...m, at: pose(m, moving ? 0 : 1, plan.span) }));
@@ -402,8 +424,7 @@ export default function HoldingsMap({
 
   const allFolded = foldable.every(({ node }) => fold.to.has(node.id));
   const allOpen = fold.to.size === 0;
-  const bulkButton =
-    "group inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-700 transition duration-200 ease-out hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm active:scale-95 active:bg-slate-200 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400";
+  const bulkButton = FOLD_BUTTON;
   const arrow = "transition-transform duration-300 ease-out";
 
   // The route from the chosen ETF to the active product, and what share it is.
@@ -481,29 +502,13 @@ export default function HoldingsMap({
       {all.some(({ node }) => node.kind === "holding") && (
         <div className="mt-3 w-fit max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="flex items-center gap-4">
-            <p className="text-xs font-semibold text-slate-700">Companies/holdings by NAICS sector</p>
-            <button
-              type="button"
-              aria-expanded={legendOpen}
-              aria-controls={legendId}
+            <p className="text-xs font-semibold text-slate-700">Companies/holdings by NAICS sector and mark</p>
+            <FoldButton
+              open={legendOpen}
+              controls={legendId}
               onClick={() => setLegendOpen((open) => !open)}
-              className={`${bulkButton} ml-auto text-xs`}
-            >
-              <svg aria-hidden viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="size-3">
-                {legendOpen ? (
-                  <>
-                    <path d="M3 1.5 6 4.5l3-3" className={`${arrow} motion-safe:group-hover:translate-y-0.5`} />
-                    <path d="M3 10.5 6 7.5l3 3" className={`${arrow} motion-safe:group-hover:-translate-y-0.5`} />
-                  </>
-                ) : (
-                  <>
-                    <path d="M3 4.5 6 1.5l3 3" className={`${arrow} motion-safe:group-hover:-translate-y-0.5`} />
-                    <path d="M3 7.5 6 10.5l3-3" className={`${arrow} motion-safe:group-hover:translate-y-0.5`} />
-                  </>
-                )}
-              </svg>
-              {legendOpen ? "Fold" : "Open"}
-            </button>
+              className="ml-auto text-xs"
+            />
           </div>
           <div id={legendId} className="legend-fold" data-closed={legendOpen ? undefined : ""}>
             {/* The folding element's only child (padding on it wouldn't fold away), so the
@@ -525,6 +530,37 @@ export default function HoldingsMap({
                   </li>
                 ))}
               </ul>
+              {/* The marks on the boxes, by sector as Yahoo Finance gives it (KindMark): only
+                  those on this map, cascading in after the colours. */}
+              {marks.length > 0 && (
+                <>
+                  <p
+                    className="legend-row mt-3 text-xs font-semibold text-slate-700"
+                    style={{ "--d": `${legendOpen ? 90 + (NAICS_GROUPS.length + 1) * 28 : 0}ms` } as React.CSSProperties}
+                  >
+                    Marks: the sector
+                  </p>
+                  <ul className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1.5 text-xs text-slate-600 sm:grid-cols-3">
+                    {marks.map((k, i) => (
+                      <li
+                        key={k.kind}
+                        title={`${k.from}: ${k.about}`}
+                        className="legend-row flex items-center gap-1.5"
+                        style={
+                          {
+                            "--d": `${legendOpen ? 90 + (NAICS_GROUPS.length + 2 + i) * 28 : 0}ms`,
+                          } as React.CSSProperties
+                        }
+                      >
+                        <span className="legend-swatch grid h-4 w-5 shrink-0 place-items-center rounded-sm bg-white text-slate-800 ring-1 ring-slate-200">
+                          <KindMark kind={k.kind} className="size-3" />
+                        </span>
+                        <span className="min-w-0 font-medium text-slate-700">{k.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -661,6 +697,24 @@ export default function HoldingsMap({
                   color: filled && sector ? sector.ink : undefined,
                 }}
               >
+                {/* Its kind's mark (KindMark, as on the Sandbox's cards and the Search page): a
+                    company we have details on by its sector, a fund as an ETF. */}
+                {(filled || node.kind === "fund") && (
+                  <KindMark
+                    kind={
+                      node.kind === "fund"
+                        ? "ETF"
+                        : kindOf({
+                            sector: node.details?.sector ?? null,
+                            industry: node.details?.industry ?? null,
+                            fundFamily: null,
+                            category: null,
+                          })
+                    }
+                    className="-ml-0.5 size-3.5"
+                    color={filled && sector ? markOn(sector) : undefined}
+                  />
+                )}
                 {node.symbol &&
                   (node.stored && links ? (
                     // Shows this product's chart and figures under the map (the page reads

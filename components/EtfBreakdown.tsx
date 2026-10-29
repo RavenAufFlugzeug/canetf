@@ -135,7 +135,7 @@ const CAPS: Record<string, number> = {
 
 // About how wide `text` is in Arial (the page font) at `px`, rounded up a little so a
 // label never ends up touching its tile's edge.
-function textWidth(text: string, px: number) {
+export function textWidth(text: string, px: number) {
   let em = 0;
   for (const ch of text) {
     if (ch in CAPS) em += CAPS[ch];
@@ -211,7 +211,7 @@ function build({ kind, items }: Breakdown, palette: PaletteName): { slices: Slic
 // Squarified treemap (Bruls, Huizing & van Wijk): fills the square with rectangles
 // whose areas match the weights, keeping each as close to square as possible.
 // ---------------------------------------------------------------------------
-type Box = { x: number; y: number; w: number; h: number };
+export type Box = { x: number; y: number; w: number; h: number };
 
 // How far from square the worst tile in a row would be, laid along a side of this length.
 function worstRatio(row: number[], side: number) {
@@ -221,7 +221,7 @@ function worstRatio(row: number[], side: number) {
   return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
 }
 
-function squarify(areas: number[], box: Box): Box[] {
+export function squarify(areas: number[], box: Box): Box[] {
   const out: Box[] = [];
   let free = { ...box };
   let i = 0;

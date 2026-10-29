@@ -1,18 +1,13 @@
 "use server";
 
-import {
-  countPriceDays,
-  getIntradayBars,
-  getIntradayDays,
-  getPricesBefore,
-  getPriceWindow,
-  pickRandomListing,
-  type PricePoint,
-} from "@/lib/db";
-import { AMOUNTS, newSeed, sandboxHref, SHORTEST, TIMEFRAMES } from "@/lib/sandbox";
+import { getIntradayBars, getIntradayDays, getPricesBefore, getPriceWindow, type PricePoint } from "@/lib/db";
 
-// The Sandbox's longest timeframe, in trading days (12 months).
+// The Sandbox's longest timeframe, in trading days (12 months); the most listings a test has;
+// and how far back each one's history goes before Day 1 (five years of trading days, which
+// the chart's longest ranges show).
 const LONGEST = 252;
+const MOST = 24;
+const HISTORY = 1260;
 
 // The indices into `points` of the days that begin a new year (each the first trading day
 // of its year after a day of the year before), for the chart's YTD range. Only these places
@@ -22,39 +17,56 @@ const yearStarts = (points: PricePoint[]) =>
 
 const isDate = (d: unknown): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
-// The closes from Day `firstDay` to Day `lastDay` of the run that starts on the trading day
-// `from`, and which of those days (by number) begin a new year; or null if any of them is
-// missing. Asked for as the test moves on (a day, a week or a month at a time), so the days
-// to come stay out of the page.
-export async function getSandboxPrices(
-  symbol: unknown,
-  from: unknown,
+// A test's listings, each with the trading day its run starts on, as the client sends them.
+type Entry = { symbol: string; from: string };
+const entriesOf = (entries: unknown): Entry[] | null =>
+  Array.isArray(entries) &&
+  entries.length > 0 &&
+  entries.length <= MOST &&
+  entries.every((e) => e && typeof e.symbol === "string" && isDate(e.from))
+    ? (entries as Entry[])
+    : null;
+
+// For each of a test's listings, its closes from Day `firstDay` to Day `lastDay` of its run,
+// and which of those days (by number) begin a new year; or null if any listing is missing
+// any of them. Asked for as the test moves on (a day, a week or a month at a time), so the
+// days to come stay out of the page.
+export async function getSandboxSetPrices(
+  entries: unknown,
   firstDay: unknown,
   lastDay: unknown,
-): Promise<{ closes: number[]; yearStarts: number[] } | null> {
-  if (typeof symbol !== "string" || !isDate(from)) return null;
+): Promise<Record<string, { closes: number[]; yearStarts: number[] }> | null> {
+  const list = entriesOf(entries);
   const isDay = (d: unknown): d is number => typeof d === "number" && Number.isInteger(d) && d >= 1 && d <= LONGEST;
-  if (!isDay(firstDay) || !isDay(lastDay) || firstDay > lastDay) return null;
-  const run = await getPriceWindow(symbol, from, lastDay);
-  if (run.length !== lastDay) return null;
-  return {
-    closes: run.slice(firstDay - 1).map((p) => p.close),
-    yearStarts: yearStarts(run)
-      .map((i) => i + 1)
-      .filter((day) => day >= firstDay),
-  };
+  if (!list || !isDay(firstDay) || !isDay(lastDay) || firstDay > lastDay) return null;
+  const out: Record<string, { closes: number[]; yearStarts: number[] }> = {};
+  for (const { symbol, from } of list) {
+    const run = await getPriceWindow(symbol, from, lastDay);
+    if (run.length !== lastDay) return null;
+    out[symbol] = {
+      closes: run.slice(firstDay - 1).map((p) => p.close),
+      yearStarts: yearStarts(run)
+        .map((i) => i + 1)
+        .filter((day) => day >= firstDay),
+    };
+  }
+  return out;
 }
 
-// Every close before Day 1 of the run that starts on the trading day `from` (the history the
-// player may look back on once the test starts), and which of them begin a new year (by
-// index; the closes' length when Day 1 itself does).
-export async function getSandboxHistory(
-  symbol: unknown,
-  from: unknown,
-): Promise<{ closes: number[]; yearStarts: number[] } | null> {
-  if (typeof symbol !== "string" || !isDate(from)) return null;
-  const points = await getPricesBefore(symbol, from);
-  return { closes: points.map((p) => p.close), yearStarts: yearStarts([...points, { t: from, close: 0 }]) };
+// For each of a test's listings, its closes before Day 1 (up to five years of them: the
+// history the player may look back on once the test starts), and which of them begin a new
+// year (by index; the closes' length when Day 1 itself does).
+export async function getSandboxSetHistory(
+  entries: unknown,
+): Promise<Record<string, { closes: number[]; yearStarts: number[] }> | null> {
+  const list = entriesOf(entries);
+  if (!list) return null;
+  const out: Record<string, { closes: number[]; yearStarts: number[] }> = {};
+  for (const { symbol, from } of list) {
+    const points = (await getPricesBefore(symbol, from)).slice(-HISTORY);
+    out[symbol] = { closes: points.map((p) => p.close), yearStarts: yearStarts([...points, { t: from, close: 0 }]) };
+  }
+  return out;
 }
 
 // An example of a day of `symbol`'s trading, for the Sandbox chart's 1D range: one of the
@@ -77,22 +89,4 @@ export async function getSandboxExampleDay(
     { minute: 0, price: bars[0].open ?? bars[0].close },
     ...bars.map((b) => ({ minute: minutes(b.ts) - start + 5, price: b.close })),
   ];
-}
-
-// A new random pick for the Sandbox, with a seed of its own: the address to go to, keeping
-// the timeframe (if the new pick has the days for it) and the starting amount, or null if
-// there is nothing to pick. The page goes there itself, so it stays in place meanwhile.
-export async function pickForSandbox(
-  range: unknown,
-  amount: unknown,
-  current?: unknown,
-): Promise<string | null> {
-  // A different pick from the one shown now (`current`), unless it keeps coming up.
-  let symbol = await pickRandomListing(SHORTEST);
-  for (let tries = 0; symbol && symbol === current && tries < 5; tries++) symbol = await pickRandomListing(SHORTEST);
-  if (!symbol) return null;
-  const timeframe = TIMEFRAMES.find((t) => t.key === range);
-  const fits = timeframe && timeframe.days <= (await countPriceDays(symbol));
-  const start = AMOUNTS.find((a) => a === amount);
-  return sandboxHref({ symbol, seed: newSeed(), range: fits ? timeframe.key : undefined, amount: start });
 }

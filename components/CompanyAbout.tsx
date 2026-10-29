@@ -1,5 +1,6 @@
 import CompanyDescription from "@/components/CompanyDescription";
 import CountUp from "@/components/CountUp";
+import KindBadge from "@/components/KindBadge";
 import type { CompanyProfile } from "@/lib/db";
 import { naicsOf } from "@/lib/naics";
 
@@ -127,10 +128,11 @@ export default function CompanyAbout({
       "Sector",
       <Noted key="sector" note={`NAICS ${naics.code.replace("-", "–")}`}>
         <span className="inline-flex items-center gap-2">
-          <span
-            aria-hidden
-            className="about-swatch size-3 shrink-0 rounded-sm"
-            style={{ background: naics.color }}
+          <KindBadge
+            sector={profile.sector}
+            industry={profile.industry}
+            className="about-swatch size-5 rounded-md"
+            markClassName="size-3"
           />
           {naics.name}
         </span>

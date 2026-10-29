@@ -1,7 +1,9 @@
 import Link from "next/link";
+import BadgeLegend from "@/components/BadgeLegend";
 import CompanyAbout from "@/components/CompanyAbout";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import KeyStats from "@/components/KeyStats";
+import KindBadge from "@/components/KindBadge";
 import MapMark from "@/components/MapMark";
 import PriceChart from "@/components/PriceChart";
 import SearchBox from "@/components/SearchBox";
@@ -38,11 +40,23 @@ export default async function SearchPage({
           {company && history ? (
             // Keyed by symbol, so each newly chosen company plays its entrance.
             <div key={`company-${company.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
-              <p className="rise-in text-lg font-semibold text-slate-900">
-                {/* Name, then the ticker on its own line, so a long name never splits them. */}
-                {company.name ?? company.symbol}
-                <span className="block text-base font-normal text-slate-500">{company.symbol}</span>
-              </p>
+              <div className="rise-in flex items-center gap-3">
+                {/* Its badge: its sector's colour and its kind's mark. */}
+                <KindBadge
+                  sector={company.sector}
+                  industry={company.industry}
+                  fundFamily={company.fundFamily}
+                  category={company.category}
+                  className="size-10 rounded-xl"
+                  markClassName="size-5"
+                  shine={false}
+                />
+                <p className="text-lg font-semibold text-slate-900">
+                  {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                  {company.name ?? company.symbol}
+                  <span className="block text-base font-normal text-slate-500">{company.symbol}</span>
+                </p>
+              </div>
               <div className="rise-in" style={{ animationDelay: "80ms" }}>
                 <PriceChart history={history} currency={company.currency} exchange={exchange} />
               </div>
@@ -68,6 +82,14 @@ export default async function SearchPage({
                   </div>
                 </div>
               )}
+              {/* What the badge by its name means: its mark, and its colour. */}
+              <BadgeLegend
+                sector={company.sector}
+                industry={company.industry}
+                fundFamily={company.fundFamily}
+                category={company.category}
+                delay={500}
+              />
             </div>
           ) : (
             <p className="rise-in mt-4 text-slate-600">

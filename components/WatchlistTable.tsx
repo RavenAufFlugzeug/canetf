@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { Company } from "@/lib/db";
 import { moneyFormatter } from "@/lib/money";
+import KindBadge from "@/components/KindBadge";
 
 const ROW_LEAVE_MS = 350; // matches .picker-collapse in globals.css
 
@@ -108,13 +109,26 @@ export default function WatchlistTable({
                 <Cell folded={folded} className="font-semibold">
                   <Link
                     href={`/search?symbol=${encodeURIComponent(c.symbol)}`}
-                    className="hover:text-blue-600"
+                    className="underline-offset-4 hover:text-slate-950 hover:underline"
                   >
                     {c.symbol}
                   </Link>
                 </Cell>
                 <Cell folded={folded}>{c.name ?? "—"}</Cell>
-                <Cell folded={folded}>{c.sector ?? "—"}</Cell>
+                <Cell folded={folded}>
+                  {/* Its badge (sector colour, kind mark), then its sector. */}
+                  <span className="flex items-center gap-2">
+                    <KindBadge
+                      sector={c.sector}
+                      industry={c.industry}
+                      fundFamily={c.fundFamily}
+                      category={c.category}
+                      className="size-6 rounded-md"
+                      markClassName="size-3.5"
+                    />
+                    {c.sector ?? (c.fundFamily || c.category ? "Fund" : "—")}
+                  </span>
+                </Cell>
                 <Cell folded={folded} className="text-right">
                   {money(c.price, c.currency)}
                 </Cell>
