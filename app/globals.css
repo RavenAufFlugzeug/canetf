@@ -781,6 +781,35 @@ body:has(> main.bg-slate-50) {
   }
 }
 
+.test-mark-live .test-mark-moon {
+  transform-origin: center;
+  animation: test-mark-moonrise 900ms cubic-bezier(0.3, 1.4, 0.5, 1) 150ms both; /* a day gone by */
+}
+
+@keyframes test-mark-moonrise {
+  from {
+    opacity: 0.3;
+    transform: translateY(3px) rotate(-40deg);
+  }
+}
+
+.test-mark-live .test-mark-star {
+  transform-origin: center;
+  animation: test-mark-twinkle 1600ms ease-in-out 600ms infinite both;
+}
+
+@keyframes test-mark-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .test-mark-live .test-mark-week {
   animation: test-mark-week 700ms cubic-bezier(0.2, 0.8, 0.3, 1) 200ms both;
 }
@@ -837,6 +866,20 @@ body:has(> main.bg-slate-50) {
 
 .group:enabled:hover .test-mark-out {
   transform: translateX(2px);
+}
+
+/* The Sandbox's locked order ticket (OrderTicket in SandboxTest.tsx): its "Click to switch"
+   drifts in out of a blur as the ticket locks (its arrows turn by Tailwind on hover). */
+.switch-in {
+  animation: switch-in 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both; /* as the ticket locks */
+}
+
+@keyframes switch-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    translate: 0 4px;
+  }
 }
 
 /* Rising in leaves each element on a layer of its own (see the Sandbox's steps). */
@@ -1340,10 +1383,13 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .auth-swap-from-left,
   .auth-fade,
   .sandbox-swap,
+  .switch-in,
   .result-pop,
   .group:enabled:hover .test-mark-spin,
   .test-mark-out,
   .test-mark-live .test-mark-sun,
+  .test-mark-live .test-mark-moon,
+  .test-mark-live .test-mark-star,
   .test-mark-live .test-mark-rays,
   .test-mark-live .test-mark-week,
   .test-mark-live .test-mark-date,

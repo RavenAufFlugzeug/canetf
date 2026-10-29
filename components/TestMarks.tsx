@@ -3,6 +3,7 @@
 //  - buying: an open box with an arrow that drops into it;
 //  - selling: the same box with an arrow that rises out of it;
 //  - the next day: a sun on the horizon that comes up as its rays shine out;
+//  - a day gone by (its recap): a crescent moon that swings up as its stars twinkle;
 //  - the next week: a calendar whose week row fills in from left to right;
 //  - the next month: a calendar whose days pop in one after another;
 //  - finishing: a flag that waves;
@@ -45,6 +46,21 @@ export function SellMark(props: Props) {
     <Mark {...props}>
       <path d={BOX} />
       <path className="test-mark-rise" d="M10 12V3.5M6.5 7 10 3.5 13.5 7" />
+    </Mark>
+  );
+}
+
+export function MoonMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path className="test-mark-moon" d="M10 3.5a5 5 0 0 0 6.5 6.5 6.5 6.5 0 1 1-6.5-6.5Z" />
+      <path className="test-mark-star" d="M15.5 2v2.4M14.3 3.2h2.4" strokeWidth="1.4" />
+      <path
+        className="test-mark-star"
+        d="M18.2 6.4v1.6M17.4 7.2H19"
+        strokeWidth="1.3"
+        style={{ animationDelay: "400ms" }}
+      />
     </Mark>
   );
 }

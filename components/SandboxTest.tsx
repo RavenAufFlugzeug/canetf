@@ -12,6 +12,7 @@ import {
   ExitMark,
   FinishMark,
   MonthMark,
+  MoonMark,
   RetryMark,
   SellMark,
   WarnMark,
@@ -27,10 +28,12 @@ import { tradingSpan } from "@/lib/tradingTime";
 // count as dollars as they are (no exchange rate). Each day's price is fetched only when
 // that day comes, so the days ahead aren't in the page. Moving on is smooth: the day, the
 // price and what the holdings are worth count to their new figures (Tween) as the chart's
-// new days slide in (SandboxChart) and the progress bar fills. Trading is of a number of
-// shares, typed in or made up with a few buttons (add or remove 1 or 10, add as many as the
-// cash allows, remove them all), whose cost shows below it as it changes; then bought or
-// sold, and every trade is confirmed first (ConfirmTrade), for good: once made,
+// new days slide in (SandboxChart) and the progress bar fills. Trading is by order tickets,
+// one to buy and one to sell (OrderTicket), one in use at a time (clicking the other switches,
+// each keeping its number until the test moves on): a number of shares, typed in or stepped
+// up and down by 1 or 10, its estimated cost or proceeds and where the cash and the
+// shares would end up shown as it changes (MoneyTiles); then reviewed and confirmed
+// (ConfirmTrade), which places the order, for good: once made,
 // a badge floats up from the holdings, the figures count to their new values, the trade
 // slides into the log and a mark pops up on the chart where it was made.
 type Trade = { day: number; side: "Bought" | "Sold"; shares: number; price: number };
@@ -51,7 +54,7 @@ type Recap = {
 
 // How long a recap stays up before the test moves on by itself (unless pointed at), and how
 // long it takes to fade away (.recap-timer, .recap-out in globals.css).
-const RECAP_MS = 3400;
+const RECAP_MS = 5000;
 const RECAP_OUT_MS = 260;
 // How long passed, for a recap's heading: "A day passes", "A week passes", "3 days pass".
 function passedText(n: number) {
@@ -95,12 +98,6 @@ const LIGHT = `${BUTTON} border border-slate-200 bg-white text-slate-900 hover:b
 // pressed, it sinks a touch.
 const ACTION =
   "group inline-flex items-center gap-2 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] disabled:hover:translate-y-0 disabled:hover:shadow-none";
-// The buttons that change the number of shares to trade: small and round, adding dark and
-// removing light; pointed at, they lift a touch, and pressed, they dip.
-const QUICK =
-  "rounded-full px-3 py-1 text-sm font-semibold tabular-nums transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-95 warn-cursor disabled:opacity-35 disabled:hover:translate-y-0";
-const QUICK_ADD = `${QUICK} bg-slate-900 text-white hover:bg-slate-700 hover:shadow-sm`;
-const QUICK_REMOVE = `${QUICK} border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:shadow-sm`;
 // The start button: dark, with its play mark. Pointed at, it lifts a little and the mark
 // springs forwards, ready to go; clicked, the mark launches (shooting forwards out of
 // sight) as a ripple spreads from where it was clicked, then the loading mark shows until
@@ -163,17 +160,22 @@ export default function SandboxTest({
   // trade starts a new one; and how many errors there have been, so each one comes in anew.
   const [flash, setFlash] = useState<{ key: number; text: string; side: Ask["side"] } | null>(null);
   const [errors, setErrors] = useState(0);
-  const sharesBox = useRef<HTMLInputElement>(null);
+  // The two order tickets' numbers of shares, as typed (or stepped), and their boxes, which
+  // give a little bump when stepped so the change is seen.
+  const [orders, setOrders] = useState<Record<Ask["side"], string>>({ Bought: "", Sold: "" });
+  // The ticket in use (clicking the other switches to it); the other keeps its number, locked.
+  const [working, setWorking] = useState<Ask["side"]>("Bought");
+  const boxes = { Bought: useRef<HTMLInputElement>(null), Sold: useRef<HTMLInputElement>(null) };
+  const noOrders = { Bought: "", Sold: "" };
 
-  // Changes the number of shares to trade with a button: by `by` (never below none), or to
-  // `to`; the box gives a little bump so the change is seen.
-  function setCount({ by, to }: { by?: number; to?: number }) {
-    const next = Math.max(to ?? count + (by ?? 0), 0);
-    setQuantity(String(next));
+  // Steps a ticket's number of shares: by `by` (never below none), or to `to`.
+  function step(side: Ask["side"], { by, to }: { by?: number; to?: number }) {
+    const next = Math.max(to ?? sizes[side] + (by ?? 0), 0);
+    setOrders((o) => ({ ...o, [side]: next ? String(next) : "" }));
     setError(null);
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      sharesBox.current?.animate(
-        [{ transform: "scale(1)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }],
+      boxes[side].current?.animate(
+        [{ transform: "scale(1)" }, { transform: "scale(1.08)" }, { transform: "scale(1)" }],
         { duration: 260, easing: "ease-out" },
       );
     }
@@ -181,7 +183,6 @@ export default function SandboxTest({
   // What everything was worth on the day moved on from (0 before Day 1), for the change since.
   const [before, setBefore] = useState({ day: 0, value: amount });
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [quantity, setQuantity] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // The start button's ripple (where it was clicked, keyed so each click starts a new one),
@@ -231,7 +232,7 @@ export default function SandboxTest({
       setYearStarts(past.yearStarts);
       setBefore({ day: 0, value: amount });
       setPrices(dayOne.closes);
-      setQuantity("");
+      setOrders(noOrders);
       setStatus("trading");
       setLeaving(false);
     });
@@ -243,12 +244,13 @@ export default function SandboxTest({
   const value = cents(cash + shares * price);
   const sinceStart = ((value - amount) / amount) * 100;
   const affordable = price > 0 ? Math.floor(cash / price) : 0;
-  const qty = Number(quantity);
-  const validQty = Number.isInteger(qty) && qty > 0;
-  // The number of shares to trade, as a count (0 while none is set), and whether that's more
-  // than the cash can buy.
-  const count = validQty ? qty : 0;
-  const over = count > affordable;
+  // Each ticket's number of shares, as a count (0 while none is set). Both are kept until the
+  // test moves on.
+  const sizeOf = (text: string) => {
+    const n = Number(text);
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  };
+  const sizes = { Bought: sizeOf(orders.Bought), Sold: sizeOf(orders.Sold) };
 
   // Moves on to Day `next`, in two beats: the days since are loaded and summed up first (a
   // recap over the panel: how the price went and what it did to the shares held); then, as
@@ -283,7 +285,7 @@ export default function SandboxTest({
       setBefore({ day: done.from, value });
       setPrices((p) => [...p, ...done.closes]);
       setYearStarts((y) => [...y, ...done.yearStarts.map((d) => history.length + d - 1)]);
-      setQuantity("");
+      setOrders(noOrders);
       setRecap(null);
       setRecapLeaving(false);
     }, RECAP_OUT_MS);
@@ -332,7 +334,6 @@ export default function SandboxTest({
         setCost((c) => (side === "Bought" ? c + n * price : shares === n ? 0 : c - n * average));
         setTrades((t) => [...t, { day, side, shares: n, price }]);
         setFlash({ key: Date.now(), text: `${side === "Bought" ? "+" : "−"}${n}`, side });
-        setQuantity("");
       }
       setAsk(null);
       setAskLeaving(false);
@@ -557,151 +558,44 @@ export default function SandboxTest({
           )}
         </div>
 
-        {/* Buying and selling at today's price: a number of shares, typed in or made up with
-            the buttons either side, its cost below it as it changes, then buy or sell. */}
-        <form
-          {...enter(4)}
-          className="rise-in mt-3 rounded-lg bg-white p-4 shadow-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            request("Bought", count);
-          }}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Fewer shares">
-              <button
-                type="button"
-                onClick={() => setCount({ to: 0 })}
-                disabled={!canTrade || count === 0}
-                className={QUICK_REMOVE}
-              >
-                Remove all
-              </button>
-              <button
-                type="button"
-                onClick={() => setCount({ by: -10 })}
-                disabled={!canTrade || count === 0}
-                className={QUICK_REMOVE}
-              >
-                Remove 10
-              </button>
-              <button
-                type="button"
-                onClick={() => setCount({ by: -1 })}
-                disabled={!canTrade || count === 0}
-                className={QUICK_REMOVE}
-              >
-                Remove 1
-              </button>
-            </div>
-            <label className="sr-only" htmlFor="sandbox-shares">
-              Number of shares
-            </label>
-            <input
-              ref={sharesBox}
-              id="sandbox-shares"
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={quantity}
-              onChange={(e) => {
-                setQuantity(e.target.value);
-                setError(null);
-              }}
-              placeholder="0"
-              aria-invalid={over}
-              className={`w-28 rounded-lg border bg-white px-3 py-2 text-center text-lg font-semibold tabular-nums text-slate-900 transition-colors duration-300 focus:outline-none ${
-                over ? "border-red-300 focus:border-red-400" : "border-slate-200 focus:border-slate-400"
-              }`}
-            />
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="More shares">
-              <button
-                type="button"
-                onClick={() => setCount({ by: 1 })}
-                disabled={!canTrade}
-                className={QUICK_ADD}
-              >
-                Add 1
-              </button>
-              <button
-                type="button"
-                onClick={() => setCount({ by: 10 })}
-                disabled={!canTrade}
-                className={QUICK_ADD}
-              >
-                Add 10
-              </button>
-              <button
-                type="button"
-                onClick={() => setCount({ to: affordable })}
-                disabled={!canTrade || affordable === 0 || count === affordable}
-                className={QUICK_ADD}
-              >
-                Add max <span className="font-normal opacity-75">· {affordable.toLocaleString("en-CA")}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* What that many shares cost at today's price, counting to each new figure; red,
-              with a warning in place of the cash left, when it's more than the cash there is
-              (the two fading into each other). */}
-          <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-            <p className="text-slate-600">
-              Cost{" "}
-              <span
-                className={`text-lg font-semibold tabular-nums transition-colors duration-300 ${
-                  over ? "text-red-600" : "text-slate-900"
-                }`}
-              >
-                <Tween value={count * price} format={moneyText} />
-              </span>{" "}
-              <span className="text-xs tabular-nums text-slate-500">
-                ({count.toLocaleString("en-CA")} × {money.format(price)})
-              </span>
-            </p>
-            <p className="grid justify-items-end text-xs tabular-nums text-slate-500">
-              <span
-                aria-hidden={over}
-                className={`col-start-1 row-start-1 transition duration-300 ease-out ${
-                  over ? "-translate-y-1 opacity-0" : ""
-                }`}
-              >
-                Cash after buying{" "}
-                <span className="font-semibold text-slate-900">
-                  <Tween value={Math.max(cash - count * price, 0)} format={moneyText} />
-                </span>
-              </span>
-              <span
-                aria-hidden={!over}
-                className={`col-start-1 row-start-1 flex items-center gap-1.5 font-medium text-red-600 transition duration-300 ease-out ${
-                  over ? "" : "translate-y-1 opacity-0"
-                }`}
-              >
-                <WarnMark className={`size-4 ${over ? "warn-pop" : ""}`} />
-                More than your {money.format(cash)} cash: at most {affordable.toLocaleString("en-CA")}{" "}
-                {sharesWord(affordable)}
-              </span>
-            </p>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="submit" disabled={!canTrade || count === 0} className={`${DARK} ${ACTION}`}>
-              <BuyMark className="size-4" />
-              Buy {count ? `${count.toLocaleString("en-CA")} ${sharesWord(count)}` : "shares"}
-            </button>
-            <button
-              type="button"
-              onClick={() => request("Sold", count)}
-              disabled={!canTrade || count === 0 || shares === 0}
-              className={`${LIGHT} ${ACTION}`}
-            >
-              <SellMark className="size-4" />
-              Sell {count ? `${count.toLocaleString("en-CA")} ${sharesWord(count)}` : "shares"}
-            </button>
+        {/* Trading at today's price: where the money is (and would be, after the order being
+            entered), then a ticket to buy and a ticket to sell, side by side. */}
+        <div {...enter(4)} className="rise-in mt-3 rounded-lg bg-white p-4 shadow-sm">
+          <MoneyTiles
+            cash={cash}
+            shares={shares}
+            price={price}
+            side={working}
+            size={sizes[working]}
+            fills={working === "Sold" ? sizes.Sold <= shares : sizes.Bought <= affordable}
+          />
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {(["Bought", "Sold"] as const).map((side) => (
+              <OrderTicket
+                key={side}
+                side={side}
+                text={orders[side]}
+                size={sizes[side]}
+                most={side === "Bought" ? affordable : shares}
+                price={price}
+                box={boxes[side]}
+                locked={working !== side}
+                onActivate={() => {
+                  setWorking(side);
+                  setError(null);
+                }}
+                usable={canTrade}
+                onText={(text) => {
+                  setOrders((o) => ({ ...o, [side]: text }));
+                  setError(null);
+                }}
+                onStep={(change) => step(side, change)}
+                onReview={() => request(side, sizes[side])}
+              />
+            ))}
           </div>
           <Notice message={error} attempt={errors} />
-        </form>
+        </div>
 
         {/* Moving on: by a day, a week or a month while that many are left; then finishing. */}
         <div
@@ -789,8 +683,8 @@ export default function SandboxTest({
 }
 
 // The recap of the days just passed, over the trading panel (which it dims): how long
-// passed, the price then and now, a little chart of those days, their low and high, and what
-// the move did to the shares held. It comes alive as it opens: its day, week or month mark
+// passed, the price then and now, a little chart of those days and their low and high (over
+// more than one day), and what the move did to the shares held. It comes alive as it opens: its day, week or month mark
 // plays, its rows rise in one after another, and its figures count from where the days began
 // to where they ended (the day, the price, the change, the shares' gain or loss) as the
 // little chart draws itself and the end of the low-to-high bar slides from the start to now.
@@ -811,7 +705,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   const held = cents(shares * move);
   const low = Math.min(start, ...closes);
   const high = Math.max(start, ...closes);
-  const Mark = passed === 1 ? DayMark : passed <= 5 ? WeekMark : MonthMark;
+  const Mark = passed === 1 ? MoonMark : passed <= 5 ? WeekMark : MonthMark;
 
   // The little chart: Day `from` (the start) and every day since, in a 100 by 36 box.
   const path = [start, ...closes];
@@ -898,58 +792,61 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
             </div>
           </div>
 
-          {/* The days just passed, drawn as a little line; pointing along it shows each day. */}
-          <div {...row(1)}>
-            <div
-              ref={chart}
-              className="relative mt-3 h-16 cursor-crosshair touch-none"
-              onPointerMove={(e) => point(e.clientX)}
-              onPointerDown={(e) => point(e.clientX)}
-              onPointerLeave={() => setSpot(null)}
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 100 36"
-                preserveAspectRatio="none"
-                className="size-full overflow-visible"
+          {/* The days just passed, drawn as a little line; pointing along it shows each day.
+              Not for a single day, whose line would be just the price then and now. */}
+          {passed > 1 && (
+            <div {...row(1)}>
+              <div
+                ref={chart}
+                className="relative mt-3 h-16 cursor-crosshair touch-none"
+                onPointerMove={(e) => point(e.clientX)}
+                onPointerDown={(e) => point(e.clientX)}
+                onPointerLeave={() => setSpot(null)}
               >
-                <path
-                  d={`${line}L100,36L0,36Z`}
-                  fill={color}
-                  fillOpacity={0.1}
-                  className="chart-area-in"
-                  style={{ animationDelay: "400ms" }}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 100 36"
+                  preserveAspectRatio="none"
+                  className="size-full overflow-visible"
+                >
+                  <path
+                    d={`${line}L100,36L0,36Z`}
+                    fill={color}
+                    fillOpacity={0.1}
+                    className="chart-area-in"
+                    style={{ animationDelay: "400ms" }}
+                  />
+                  <path
+                    d={line}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    className="recap-draw"
+                  />
+                </svg>
+                {/* The day shown: today at first, or the one pointed at. */}
+                <span
+                  className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
+                  style={{
+                    left: `${px(shown)}%`,
+                    top: `${(py(path[shown]) / 36) * 100}%`,
+                    backgroundColor: color,
+                  }}
                 />
-                <path
-                  d={line}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={2}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                  className="recap-draw"
-                />
-              </svg>
-              {/* The day shown: today at first, or the one pointed at. */}
-              <span
-                className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
-                style={{
-                  left: `${px(shown)}%`,
-                  top: `${(py(path[shown]) / 36) * 100}%`,
-                  backgroundColor: color,
-                }}
-              />
-              <span
-                className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
-                  spot === null ? "opacity-0" : "opacity-100"
-                }`}
-                style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
-              >
-                Day {from + shown}: {money.format(path[shown])}
-              </span>
+                <span
+                  className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
+                    spot === null ? "opacity-0" : "opacity-100"
+                  }`}
+                  style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
+                >
+                  Day {from + shown}: {money.format(path[shown])}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Where the days began and ended, between their low and high. */}
           {passed > 1 && (
@@ -1023,6 +920,323 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
         />
       </div>
     </div>
+  );
+}
+
+// Where the money is: the cash, what the shares held are worth, and the two together. While
+// an order is being entered (that can be filled), the cash and the shares show where they
+// would end up after it, and by how much, below their figures; it all counts to each new
+// value, and the projections open and close smoothly.
+function MoneyTiles({
+  cash,
+  shares,
+  price,
+  side,
+  size,
+  fills,
+}: {
+  cash: number;
+  shares: number;
+  price: number;
+  side: Ask["side"] | null;
+  size: number;
+  fills: boolean;
+}) {
+  const showing = side !== null && size > 0 && fills;
+  const total = size * price;
+  const cashAfter = side === "Sold" ? cash + total : cash - total;
+  const sharesAfter = side === "Sold" ? shares - size : shares + size;
+  const tile = "rounded-lg bg-slate-50 px-3 py-2";
+
+  // What a figure would become after the order, and by how much, opening below it.
+  const after = (now: number, then: number, format: (x: number) => string, text: (x: number) => string) => (
+    <dd
+      className={`grid text-xs tabular-nums transition-[grid-template-rows,opacity] duration-300 ease-out ${
+        showing ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+      }`}
+      aria-hidden={!showing}
+    >
+      <span className="overflow-hidden text-slate-500">
+        → <Tween value={then} format={format} />{" "}
+        <span className={`font-semibold ${tone(then - now)}`}>
+          (<Tween value={then - now} format={text} />)
+        </span>
+      </span>
+    </dd>
+  );
+
+  return (
+    <dl className="grid grid-cols-3 gap-2 text-sm tabular-nums">
+      <div className={tile}>
+        <dt className="text-xs text-slate-500">Cash</dt>
+        <dd className="font-semibold text-slate-900">
+          <Tween value={cash} format={moneyText} />
+        </dd>
+        {after(cash, cashAfter, moneyText, changeText)}
+      </div>
+      <div className={tile}>
+        <dt className="text-xs text-slate-500">
+          Position · <Tween value={shares} format={countText} /> {sharesWord(shares)}
+        </dt>
+        <dd className="font-semibold text-slate-900">
+          <Tween value={shares * price} format={moneyText} />
+        </dd>
+        {after(shares * price, sharesAfter * price, moneyText, changeText)}
+      </div>
+      <div className={tile}>
+        <dt className="text-xs text-slate-500">Account value</dt>
+        <dd className="font-semibold text-slate-900">
+          <Tween value={cash + shares * price} format={moneyText} />
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+// A ticket for one side of an order, buying or selling. Its number of shares is typed in, or
+// stepped by 1 or 10 with the buttons either side of it (fewer on the left, more on the
+// right), or set to the most there could be (Max: as many as the cash buys; All: every share
+// held); a cross clears it. Below, the order's estimated cost or proceeds, or why it can't
+// be filled, fading into each other; then Review, which opens the confirming card. One
+// ticket is in use at a time: the other is locked, faded but keeping its number, and a click
+// anywhere on it (a button laid over it) switches to it.
+function OrderTicket({
+  side,
+  text,
+  size,
+  most,
+  price,
+  box,
+  locked,
+  usable,
+  onText,
+  onStep,
+  onReview,
+  onActivate,
+}: {
+  side: Ask["side"];
+  text: string;
+  size: number;
+  most: number;
+  price: number;
+  box: React.RefObject<HTMLInputElement | null>;
+  locked: boolean;
+  usable: boolean;
+  onText: (text: string) => void;
+  onStep: (change: { by?: number; to?: number }) => void;
+  onReview: () => void;
+  onActivate: () => void;
+}) {
+  const buying = side === "Bought";
+  const can = size <= most;
+  // A ticket with nothing it could trade (no cash for a share, or no shares) rests unused, as
+  // a locked one does, saying why; so it never holds a number that would lock the other.
+  const empty = most === 0 && size === 0;
+  const resting = locked || empty;
+  const live = usable && !resting;
+  // A ticket with nothing to trade, in use, says why (a locked one just fades).
+  const quiet = empty && !locked;
+  const why = buying ? "Not enough cash for a share." : "You hold no shares to sell.";
+  // While it rests, its controls fade (a locked one less, under its veil).
+  const dim = locked ? "opacity-60" : resting ? "opacity-40" : "";
+  const id = `sandbox-${buying ? "buy" : "sell"}-shares`;
+
+  // A button stepping the number by `by`: a round-ended chip with a chevron (up for more, down
+  // for fewer) and how many, removing light and adding black. Pointed at, it lifts a touch
+  // and its chevron nudges the way it goes; pressed, it dips.
+  const nudge = (by: number) => {
+    const adding = by > 0;
+    return (
+      <button
+        type="button"
+        aria-label={`${adding ? "Add" : "Remove"} ${Math.abs(by)}`}
+        title={`${adding ? "Add" : "Remove"} ${Math.abs(by)}`}
+        disabled={!live || (!adding && size === 0)}
+        onClick={() => onStep({ by })}
+        className={`group/nudge flex h-8 min-w-12 items-center justify-center gap-1 rounded-full px-2.5 text-xs font-semibold tabular-nums shadow-sm transition duration-200 ease-out motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-90 warn-cursor disabled:opacity-35 disabled:shadow-none disabled:hover:translate-y-0 ${
+          adding
+            ? "bg-slate-900 text-white hover:bg-slate-700"
+            : "border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900"
+        }`}
+      >
+        <svg
+          aria-hidden
+          viewBox="0 0 12 12"
+          className={`size-2.5 transition-transform duration-300 ease-[cubic-bezier(0.3,1.6,0.5,1)] ${
+            adding
+              ? "group-enabled/nudge:group-hover/nudge:-translate-y-0.5"
+              : "group-enabled/nudge:group-hover/nudge:translate-y-0.5"
+          }`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        >
+          <path d={adding ? "M2 8 6 4l4 4" : "M2 4l4 4 4-4"} />
+        </svg>
+        {Math.abs(by)}
+      </button>
+    );
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onReview();
+      }}
+      className={`group/ticket relative rounded-xl border p-3 transition duration-300 ${
+        locked
+          ? "border-slate-100 bg-slate-50/60 hover:border-slate-300"
+          : "border-slate-900/20 shadow-md shadow-slate-900/5"
+      }`}
+    >
+      {/* Locked: a soft frosted veil over it, saying so, and a click anywhere on it switches
+          to it. Its words drift in out of a blur; pointed at, the veil thins, the words grow a
+          touch and their arrows turn half a circle. */}
+      {locked && (
+        <button
+          type="button"
+          onClick={onActivate}
+          aria-label={`Switch to ${buying ? "buying" : "selling"}`}
+          className="group/switch absolute inset-0 z-10 grid cursor-pointer place-items-center rounded-xl bg-white/45 backdrop-blur-[1.5px] transition-colors duration-300 hover:bg-white/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        >
+          <span className="switch-in flex items-center gap-2 rounded-full bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-white shadow-lg shadow-slate-900/20 transition-transform duration-300 ease-[cubic-bezier(0.3,1.5,0.5,1)] group-hover/switch:scale-105">
+            {/* Two arrows chasing each other round: pointed at, they turn half a circle. */}
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-500 ease-[cubic-bezier(0.3,1.3,0.5,1)] group-hover/switch:rotate-180"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M13.2 6.4A5.4 5.4 0 0 0 3.6 4.6M2.8 9.6a5.4 5.4 0 0 0 9.6 1.8" />
+              <path d="M3.4 1.9v2.9h2.9M12.6 14.1v-2.9H9.7" />
+            </svg>
+            Click to switch
+          </span>
+        </button>
+      )}
+      <div className={`flex items-center justify-between gap-2 transition-opacity duration-300 ${dim}`}>
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+          <span
+            className={`grid size-6 place-items-center rounded-full ${
+              buying ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-900"
+            }`}
+          >
+            {buying ? <BuyMark className="size-3.5" /> : <SellMark className="size-3.5" />}
+          </span>
+          {buying ? "Buy" : "Sell"}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={!live || most === 0 || size === most}
+            onClick={() => onStep({ to: most })}
+            className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600 transition hover:bg-slate-200 hover:text-slate-900 active:scale-95 warn-cursor disabled:opacity-40"
+          >
+            {buying ? "Max" : "All"} · {most.toLocaleString("en-CA")}
+          </button>
+          <button
+            type="button"
+            aria-label={`Clear the ${buying ? "buy" : "sell"} order`}
+            disabled={!live || !text}
+            onClick={() => onStep({ to: 0 })}
+            className={`grid size-6 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 ${
+              text ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="size-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="m4 4 8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* The number of shares: fewer on the left of it, more on the right. */}
+      <div className={`mt-3 flex items-center justify-center gap-1.5 transition-opacity duration-300 ${dim}`}>
+        {nudge(-10)}
+        {nudge(-1)}
+        <label className="sr-only" htmlFor={id}>
+          Shares to {buying ? "buy" : "sell"}
+        </label>
+        <input
+          ref={box}
+          id={id}
+          type="number"
+          min={0}
+          step={1}
+          inputMode="numeric"
+          disabled={!live}
+          value={text}
+          onChange={(e) => onText(e.target.value)}
+          placeholder="0"
+          aria-invalid={!can}
+          className={`h-9 w-20 rounded-lg border bg-white px-2 text-center text-sm font-semibold tabular-nums outline-none transition-colors duration-300 [appearance:textfield] disabled:bg-slate-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+            can ? "border-slate-200 text-slate-900 focus:border-slate-400" : "border-red-300 text-red-600"
+          }`}
+        />
+        {nudge(1)}
+        {nudge(10)}
+      </div>
+
+      {/* The estimate; or why the order can't be filled; or, for a ticket with nothing to
+          trade, why: each fades into the next. */}
+      <div className={`mt-2 grid text-xs tabular-nums transition-opacity duration-300 ${locked ? dim : ""}`}>
+        <p
+          aria-hidden={!can || quiet}
+          className={`col-start-1 row-start-1 text-center text-slate-500 transition duration-300 ease-out ${
+            can && !quiet ? "" : "-translate-y-1 opacity-0"
+          }`}
+        >
+          {buying ? "Est. cost" : "Est. proceeds"}{" "}
+          <span className="text-sm font-semibold text-slate-900">
+            <Tween value={size * price} format={moneyText} />
+          </span>{" "}
+          ({size.toLocaleString("en-CA")} × {money.format(price)})
+        </p>
+        <p
+          aria-hidden={can || quiet}
+          className={`col-start-1 row-start-1 flex items-center justify-center gap-1.5 font-medium text-red-600 transition duration-300 ease-out ${
+            can || quiet ? "translate-y-1 opacity-0" : ""
+          }`}
+        >
+          <WarnMark className={`size-4 ${can ? "" : "warn-pop"}`} />
+          {buying
+            ? `Insufficient funds: max ${most.toLocaleString("en-CA")} ${sharesWord(most)}`
+            : `Insufficient shares: you hold ${most.toLocaleString("en-CA")}`}
+        </p>
+        <p
+          aria-hidden={!quiet}
+          className={`col-start-1 row-start-1 flex items-center justify-center gap-1.5 font-medium text-red-600 transition duration-300 ease-out ${
+            quiet ? "" : "translate-y-1 opacity-0"
+          }`}
+        >
+          <WarnMark className={`size-4 ${quiet ? "warn-pop" : ""}`} />
+          {why}
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        disabled={!live || size === 0 || !can}
+        className={`${buying ? DARK : LIGHT} ${ACTION} mt-3 w-full justify-center ${resting ? "opacity-40" : ""}`}
+      >
+        {buying ? <BuyMark className="size-4" /> : <SellMark className="size-4" />}
+        Review {buying ? "buy" : "sell"} order
+      </button>
+    </form>
   );
 }
 
@@ -1108,7 +1322,7 @@ function ConfirmTrade({
           </span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Day {day} · confirm your trade
+              Day {day} · review your order
             </p>
             <p className="text-lg font-semibold text-slate-900">
               {buying ? "Buy" : "Sell"} {ask.shares.toLocaleString("en-CA")} {sharesWord(ask.shares)}?
@@ -1238,7 +1452,7 @@ function ConfirmTrade({
                 d="m3 8.5 3.2 3.2L13 4.8"
               />
             </svg>
-            {confirmed ? "Confirmed" : `Confirm ${buying ? "buy" : "sale"}`}
+            {confirmed ? "Order placed" : `Place ${buying ? "buy" : "sell"} order`}
           </button>
         </div>
       </div>
