@@ -1,4 +1,5 @@
 import CompanyDescription from "@/components/CompanyDescription";
+import { BasedIn } from "@/components/FlagPair";
 import CountUp from "@/components/CountUp";
 import KindBadge from "@/components/KindBadge";
 import type { CompanyProfile } from "@/lib/db";
@@ -71,7 +72,7 @@ function Noted({ children, note }: { children: React.ReactNode; note: string }) 
 // then its website and a short summary of what it does. Rows the database has nothing for
 // are left out, and the section with them when there is nothing at all. The rows rise in
 // one after another, like the key figures', and the figures count up as they come into
-// view (CountUp). Pointing at a row tints it, pops the sector's swatch and opens a card
+// view (CountUp). Pointing at a row tints it, lifts the sector's badge as every badge lifts and opens a card
 // saying where its figure comes from.
 // It rises in row by row: its heading after `delay` (ms), then each row `stagger` after the
 // one before.
@@ -131,7 +132,7 @@ export default function CompanyAbout({
           <KindBadge
             sector={profile.sector}
             industry={profile.industry}
-            className="about-swatch size-5 rounded-md"
+            className="size-5 rounded-md"
             markClassName="size-3"
           />
           {naics.name}
@@ -140,8 +141,9 @@ export default function CompanyAbout({
       true,
     ]);
   }
-  if (profile.industry) rows.push(["Industry", profile.industry]);
-  if (place) rows.push(["Based in", place]);
+  if (profile.industry) rows.push(["Industry", profile.industry, true]);
+  // Across the full width, as the sector is, so the place stays on one line beside its flag.
+  if (place) rows.push(["Based in", <BasedIn key="place" place={place} country={profile.hqCountry} />, true]);
   if (profile.revenue !== null) {
     rows.push([
       "Revenue",
@@ -249,7 +251,7 @@ export default function CompanyAbout({
               // column opens its card towards the left, so it stays within the page.
               <div
                 key={label}
-                className={`rise-in group/row relative flex border-b border-slate-200 py-2 transition-colors duration-200 focus-within:z-30 hover:z-30 hover:bg-slate-50 ${prose ? "flex-col gap-1.5" : "items-start justify-between gap-4"} ${wide ? "sm:col-span-2" : ""}`}
+                className={`rise-in group/row kind-hover relative flex border-b border-slate-200 py-2 transition-colors duration-200 focus-within:z-30 hover:z-30 hover:bg-slate-50 ${prose ? "flex-col gap-1.5" : "items-start justify-between gap-4"} ${wide ? "sm:col-span-2" : ""}`}
                 style={{ animationDelay: `${delay + 40 + i * stagger}ms` }}
               >
                 <dt>

@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import yfinance as yf
 
+from fx import is_fx, pair_name
+
 # One database shared by the notebooks, update.py and the Next.js site (lib/db.ts).
 # Defaults to search/stocks.db no matter which folder you run from;
 # set CANETF_DB_PATH to use a different file (the website reads the same variable).
@@ -51,7 +53,8 @@ CREATE TABLE IF NOT EXISTS companies (          -- one row per company (latest i
     fund_family TEXT,                           -- a fund's provider, e.g. BlackRock (NULL for
                                                 --   companies)
     category    TEXT,                           -- a fund's category, e.g. Large Blend, when
-                                                --   Yahoo has one
+                                                --   Yahoo has one; 'Currency' for an exchange
+                                                --   rate (USDCAD=X, see fx.py)
     website     TEXT,                           -- a company's website
     employees   INTEGER,                        -- a company's full-time employees
     description TEXT,                           -- what it does: Yahoo's business summary
@@ -193,14 +196,17 @@ def get_quote(symbol, info=None):
 def get_company_info(symbol, info=None):
     """Company profile and key stats -> dict. Missing values are None.
 
-    Pass `info` (a Ticker's .info) to reuse it instead of downloading it again.
+    Pass `info` (a Ticker's .info) to reuse it instead of downloading it again. An
+    exchange rate (USDCAD=X) is named in words, 'US Dollar to Canadian Dollar (USD/CAD)',
+    rather than Yahoo's 'USD/CAD', and gets the category 'Currency'.
     """
     t = yf.Ticker(symbol)
     info = _get_info(t) if info is None else info  # fast_info covers the basics if it's {}
     fi = t.fast_info
+    fx = is_fx(symbol) or info.get("quoteType") == "CURRENCY"
     return {
         "symbol": symbol.upper(),
-        "name": info.get("longName") or info.get("shortName"),
+        "name": pair_name(symbol) if fx else (info.get("longName") or info.get("shortName")),
         "sector": info.get("sector"),
         "industry": info.get("industry"),
         "currency": info.get("currency") or fi["currency"],
@@ -213,7 +219,7 @@ def get_company_info(symbol, info=None):
         "hq_city": info.get("city"),
         "hq_country": info.get("country"),
         "fund_family": info.get("fundFamily"),
-        "category": info.get("category"),
+        "category": "Currency" if fx else info.get("category"),
         "hq_state": info.get("state"),
         "website": info.get("website"),
         "employees": _num(info.get("fullTimeEmployees"), int),
@@ -365,6 +371,13 @@ def _migrate_columns(conn):
 def init_db(db_path=DB_PATH):
     """Create the database file and tables if they don't exist -> connection."""
     conn = sqlite3.connect(db_path)
+    # WAL mode, so the website (lib/db.ts) can go on reading while an update writes, instead of
+    # finding the database locked. It is kept in the file once set; setting it needs no other
+    # connection open, so if one is, it is left as it is until a later run.
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError:
+        pass
     conn.executescript(SCHEMA)
     _migrate_quotes(conn)
     _migrate_columns(conn)

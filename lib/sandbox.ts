@@ -62,6 +62,7 @@ const SECTOR_KINDS: Record<string, string> = {
 };
 
 export function kindOf({ sector, industry, fundFamily, category }: Kindable) {
+  if (category === "Currency") return "Currency"; // an exchange rate (search/fx.py)
   if (!sector) return fundFamily || category ? "ETF" : "Company";
   if (sector === "Basic Materials") {
     if (/mining|gold|silver|copper|uranium|metal|coal/i.test(industry ?? "")) return "MiningCompany";

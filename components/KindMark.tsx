@@ -4,7 +4,8 @@
 // cross for health, a gear for industry, a house for real estate, a bolt for utilities, a play
 // button for media, a bag for consumer goods, a basket for staples, two fused rings of six (a
 // molecule) for chemicals, a sprout for agriculture, a cube for materials, stacked layers
-// for an ETF, and a building for any other company. Each comes alive in its own way when
+// for an ETF, two arrows passing each other for an exchange rate, the letters A and B (A in
+// front) for a credit rating, and a building for any other company. Each comes alive in its own way when
 // something round it marked `kind-hover` is pointed at (.kind-mark-* in globals.css): the
 // cart rolls, the gear stamps, the sprout grows, the molecule floats, the flame flickers…
 
@@ -87,8 +88,19 @@ const PATHS: Record<string, string> = {
   // down to the left with its vein running into the stem.
   Agri: "M10.59 17.68V9.78C10.67 7.74 11.31 6.59 12.58 5.95M16.28 5.06C16.79 4.17 17.55 3.40 18.19 3.10C16.79 2.25 13.73 1.75 11.69 2.76C9.65 3.79 8.88 6.21 9.39 7.99C9.90 9.78 11.69 9.90 12.71 9.65C14.24 9.27 15.26 8.25 15.57 7.10M9.14 12.46C8.38 9.78 4.80 7.99 2.13 11.18C3.53 11.56 4.29 12.84 5.06 13.47C6.33 14.49 8.38 14.11 9.14 12.46ZM6.08 11.05C8.12 11.43 10.03 12.84 10.59 15.26",
   Materials: "M10 3.5 16 7v6l-6 3.5L4 13V7ZM4 7l6 3.5L16 7M10 10.5v6",
+  // Two arrows passing each other: one currency traded for another.
+  Currency: "M3.5 7.5h12M12.5 4.5l3 3-3 3M16.5 12.5h-12M7.5 9.5l-3 3 3 3",
+  // A credit rating: the letter A, a grade, in front (BEHIND has the B behind it).
+  Rating: "M2.5 17.5 6.8 5l4.4 12.5M4.1 13.3h5.4",
   ETF: "M10 3.5 17 7l-7 3.5L3 7ZM3 10l7 3.5 7-3.5M3 13l7 3.5 7-3.5",
   Company: "M5 16.5V4.5h7v12M12 8.5h3v8M3.5 16.5h13M7.5 7h2M7.5 10h2M7.5 13h2",
+};
+
+// What some marks have behind them, drawn first and fainter, with a gap cut round the front
+// mark where it crosses (a mask), so the front one plainly stands before it: a credit
+// rating's B, up and to the right, behind its A.
+const BEHIND: Record<string, string> = {
+  Rating: "M10.6 3v10M10.6 3h3.5a2.5 2.5 0 0 1 0 5h-3.5M10.6 8h4a2.5 2.5 0 0 1 0 5h-4",
 };
 
 export default function KindMark({
@@ -113,6 +125,16 @@ export default function KindMark({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      {BEHIND[found] && (
+        <>
+          {/* The same for every mark of the kind, so one id serves them all. */}
+          <mask id={`kind-mark-behind-${found}`} maskUnits="userSpaceOnUse" x="0" y="0" width="20" height="20">
+            <rect width="20" height="20" fill="white" />
+            <path d={PATHS[found]} stroke="black" strokeWidth={3.6} />
+          </mask>
+          <path d={BEHIND[found]} opacity={0.55} mask={`url(#kind-mark-behind-${found})`} />
+        </>
+      )}
       <path d={PATHS[found]} />
     </svg>
   );

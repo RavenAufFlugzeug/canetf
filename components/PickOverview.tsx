@@ -36,8 +36,13 @@ export default function PickOverview({ cards }: { cards: PickCard[] }) {
             {cards.slice(0, 5).map((c, i) => (
               <span
                 key={c.symbol}
-                className="grid size-6 place-items-center rounded-md ring-2 ring-white transition-transform duration-300 ease-[cubic-bezier(0.3,1.6,0.5,1)] group-hover:-translate-y-0.5"
-                style={{ background: c.color, color: c.mark, transitionDelay: `${i * 40}ms` }}
+                className="kind-badge grid size-6 place-items-center rounded-md ring-2 ring-white"
+                style={{
+                  background: c.color,
+                  color: c.mark,
+                  ["--badge" as string]: c.color,
+                  transitionDelay: `${i * 40}ms`,
+                }}
               >
                 <KindMark kind={c.kind} className="size-3.5" />
               </span>

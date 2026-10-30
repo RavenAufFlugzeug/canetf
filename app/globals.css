@@ -193,6 +193,7 @@ body:has(> main.bg-slate-50) {
    out and the rows cascade in top first, sliding from the left as their swatches grow. */
 .legend-fold {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* never wider than its place, however wide its contents */
   grid-template-rows: 1fr;
   transition: grid-template-rows 520ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -280,6 +281,78 @@ body:has(> main.bg-slate-50) {
     opacity: 0;
     transform: scale(0.85);
   }
+}
+
+/* The Sandbox's currency exchange (ExchangePanel in components/SandboxTest.tsx): swapped, the
+   "from" menu slides in from where "to" was and the "to" from where "from" was; an exchange
+   just made slides into the top of the list, briefly tinted. */
+.fx-swap-from {
+  display: inline-block;
+  animation: fx-swap-from 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fx-swap-from {
+  from {
+    opacity: 0;
+    translate: 48px 0;
+  }
+}
+
+.fx-swap-to {
+  display: inline-block;
+  animation: fx-swap-to 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fx-swap-to {
+  from {
+    opacity: 0;
+    translate: -48px 0;
+  }
+}
+
+.fx-row-in {
+  animation: fx-row-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fx-row-in {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+    background-color: rgb(15 23 42 / 0.06);
+  }
+}
+
+/* A line of the Sandbox set-up changing its wording (components/FadeText.tsx): the old words
+   fade and drift up away as the new fade and rise into place, overlapping (a cross-fade),
+   slowly enough to follow. */
+.fade-text-out {
+  animation: fade-text-out 520ms cubic-bezier(0.4, 0, 0.6, 1) both; /* OUT_MS */
+}
+
+@keyframes fade-text-out {
+  to {
+    opacity: 0;
+    translate: 0 -4px;
+    filter: blur(1px);
+  }
+}
+
+.fade-text-in {
+  animation: fade-text-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+
+@keyframes fade-text-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+    filter: blur(1px);
+  }
+}
+
+/* A tile coming in after a change of choices (SetComposition): all together, quickly, so the
+   new set arrives whole. */
+.tile-quick {
+  animation: chart-fade 280ms ease-out backwards;
 }
 
 /* "backwards" only: once in place, the tile's own transform takes over for hover. */
@@ -427,10 +500,36 @@ body:has(> main.bg-slate-50) {
 }
 
 .sandbox-swap[data-leaving] {
-  opacity: 0.15;
-  filter: blur(3px);
+  opacity: 0.35;
+  filter: blur(2px);
   translate: 0 6px;
   pointer-events: none; /* nothing in it can be used until the new contents are in */
+}
+
+/* New contents after a change (Swap in components/SandboxSwap.tsx): fading and rising in out
+   of the softness the old ones left in, so nothing snaps. */
+.sandbox-swap-in {
+  animation: sandbox-swap-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sandbox-swap-in {
+  from {
+    opacity: 0.35;
+    filter: blur(2px);
+    translate: 0 6px;
+  }
+}
+
+/* The loading mark over an area being changed: only after a moment, then fading in. */
+.swap-wait {
+  animation: swap-wait 300ms ease-out 450ms both;
+}
+
+@keyframes swap-wait {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
 }
 
 /* The Sandbox test's start button (components/SandboxTest.tsx). Clicked, its play mark
@@ -603,6 +702,303 @@ body:has(> main.bg-slate-50) {
 
 .set-label {
   transition: transform 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The Sandbox result's grade (components/SandboxTest.tsx): its tile pops in once the tick on
+   the paper beside it has drawn itself. */
+/* An S+, holographic: pastel lavender, pink, cyan and white flowing slowly through it like
+   light on moving water (two layers drifting different ways), under a soft lavender glow.
+   It sits on dark (its tile and its chip), where the pastels show. As the letter's colour, and
+   as the ring of light round an S+ chip when it is the grade earned. */
+.grade-holo {
+  background-image:
+    radial-gradient(ellipse at 30% 30%, rgb(255 255 255 / 0.7), transparent 28%),
+    linear-gradient(
+      125deg,
+      #a78bfa 0%,
+      #f0abfc 12%,
+      #ffffff 22%,
+      #67e8f9 32%,
+      #c4b5fd 44%,
+      #f9a8d4 56%,
+      #ffffff 66%,
+      #7dd3fc 78%,
+      #a78bfa 90%,
+      #f0abfc 100%
+    );
+  background-size:
+    180% 180%,
+    220% 220%;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px rgb(196 181 253 / 0.6));
+  animation: grade-holo 5.5s ease-in-out infinite alternate;
+}
+
+@keyframes grade-holo {
+  0% {
+    background-position:
+      0% 0%,
+      0% 50%;
+  }
+  50% {
+    background-position:
+      100% 60%,
+      60% 100%;
+  }
+  100% {
+    background-position:
+      30% 100%,
+      100% 30%;
+  }
+}
+
+.grade-holo-fill {
+  background-color: #0f172a;
+  box-shadow:
+    0 0 0 1.5px rgb(196 181 253 / 0.8),
+    0 0 14px rgb(165 243 252 / 0.45);
+  animation: grade-holo-ring 7s ease-in-out infinite alternate;
+}
+
+@keyframes grade-holo-ring {
+  50% {
+    box-shadow:
+      0 0 0 1.5px rgb(251 207 232 / 0.85),
+      0 0 16px rgb(196 181 253 / 0.5);
+  }
+}
+
+/* A sparkle by an S+: it grows, turns a little and fades, then waits for its next turn. */
+.grade-sparkle {
+  opacity: 0;
+  filter: drop-shadow(0 0 2px rgb(255 255 255 / 0.95)) drop-shadow(0 0 3px rgb(186 230 253 / 0.9));
+  animation: grade-sparkle 2.7s ease-in-out infinite backwards;
+}
+
+@keyframes grade-sparkle {
+  0%,
+  45%,
+  100% {
+    opacity: 0;
+    scale: 0.2;
+    rotate: 0deg;
+  }
+  20% {
+    opacity: 1;
+    scale: 1;
+    rotate: 45deg;
+  }
+}
+
+.grade-tile {
+  animation: universe-pop 600ms cubic-bezier(0.3, 1.6, 0.5, 1) 450ms backwards;
+}
+
+.grade-tick {
+  stroke-dasharray: 1;
+  animation: result-line 500ms ease-out 250ms backwards;
+}
+
+/* A Holdings Map box that opens something when clicked (the Sandbox's ETF holdings): a hand
+   for the pointer, and a press as it is clicked. */
+.map-node[data-pickable] {
+  cursor: pointer;
+}
+
+.map-node[data-pickable]:active {
+  scale: 0.97;
+}
+
+/* An ETF's holdings in the Sandbox (components/EtfHoldings.tsx): a holding's pop-up fades in
+   over the dimmed page as its card rises and grows into place; closing, it fades and sinks
+   away. */
+
+.holding-in {
+  animation: text-fade-in 220ms ease-out both;
+}
+
+.holding-in .holding-card {
+  animation: holding-card-in 380ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+.holding-out {
+  animation: holding-fade-out 220ms ease-in both;
+}
+
+.holding-out .holding-card {
+  animation: holding-card-out 220ms ease-in both;
+}
+
+@keyframes holding-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+
+@keyframes holding-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes holding-card-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* The calendar beside the test's day (components/SandboxTest.tsx): its date marks fade up
+   afresh each new day. */
+.calendar-tick {
+  animation: calendar-tick 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes calendar-tick {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* The investment universe's sort menu (components/PickBoard.tsx): it fades and drops open from
+   its top corner, its options sliding in one after another. */
+.sort-menu {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sort-menu[data-open] {
+  opacity: 1;
+  transform: none;
+}
+
+.sort-option {
+  opacity: 0;
+  translate: 0 -3px;
+  transition:
+    opacity 200ms ease,
+    translate 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.sort-menu[data-open] .sort-option {
+  opacity: 1;
+  translate: 0 0;
+  /* one after another as it opens (--i is its place); the hover colours at once */
+  transition-delay: calc(var(--i, 0) * 22ms), calc(var(--i, 0) * 22ms), 0ms, 0ms;
+}
+
+/* The Sandbox test's investment universe (components/PickBoard.tsx). A row pointed at takes a
+   thin bar of its sector's colour (--accent) down its left edge; the row being traded a
+   thicker one, on a light wash of that colour. Chosen, the row flashes brighter and settles,
+   its badge pops, and a Trading tag slides in by its name; a chosen card pops likewise. */
+.universe-row {
+  transition: background-color 300ms ease;
+}
+
+.universe-row > td:first-child {
+  box-shadow: inset 0 0 0 var(--accent);
+  transition: box-shadow 300ms ease-out; /* no overshoot: past zero, it would show on the far side */
+}
+
+.universe-row:hover {
+  background-color: var(--color-slate-50);
+}
+
+.universe-row:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* The flash of being picked plays on the row's cells, not the row: the row's own entrance
+   (.rise-in) would otherwise be displaced while it is picked and play again when it is let go,
+   making the last pick flash as another is chosen. */
+.universe-row[data-on] {
+  background-color: color-mix(in oklab, var(--accent) 8%, white);
+}
+
+.universe-row[data-on] > td {
+  animation: universe-picked 900ms ease-out;
+}
+
+.universe-row[data-on] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+@keyframes universe-picked {
+  from {
+    background-color: color-mix(in oklab, var(--accent) 28%, white);
+  }
+}
+
+/* Likewise a card's pop plays on its badge, not on the card, which has its own entrance. */
+.universe-row[data-on] .universe-badge,
+.universe-card[data-on] .kind-badge {
+  animation: universe-pop 520ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes universe-pop {
+  40% {
+    scale: 1.12;
+  }
+}
+
+.universe-tag {
+  animation: universe-tag-in 380ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+}
+
+@keyframes universe-tag-in {
+  from {
+    opacity: 0;
+    translate: -6px 0;
+  }
+}
+
+/* The Sandbox result's table (components/SandboxTest.tsx): a row pointed at, focused or open
+   takes a bar of its pick's colour down its left edge (--accent) and a light ground. */
+.result-row {
+  transition: background-color 200ms ease;
+}
+
+.result-row > td:first-child {
+  box-shadow: inset 0 0 0 var(--accent); /* the bar, drawn on the first cell (a row can't draw one) */
+  transition: box-shadow 250ms ease;
+}
+
+.result-row:hover,
+.result-row:focus-visible,
+.result-row[aria-expanded="true"] {
+  background-color: var(--color-slate-50);
+}
+
+.result-row:hover > td:first-child,
+.result-row:focus-visible > td:first-child,
+.result-row[aria-expanded="true"] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The Sandbox result's charts (components/ResultChart.tsx): the line draws itself in, its
+   fill and trade marks fading up after it. */
+.result-line {
+  stroke-dasharray: 1;
+  animation: result-line 1100ms cubic-bezier(0.4, 0, 0.2, 1) 150ms backwards;
+}
+
+@keyframes result-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+.result-area,
+.result-marker {
+  animation: text-fade-in 600ms ease-out 700ms backwards;
 }
 
 /* The trade record (components/TradeLog.tsx): its chip strips scroll sideways without a bar,
@@ -967,6 +1363,18 @@ body:has(> main.bg-slate-50) {
   }
 }
 
+/* A currency pair's flags (components/FlagPair.tsx): pointed at, they slide apart and back,
+   as if trading places. */
+.flag-pair > span {
+  transition: translate 450ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+:is(.flag-pair, .flag-hover):hover .flag-a {
+  translate: -3px 0;
+}
+:is(.flag-pair, .flag-hover):hover .flag-b {
+  translate: 3px 0;
+}
+
 /* Kind marks coming alive (components/KindMark.tsx) when what holds them is pointed at: a badge
    (.kind-badge), or a tile or card marked .kind-hover (not on the Holdings Map, whose marks
    stay still). Each kind moves its own way, none of them turning: the cart rolls along its
@@ -1011,10 +1419,18 @@ body:has(> main.bg-slate-50) {
 :is(.kind-badge, .kind-hover):hover .kind-mark-materials {
   animation: kind-float 1.8s ease-in-out infinite;
 }
+:is(.kind-badge, .kind-hover):hover .kind-mark-currency {
+  animation: kind-trade 1.1s ease-in-out infinite;
+}
 :is(.kind-badge, .kind-hover):hover .kind-mark-etf {
   animation: kind-stack 1s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
 }
 
+/* Back and forth, as money changes hands. */
+@keyframes kind-trade {
+  0%, 100% { translate: -1px 0; }
+  50% { translate: 1px 0; }
+}
 /* Along its track, bumping over the joins. */
 @keyframes kind-roll {
   0%, 100% { translate: -1.5px 0; }
@@ -1098,41 +1514,24 @@ body:has(> main.bg-slate-50) {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--swatch) 25%, transparent);
 }
 
-/* A badge (components/KindBadge.tsx) pointed at lifts, grows a touch and glows in its own
-   colour, and a sheen of light sweeps across it, while its mark does its dance. */
+/* Every badge (a kind's mark on its colour: components/KindBadge.tsx and the squares drawn
+   like it across the app), the same way everywhere, as the Search page's big one does: pointed
+   at, or when the card, row or tile holding it (.kind-hover) is, it lifts, grows a touch and
+   glows in its own colour (--badge, else slate), while its mark does its dance; no sheen. */
 .kind-badge {
-  position: relative;
-  overflow: hidden;
   transition:
     translate 350ms cubic-bezier(0.3, 1.6, 0.5, 1),
     scale 350ms cubic-bezier(0.3, 1.6, 0.5, 1),
     box-shadow 350ms ease;
 }
 
-.kind-badge::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
-  translate: -110% 0;
-  pointer-events: none;
-}
-
+:is(.kind-badge, .kind-hover):hover .kind-badge,
 .kind-badge:hover {
   translate: 0 -2px;
   scale: 1.12;
   box-shadow:
-    0 6px 14px -4px color-mix(in oklab, var(--badge) 70%, transparent),
-    0 0 0 3px color-mix(in oklab, var(--badge) 22%, transparent);
-}
-
-.kind-badge-plain::after {
-  display: none; /* no sheen on this one (the Search page's big badge) */
-}
-
-.kind-badge:hover::after {
-  translate: 110% 0;
-  transition: translate 700ms ease;
+    0 6px 14px -4px color-mix(in oklab, var(--badge, #64748b) 70%, transparent),
+    0 0 0 3px color-mix(in oklab, var(--badge, #64748b) 22%, transparent);
 }
 
 /* The Search page's badge legend (components/BadgeLegend.tsx): this listing's own mark and
@@ -1258,14 +1657,6 @@ body:has(> main.bg-slate-50) {
 .bar-grow {
   transform-origin: left;
   animation: bar-grow 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.about-swatch {
-  transition: scale 350ms cubic-bezier(0.3, 1.6, 0.5, 1);
-}
-
-.group\/row:hover .about-swatch {
-  scale: 1.35;
 }
 
 @keyframes chart-draw {
@@ -1640,7 +2031,6 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .chart-draw,
   .chart-area-in,
   .bar-grow,
-  .about-swatch,
   .search-swap-from-right,
   .search-swap-from-left,
   .shake,
@@ -1648,10 +2038,17 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .auth-swap-from-left,
   .auth-fade,
   .sandbox-swap,
+  .sandbox-swap-in,
+  .tile-quick,
+  .fx-swap-from,
+  .fx-swap-to,
+  .fx-row-in,
+  .fade-text-out,
+  .fade-text-in,
+  .swap-wait,
   .legend-pop,
   .kind-mark,
   .kind-badge,
-  .kind-badge::after,
   .naics-row,
   .naics-swatch,
   .deck-deal,
@@ -1682,6 +2079,27 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .group:enabled:hover .test-mark-flag,
   .trade-row,
   .pick-swap-in,
+  .holding-in,
+  .holding-in .holding-card,
+  .holding-out,
+  .holding-out .holding-card,
+  .grade-tile,
+  .grade-holo,
+  .grade-holo-fill,
+  .grade-sparkle,
+  .grade-tick,
+  .calendar-tick,
+  .sort-menu,
+  .sort-option,
+  .universe-row,
+  .universe-row > td,
+  .universe-row .universe-badge,
+  .universe-card .kind-badge,
+  .universe-card,
+  .universe-tag,
+  .result-line,
+  .result-area,
+  .result-marker,
   .pick-swap-out,
   .set-rect,
   .set-label,

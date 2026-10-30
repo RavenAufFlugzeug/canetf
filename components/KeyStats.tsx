@@ -1,12 +1,22 @@
 import type { KeyStats as Stats } from "@/lib/db";
-import { moneyFormatter } from "@/lib/money";
+import { moneyFormatter, rateDecimals } from "@/lib/money";
 
 const count = (n: number | null) => (n === null ? "—" : n.toLocaleString("en-CA"));
 
-export default function KeyStats({ stats, currency }: { stats: Stats; currency: string | null }) {
+// With `rate`, an exchange rate's: a rate's decimals, and no volume (currencies trade between
+// banks, and Yahoo counts none).
+export default function KeyStats({
+  stats,
+  currency,
+  rate = false,
+}: {
+  stats: Stats;
+  currency: string | null;
+  rate?: boolean;
+}) {
   // Prices as finance sites list them: plain numbers, no currency sign,
   // with the currency's usual decimals (two for dollars, none for yen or won).
-  const { decimals } = moneyFormatter(currency);
+  const decimals = rate ? rateDecimals(stats.prevClose ?? stats.open ?? 1) : moneyFormatter(currency).decimals;
   const price = (n: number | null) =>
     n === null
       ? "—"
@@ -19,8 +29,12 @@ export default function KeyStats({ stats, currency }: { stats: Stats; currency: 
     ["Open", price(stats.open)],
     ["Day's Range", range(stats.dayLow, stats.dayHigh)],
     ["52 Week Range", range(stats.week52Low, stats.week52High)],
-    ["Volume", count(stats.volume)],
-    ["Avg. Volume", count(stats.avgVolume)],
+    ...(rate
+      ? []
+      : ([
+          ["Volume", count(stats.volume)],
+          ["Avg. Volume", count(stats.avgVolume)],
+        ] as [string, string][])),
   ];
 
   return (

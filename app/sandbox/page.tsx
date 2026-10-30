@@ -1,4 +1,5 @@
 import ChoiceChips from "@/components/ChoiceChips";
+import FadeText from "@/components/FadeText";
 import PickButton from "@/components/PickButton";
 import { type PickCard } from "@/components/PickCards";
 import PickOverview from "@/components/PickOverview";
@@ -6,7 +7,16 @@ import { AliasProvider } from "@/components/SandboxAliases";
 import { SetupArea, StageProvider } from "@/components/SandboxStage";
 import { SandboxSwapProvider, Swap } from "@/components/SandboxSwap";
 import SandboxTest from "@/components/SandboxTest";
-import { getCompanyProfile, pickSandboxSet } from "@/lib/db";
+import { listingOf } from "@/lib/exchanges";
+import {
+  getCompanyProfile,
+  getEtfTree,
+  getLatestCadRate,
+  majorOf,
+  pickSandboxSet,
+  type EtfTreeNode,
+} from "@/lib/db";
+import { KINDS } from "@/lib/kinds";
 import { hideName } from "@/lib/hideName";
 import { markOn, naicsOf } from "@/lib/naics";
 import {
@@ -85,6 +95,14 @@ export default async function SandboxPage({
   const set = seeded ? await pickSandboxSet(count, timeframe.days, seed) : null;
   const names = set ? pickNames(set.picks) : [];
   const profiles = set ? await Promise.all(set.picks.map((p) => getCompanyProfile(p.symbol))) : [];
+  // For each fund, a short line on what it holds, without naming it (fundNote).
+  const notes = set
+    ? await Promise.all(
+        set.picks.map(async (p) => (kindOf(p) === "ETF" ? fundNote(await getEtfTree(p.symbol)) : null)),
+      )
+    : [];
+  // Each pick's latest rate to Canadian dollars, so their market values can be compared.
+  const toCad = set ? await Promise.all(set.picks.map((p) => getLatestCadRate(p.currency))) : [];
 
   // The keys of the areas that change with the choices (see SandboxSwap): the set's, which a
   // new set, timeframe or number changes, and the test's, which a new amount changes too.
@@ -96,6 +114,7 @@ export default async function SandboxPage({
     const kind = kindOf(p);
     const place = [profile?.hqCity, profile?.hqCountry].filter(Boolean).join(", ");
     const fund = kind === "ETF";
+    const listing = listingOf(profile?.exchange);
     return {
       symbol: p.symbol,
       name: names[i],
@@ -104,10 +123,17 @@ export default async function SandboxPage({
       ink: naics?.ink ?? (fund ? "#ffffff" : "#0f172a"),
       mark: (naics && markOn(naics)) ?? (fund ? "#ffffff" : "#0f172a"),
       line: [p.industry ?? (p.sector ? null : (p.category ?? "ETF")), place].filter(Boolean).join(" · "),
+      industry: p.industry ?? (p.sector ? null : (p.category ?? "ETF")),
+      // Where it is from: a company's base; a fund, which has none, by where it is listed.
+      place: place || (fund && listing ? `${listing.country} · ${listing.exchange}` : null),
+      country: profile?.hqCountry ?? (fund ? (listing?.country ?? null) : null),
+      note: notes[i] ?? null,
       about: (profile?.description && hideName(profile.description, p.name, p.symbol)) || null,
       sector: naics?.name ?? null,
-      currency: p.currency ?? null,
-      size: profile?.marketCap ?? null,
+      // Prices come in the main unit (pounds, not pence), so the currency is named that way.
+      currency: p.currency ? majorOf(p.currency) : null,
+      // Its market value in Canadian dollars, to compare with the others'.
+      size: profile?.marketCap && toCad[i] ? profile.marketCap * toCad[i] : null,
       figures:
         fund || !profile
           ? null
@@ -165,9 +191,11 @@ export default async function SandboxPage({
                       href: sandboxHref({ ...choices, range: t.key, seed: seeded ? seed : undefined }),
                     }))}
                   />
-                  <p key={timeframe.key} className="text-fade-in mt-2 text-sm text-slate-500">
-                    Day 1 – Day {timeframe.days}, from a random point in time.
-                  </p>
+                  {/* Each description cross-fades to its new wording with the choice (FadeText). */}
+                  <FadeText
+                    className="mt-2 text-sm text-slate-500"
+                    text={`Day 1 – Day ${timeframe.days}, from a random point in time.`}
+                  />
                 </Step>
 
                 <Step n={3} title="How many" delay={80}>
@@ -181,21 +209,24 @@ export default async function SandboxPage({
                       href: sandboxHref({ ...choices, count: c, seed: seeded ? seed : undefined }),
                     }))}
                   />
-                  <p key={count} className="text-fade-in mt-2 text-sm text-slate-500">
-                    {count} companies and ETFs, picked at random, all trading through the same{" "}
-                    {timeframe.label}.
-                  </p>
+                  <FadeText
+                    className="mt-2 text-sm text-slate-500"
+                    text={`${count} companies and ETFs, picked at random, all trading through the same ${timeframe.label}.`}
+                  />
                 </Step>
 
-                <Step n={4} title="Your picks" delay={120} id="sandbox-picks">
+                <Step n={4} title="Investment universe" delay={120} id="sandbox-picks">
                   <div className="rise-in mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
-                    <p className="min-w-0 text-sm text-slate-600">
-                      {set
-                        ? `${count} picked from the same stretch of time. Their names stay hidden.`
-                        : seeded
-                          ? `There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`
-                          : `Pick ${count} random companies and ETFs to test with. Their names stay hidden.`}
-                    </p>
+                    <FadeText
+                      className="min-w-0 flex-1 text-sm text-slate-600"
+                      text={
+                        set
+                          ? `${count} picked from the same stretch of time. Their names stay hidden.`
+                          : seeded
+                            ? `There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`
+                            : `Pick ${count} random companies and ETFs to test with. Their names stay hidden.`
+                      }
+                    />
                     <PickButton current={set ? setKey : undefined} {...choices} />
                   </div>
                 </Step>
@@ -233,4 +264,39 @@ export default async function SandboxPage({
       </div>
     </main>
   );
+}
+
+// What a fund holds, in a few words, from its holdings (as listed today) and nothing that names
+// it: a bond fund's split by credit rating; a fund mostly of other ETFs (an all-in-one); or
+// stocks, by where most of their companies are based and, when one sector is a large part, that
+// sector ("Stocks, mostly United States · Tech-heavy"). Null when it has no holdings on record.
+function fundNote(tree: EtfTreeNode | null): string | null {
+  const items = tree?.children.filter((c) => c.kind !== "other") ?? [];
+  if (!items.length) return null;
+  if (items.some((c) => c.kind === "rating")) return "Bonds, by credit rating";
+  const listed = items.reduce((sum, c) => sum + c.weight, 0) || 1;
+  const funds = items.filter((c) => c.kind === "fund").reduce((sum, c) => sum + c.weight, 0);
+  if (funds / listed > 0.5) return "Holds other ETFs (all-in-one)";
+  const top = (key: (c: EtfTreeNode) => string | null) => {
+    const by = new Map<string, number>();
+    for (const c of items) {
+      const k = key(c);
+      if (k) by.set(k, (by.get(k) ?? 0) + c.weight);
+    }
+    const best = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
+    return best ? { name: best[0], share: best[1] / listed } : null;
+  };
+  const country = top((c) => c.details?.hqCountry ?? null);
+  const sector = top((c) =>
+    c.kind === "holding" && c.details?.sector
+      ? (KINDS.find((k) => k.kind === kindOf({ ...c.details!, fundFamily: null, category: null }))?.label ??
+        null)
+      : null,
+  );
+  return [
+    country ? `Stocks, mostly ${country.name}` : "Stocks",
+    sector && sector.share >= 0.35 ? `${sector.name}-heavy` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

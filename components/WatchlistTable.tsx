@@ -5,6 +5,8 @@ import { useState, useTransition } from "react";
 import type { Company } from "@/lib/db";
 import { moneyFormatter } from "@/lib/money";
 import KindBadge from "@/components/KindBadge";
+import { listingOf } from "@/lib/exchanges";
+import { countryFlag } from "@/lib/fx";
 
 const ROW_LEAVE_MS = 350; // matches .picker-collapse in globals.css
 
@@ -67,7 +69,8 @@ export default function WatchlistTable({
     // Scrolls sideways if the table is too wide, but never vertically: a vertical scrollbar
     // (e.g. while rows rise in, or from a 1px rounding overflow) would take 15px of width
     // and make the columns re-wrap.
-    <div className="overflow-x-auto overflow-y-hidden rounded-2xl bg-white shadow">
+    // Its card is the page's (app/watchlist/page.tsx), which has the badge legend under it.
+    <div className="overflow-x-auto overflow-y-hidden rounded-t-2xl">
       {/* Fixed column widths, so adding or removing a row never resizes the columns and
           re-wraps the names; the name column takes the rest. Narrower than min-w, the
           table scrolls sideways instead of squeezing the names. */}
@@ -114,7 +117,27 @@ export default function WatchlistTable({
                     {c.symbol}
                   </Link>
                 </Cell>
-                <Cell folded={folded}>{c.name ?? "—"}</Cell>
+                <Cell folded={folded}>
+                  {/* Its name, after the flag of where it is from: where a company is based, or
+                      where a fund is listed. */}
+                  <span className="flex items-center gap-2">
+                    {(() => {
+                      const fund = Boolean(c.fundFamily || c.category) && c.category !== "Currency";
+                      const country = c.hqCountry ?? (fund ? (listingOf(c.exchange)?.country ?? null) : null);
+                      const src = countryFlag(country, true);
+                      return src ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG
+                        <img
+                          src={src}
+                          alt={country ?? ""}
+                          title={`${fund ? "Listed in" : "Based in"} ${country}`}
+                          className="h-3.5 w-auto shrink-0 rounded-[2px] ring-1 ring-black/10"
+                        />
+                      ) : null;
+                    })()}
+                    <span className="min-w-0">{c.name ?? "—"}</span>
+                  </span>
+                </Cell>
                 <Cell folded={folded}>
                   {/* Its badge (sector colour, kind mark), then its sector. */}
                   <span className="flex items-center gap-2">
@@ -126,7 +149,8 @@ export default function WatchlistTable({
                       className="size-6 rounded-md"
                       markClassName="size-3.5"
                     />
-                    {c.sector ?? (c.fundFamily || c.category ? "Fund" : "—")}
+                    {c.sector ??
+                      (c.category === "Currency" ? "Exchange rate" : c.fundFamily || c.category ? "Fund" : "—")}
                   </span>
                 </Cell>
                 <Cell folded={folded} className="text-right">

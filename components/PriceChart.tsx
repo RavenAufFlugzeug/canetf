@@ -5,7 +5,7 @@ import type { PriceHistory, PricePoint } from "@/lib/db";
 import RangeTabs from "@/components/RangeTabs";
 import { blend, easeOut, linePath, MORPH_MS, resample, SAMPLES, type Shape } from "@/lib/chartMorph";
 import { listingOf, type Listing } from "@/lib/exchanges";
-import { moneyFormatter } from "@/lib/money";
+import { moneyFormatter, rateDecimals } from "@/lib/money";
 
 // The standard ranges finance sites offer, up to all the daily history there is
 // (HISTORY_PERIOD in search/StockUtils.py keeps everything Yahoo has).
@@ -189,7 +189,9 @@ function yTicks(lo: number, hi: number) {
   const max = Math.ceil(hi / step) * step;
   const ticks = [];
   for (let v = min; v <= max + step / 2; v += step) ticks.push(v);
-  return { min, max, ticks, decimals: step < 1 ? 2 : 0 };
+  // Enough decimals to tell the ticks apart: two for steps of a cent and up, more for an
+  // exchange rate's tiny ones.
+  return { min, max, ticks, decimals: step < 1 ? Math.max(2, Math.ceil(-Math.log10(step) - 1e-9)) : 0 };
 }
 
 function thin<T>(items: T[], max: number) {
@@ -407,8 +409,8 @@ function ListingStrip({ listing, code, currency }: { listing: Listing; code: str
           }
           details={
             <>
-              <span className="block font-semibold text-slate-900">Listed in {listing.country}</span>
-              Where these shares trade. The company itself may be based elsewhere.
+              <span className="block font-semibold text-slate-900">{listing.place ?? `Listed in ${listing.country}`}</span>
+              {listing.about ?? "Where these shares trade. The company itself may be based elsewhere."}
             </>
           }
         >
@@ -458,14 +460,17 @@ function ListingStrip({ listing, code, currency }: { listing: Listing; code: str
 }
 
 // `exchange` is Yahoo's code for where it trades (companies.exchange), shown under the chart.
+// With `rate`, it is an exchange rate's chart, its prices shown with a rate's decimals.
 export default function PriceChart({
   history,
   currency,
   exchange = null,
+  rate = false,
 }: {
   history: PriceHistory;
   currency: string | null;
   exchange?: string | null;
+  rate?: boolean;
 }) {
   const [range, setRange] = useState<Range>("1D");
   const [active, setActive] = useState<number | null>(null);
@@ -500,7 +505,10 @@ export default function PriceChart({
     return () => observer.disconnect();
   }, []);
 
-  const money = useMemo(() => moneyFormatter(currency), [currency]);
+  const money = useMemo(
+    () => moneyFormatter(currency, rate ? rateDecimals(latestPrice(history)) : undefined),
+    [currency, rate, history],
+  );
   const listing = listingOf(exchange);
   const series = useMemo(() => buildSeries(range, history), [range, history]);
 

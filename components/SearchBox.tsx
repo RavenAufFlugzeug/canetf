@@ -38,7 +38,7 @@ export default function SearchBox({
   // after a switch, not when the page opens.
   const [switched, setSwitched] = useState(false);
   const leadId = useId();
-  const what = etfsOnly ? "an ETF" : "a company or ETF";
+  const what = etfsOnly ? "an ETF" : "a company, ETF or exchange rate";
 
   return (
     <div className="mt-4">

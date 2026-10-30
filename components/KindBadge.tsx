@@ -1,12 +1,13 @@
 import KindMark from "@/components/KindMark";
-import { markOn, naicsOf } from "@/lib/naics";
+import { badgeLook } from "@/lib/kinds";
+import { naicsOf } from "@/lib/naics";
 import { kindOf } from "@/lib/sandbox";
 
 // A company's or fund's badge: a rounded square in its NAICS sector's colour (a fund's dark
-// slate, an unclassified company's grey) with the mark of its kind on it (KindMark: a chip for
+// slate, an exchange rate's white with a black outline, an unclassified company's grey) with the mark of its kind on it (KindMark: a chip for
 // tech, a mine cart for mining…), as the Sandbox's cards have, and its sector named when it is
-// pointed at. Pointed at, it lifts and glows in its colour, a sheen sweeps over it, and its mark
-// moves its own way (.kind-badge in globals.css). Used on the Search page and the Watch List.
+// pointed at. Pointed at, it lifts and glows in its colour and its mark moves its own way
+// (.kind-badge in globals.css), as every badge in the app does.
 export default function KindBadge({
   sector,
   industry,
@@ -14,7 +15,6 @@ export default function KindBadge({
   category = null,
   className = "size-7",
   markClassName = "size-4",
-  shine = true,
 }: {
   sector: string | null;
   industry: string | null;
@@ -22,21 +22,21 @@ export default function KindBadge({
   category?: string | null;
   className?: string;
   markClassName?: string;
-  // Whether a sheen sweeps across it when pointed at (not on the Search page's big one).
-  shine?: boolean;
 }) {
   const naics = naicsOf(sector, industry);
   const kind = kindOf({ sector, industry, fundFamily, category });
-  const fund = kind === "ETF";
+  const look = badgeLook(kind, naics);
   return (
     <span
-      title={naics?.name ?? (fund ? "Fund" : "Unclassified")}
-      className={`kind-badge ${shine ? "" : "kind-badge-plain"} grid shrink-0 place-items-center rounded-lg shadow-sm ${className}`}
+      title={naics?.name ?? (kind === "ETF" ? "Fund" : kind === "Currency" ? "Exchange rate" : "Unclassified")}
+      className={`kind-badge grid shrink-0 place-items-center rounded-lg shadow-sm ${
+        look.ring ? "ring-[1.5px] ring-inset ring-slate-900" : ""
+      } ${className}`}
       style={{
         // Its colour, for the glow when it is pointed at.
-        ["--badge" as string]: naics?.color ?? (fund ? "#1e293b" : "oklch(0.80 0 0)"),
-        background: naics?.color ?? (fund ? "#1e293b" : "oklch(0.80 0 0)"),
-        color: (naics && markOn(naics)) ?? (fund ? "#ffffff" : "#0f172a"),
+        ["--badge" as string]: look.glow,
+        background: look.background,
+        color: look.color,
       }}
     >
       <KindMark kind={kind} className={markClassName} />

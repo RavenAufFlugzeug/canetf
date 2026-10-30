@@ -1,12 +1,22 @@
 import Link from "next/link";
 import SearchBox from "@/components/SearchBox";
+import CompanyAbout from "@/components/CompanyAbout";
 import EtfBreakdown from "@/components/EtfBreakdown";
+import FundAbout from "@/components/FundAbout";
 import HoldingsMap from "@/components/HoldingsMap";
 import KeyStats from "@/components/KeyStats";
 import KindBadge from "@/components/KindBadge";
 import MapDetail from "@/components/MapDetail";
 import PriceChart from "@/components/PriceChart";
-import { getCompany, getEtfBreakdown, getExchange, getEtfTree, getKeyStats, getPriceHistory } from "@/lib/db";
+import {
+  getCompany,
+  getCompanyProfile,
+  getEtfBreakdown,
+  getExchange,
+  getEtfTree,
+  getKeyStats,
+  getPriceHistory,
+} from "@/lib/db";
 
 export default async function MapPage({
   searchParams,
@@ -26,6 +36,9 @@ export default async function MapPage({
   const stats = picked ? await getKeyStats(picked.symbol) : null;
   const exchange = picked ? await getExchange(picked.symbol) : null;
   const breakdown = picked ? await getEtfBreakdown(picked.symbol) : null;
+  const profile = picked ? await getCompanyProfile(picked.symbol) : null;
+  // A fund (it has a composition, or a provider) gets the fund's About; a company its own.
+  const fund = Boolean(breakdown || profile?.fundFamily);
 
   return (
     <main className="flex-1 bg-slate-50">
@@ -77,7 +90,6 @@ export default async function MapPage({
                   category={etf.category}
                   className="size-10 rounded-xl"
                   markClassName="size-5"
-                  shine={false}
                 />
                 <p className="text-lg font-semibold text-slate-900">
                   {/* Name, then the ticker on its own line, so a long name never splits them. */}
@@ -103,7 +115,6 @@ export default async function MapPage({
                       category={picked.category}
                       className="size-10 rounded-xl"
                       markClassName="size-5"
-                      shine={false}
                     />
                   }
                   closeHref={`/map?symbol=${encodeURIComponent(etf.symbol)}`}
@@ -112,6 +123,11 @@ export default async function MapPage({
                     <PriceChart history={history} currency={picked.currency} exchange={exchange} />
                   </div>
                   {stats && <KeyStats stats={stats} currency={picked.currency} />}
+                  {/* What it is, as the Search page says it: a fund's country, provider (which
+                      opens the company behind it) and category; a company's sector, base (by its
+                      flag), size, website and what it does. */}
+                  {profile && fund && <FundAbout profile={profile} />}
+                  {profile && !fund && <CompanyAbout name={picked.name ?? picked.symbol} profile={profile} />}
                   {breakdown && (
                     <div className="rise-in" style={{ animationDelay: "400ms" }}>
                       <EtfBreakdown breakdown={breakdown} />

@@ -32,7 +32,7 @@ const RANGES = [
   { key: "5Y", days: 1260 },
 ] as const;
 // The ranges drawn as the pick's line, and with 1D (the example day) every range offered.
-type Range = (typeof RANGES)[number]["key"] | "All";
+export type Range = (typeof RANGES)[number]["key"] | "All";
 type Tab = Range | "1D";
 // An example day for 1D: each point's minutes into the session and its price (the open
 // first); "loading" while it is fetched, null when the pick has none, undefined before it's
@@ -94,6 +94,12 @@ export default function SandboxChart({
   prices,
   yearStarts,
   trades = [],
+  exampleDay = true,
+  format = money.format,
+  range: rangeShared,
+  onRange,
+  scope: scopeShared,
+  onScope,
 }: {
   symbol: string;
   history: number[];
@@ -102,8 +108,33 @@ export default function SandboxChart({
   // The player's trades, marked on the line where they were made: a green triangle pointing
   // up for a buy, a red one pointing down for a sale, each popping up as it is made.
   trades?: { day: number; side: "Bought" | "Sold"; price: number }[];
+  // Whether the 1D tab (an example day of `symbol`'s) is offered: not for a listing named
+  // only by an id, such as a holding of an ETF in the test.
+  exampleDay?: boolean;
+  // How a value is written (on the axis, in the tooltip): money by default; an exchange rate's
+  // chart gives its own, with a rate's decimals.
+  format?: (x: number) => string;
+  // A range and scope shared with another chart (an exchange rate's, under its pick's), so the
+  // two show the same stretch of days: when given, they are used and changes are passed on.
+  range?: Range;
+  onRange?: (r: Range) => void;
+  scope?: "all" | "test";
+  onScope?: (s: "all" | "test") => void;
 }) {
-  const [range, setRange] = useState<Range>("1M");
+  const [ownRange, setOwnRange] = useState<Range>("1M");
+  const range = rangeShared ?? ownRange;
+  const setRange = (r: Range) => {
+    setOwnRange(r);
+    onRange?.(r);
+  };
+  // Whether the days before the test are shown (With history) or only the test's own (Test
+  // only): the range chosen is cut to the test's days.
+  const [ownScope, setOwnScope] = useState<"all" | "test">("all");
+  const scope = scopeShared ?? ownScope;
+  const setScope = (s2: "all" | "test") => {
+    setOwnScope(s2);
+    onScope?.(s2);
+  };
   // Whether 1D (the example day) is showing instead of the line, and that day once fetched
   // (once per chart, so going back to 1D shows the same day).
   const [showDay, setShowDay] = useState(false);
@@ -133,8 +164,11 @@ export default function SandboxChart({
   // The range chosen (1M to begin with), or "All" while there aren't that many days.
   const chosen = offered.find((r) => r.key === range);
   const current: Range = chosen?.key ?? "All";
-  // The index of the first day shown.
-  const first = !chosen ? 0 : chosen.key === "YTD" ? (ytdFrom ?? 0) : total - chosen.days;
+  // The index of the first day shown (with Test only, no earlier than Day 1).
+  const rangeFirst = !chosen ? 0 : chosen.key === "YTD" ? (ytdFrom ?? 0) : total - chosen.days;
+  const first = scope === "test" ? Math.min(Math.max(rangeFirst, history.length), total - 1) : rangeFirst;
+  // What is shown: the range, and the scope; a change of either morphs the line.
+  const key = `${current}|${scope}`;
   const slice = useMemo(() => series.slice(first), [series, first]);
   const last = slice.length - 1;
   // The day an index into `slice` is (Day 1 is the test's first), and where the test's
@@ -164,14 +198,14 @@ export default function SandboxChart({
 
   // While a morph runs, `frame` holds the in-between view for `range` (as on the Search
   // page's chart: components/PriceChart.tsx).
-  const [frame, setFrame] = useState<{ range: Range; view: View } | null>(null);
-  const shown = useRef<{ range: Range; view: View | null }>({ range: current, view });
+  const [frame, setFrame] = useState<{ range: string; view: View } | null>(null);
+  const shown = useRef<{ range: string; view: View | null }>({ range: key, view });
   const frameRef = useRef<View | null>(null);
 
   useEffect(() => {
     const from = frameRef.current ?? shown.current.view;
-    const rangeChanged = shown.current.range !== current;
-    shown.current = { range: current, view };
+    const rangeChanged = shown.current.range !== key;
+    shown.current = { range: key, view };
 
     let raf = 0;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -193,7 +227,7 @@ export default function SandboxChart({
       const t = Math.min((now - start) / MORPH_MS, 1);
       if (t < 1) {
         frameRef.current = blendView(from, view, easeOut(t));
-        setFrame({ range: current, view: frameRef.current });
+        setFrame({ range: key, view: frameRef.current });
         raf = requestAnimationFrame(step);
       } else {
         frameRef.current = null;
@@ -202,23 +236,23 @@ export default function SandboxChart({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [current, view]);
+  }, [key, view]);
 
   // New days: while the range stays the same, `slide` holds the in-between span as the
   // chart eases from what it spanned before to what it spans now.
   const [slide, setSlide] = useState<Span | null>(null);
   const slideRef = useRef<Span | null>(null);
-  const settled = useRef({ span: { lo: first, hi: total - 1, yMin, yMax } as Span, range: current, total });
+  const settled = useRef({ span: { lo: first, hi: total - 1, yMin, yMax } as Span, range: key, total });
 
   useEffect(() => {
     const before = settled.current;
     const to: Span = { lo: first, hi: total - 1, yMin, yMax };
     const from = slideRef.current ?? before.span;
-    settled.current = { span: to, range: current, total };
+    settled.current = { span: to, range: key, total };
 
     let raf = 0;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (before.range !== current || total <= before.total || reduceMotion) {
+    if (before.range !== key || total <= before.total || reduceMotion) {
       // Not new days (a range switch morphs instead): settle on the final span.
       if (slideRef.current) {
         raf = requestAnimationFrame(() => {
@@ -244,7 +278,7 @@ export default function SandboxChart({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [first, total, yMin, yMax, current]);
+  }, [first, total, yMin, yMax, key]);
 
   // Where a day (an index into every day) and a price fall, on the span shown.
   const span = slide ?? { lo: first, hi: total - 1, yMin, yMax };
@@ -263,7 +297,7 @@ export default function SandboxChart({
   // (while sliding, the days sliding out too, cut off at the edge) to the last (while
   // sliding, the days still to slide in too). With more days than pixels, only every so
   // many are drawn, always both ends, which looks the same.
-  const morph = frame?.range === current ? frame.view : null;
+  const morph = frame?.range === key ? frame.view : null;
   const from0 = Math.max(Math.floor(span.lo), 0);
   const every = Math.max(1, Math.floor((total - from0) / (plotW * 1.5)));
   const drawn = Array.from({ length: total - from0 }, (_, k) => from0 + k).filter(
@@ -314,7 +348,7 @@ export default function SandboxChart({
   const visible = Boolean(hover?.on) && at !== null && !morph && !slide && !showDay;
   const tone = (i: number) => (i >= testFrom ? color : PAST);
   // The tooltip's text, and about how wide it is, to keep it within the chart's edges.
-  const tipPrice = at !== null ? money.format(slice[at]) : "";
+  const tipPrice = at !== null ? format(slice[at]) : "";
   const tipDay = at !== null ? dayName(dayOf(at)) : "";
   const tipWidth = (tipPrice.length + tipDay.length + 1) * 7.6 + TIP_PAD;
   const tipLeft = at !== null ? Math.min(Math.max(sx(at), tipWidth / 2), width - tipWidth / 2) : 0;
@@ -322,8 +356,9 @@ export default function SandboxChart({
 
   return (
     <div className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
       <RangeTabs
-        ranges={["1D", ...offered.map((r) => r.key), "All"] as Tab[]}
+        ranges={[...(exampleDay ? ["1D"] : []), ...offered.map((r) => r.key), "All"] as Tab[]}
         range={showDay ? "1D" : current}
         onPick={(r) => {
           setHover(null);
@@ -341,12 +376,64 @@ export default function SandboxChart({
           const now = frameRef.current ?? view;
           if (r !== current) {
             frameRef.current = now;
-            setFrame({ range: r, view: now });
+            setFrame({ range: `${r}|${scope}`, view: now });
           }
           setRange(r);
           setHover(null);
         }}
       />
+        {/* With the days before the test, or the test's own only. */}
+        <div
+          role="group"
+          aria-label="Days shown"
+          className={`flex gap-0.5 rounded-lg bg-slate-100 p-0.5 transition-opacity duration-300 ${
+            showDay ? "pointer-events-none opacity-40" : ""
+          }`}
+        >
+          {(
+            [
+              ["all", "With history"],
+              ["test", "Test only"],
+            ] as const
+          ).map(([s2, label]) => (
+            <button
+              key={s2}
+              type="button"
+              aria-pressed={scope === s2}
+              onClick={() => {
+                if (s2 === scope) return;
+                setHover(null);
+                // As for a range: keep the current line until the morph starts.
+                const now = frameRef.current ?? view;
+                frameRef.current = now;
+                setFrame({ range: `${current}|${s2}`, view: now });
+                setScope(s2);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
+                scope === s2 ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-white hover:text-slate-900"
+              }`}
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-3.5"
+              >
+                {s2 === "all" ? (
+                  <path d="M1.5 10 4.5 6.5l2 2L9 5l3.5 4.5M1.5 12.5h11" />
+                ) : (
+                  <path d="M4 2v10M10 2v10M4 7h6M2.5 3.5 4 2l1.5 1.5M8.5 3.5 10 2l1.5 1.5" />
+                )}
+              </svg>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div
         ref={box}
@@ -363,7 +450,7 @@ export default function SandboxChart({
               width={width}
               height={HEIGHT}
               role="img"
-              aria-label={`Closing price from ${dayName(dayOf(0))} to ${dayName(dayOf(last))}: ${money.format(slice[0])} to ${money.format(slice[last])}`}
+              aria-label={`Closing price from ${dayName(dayOf(0))} to ${dayName(dayOf(last))}: ${format(slice[0])} to ${format(slice[last])}`}
               className="block"
             >
               <defs>
@@ -381,12 +468,12 @@ export default function SandboxChart({
               </defs>
 
               {/* Gridlines and day labels fade in with each range, as on the Search page. */}
-              <g key={current} className="chart-fade">
+              <g key={key} className="chart-fade">
                 {yTicks.map((v) => (
                   <g key={v}>
                     <line x1={MARGIN.left} x2={MARGIN.left + plotW} y1={sy(v)} y2={sy(v)} stroke={GRID} />
                     <text x={MARGIN.left + plotW + 8} y={sy(v)} dy="0.32em" fontSize={12} fill={INK}>
-                      {money.format(v)}
+                      {format(v)}
                     </text>
                   </g>
                 ))}
@@ -407,13 +494,18 @@ export default function SandboxChart({
               {/* Where the test starts, when the days before it are in view. */}
               {startX > MARGIN.left + 0.5 && (
                 <g>
-                  <line x1={startX} x2={startX} y1={MARGIN.top} y2={bottom} stroke="#cbd5e1" />
+                  <line x1={startX} x2={startX} y1={MARGIN.top - 14} y2={bottom} stroke="#cbd5e1" />
+                  {/* Its label above the plot, where the line never goes. */}
                   <text
                     x={startX + (markerRight ? -4 : 4)}
-                    y={MARGIN.top + 12}
+                    y={MARGIN.top - 6}
                     fontSize={11}
+                    fontWeight={600}
                     fill={INK}
                     textAnchor={markerRight ? "end" : "start"}
+                    stroke="#f8fafc"
+                    strokeWidth={4}
+                    paintOrder="stroke"
                   >
                     Test starts
                   </text>

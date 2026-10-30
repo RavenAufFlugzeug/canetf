@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useLayoutEffect, useRef, useState, useTransition } from "react";
+import DiamondLoader from "@/components/DiamondLoader";
 
 // How long a swapped area takes to fade out (.sandbox-swap in globals.css): a change waits
 // at least this long, so the old contents always fade out fully before the new come in.
@@ -11,6 +12,9 @@ const RESIZE_MS = 500;
 
 type SandboxSwap = {
   pending: boolean;
+  // Whether a choice has been changed since the page opened: what comes in after one comes in
+  // whole and quickly (a fade), not by the slower first entrances.
+  changed: boolean;
   // The area being left (its key), from the click until its new contents are in.
   leaving: string | null;
   // Leaves the area `from` for the address `to` gives (a new pick, timeframe or amount).
@@ -27,9 +31,11 @@ export function SandboxSwapProvider({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [leaving, setLeaving] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
 
   function change(from: string, to: () => Promise<string | null> | string) {
     setLeaving(from);
+    setChanged(true);
     startTransition(async () => {
       const [href] = await Promise.all([to(), new Promise((done) => window.setTimeout(done, FADE_MS))]);
       if (href) router.replace(href, { scroll: false });
@@ -37,7 +43,14 @@ export function SandboxSwapProvider({ children }: { children: React.ReactNode })
     });
   }
 
-  return <SwapContext.Provider value={{ pending, leaving, change }}>{children}</SwapContext.Provider>;
+  return (
+    <SwapContext.Provider value={{ pending, leaving, changed, change }}>{children}</SwapContext.Provider>
+  );
+}
+
+// Whether a choice has been changed since the page opened (false outside the Sandbox).
+export function useSwapChanged() {
+  return useContext(SwapContext)?.changed ?? false;
 }
 
 export function useSandboxSwap() {
@@ -49,16 +62,35 @@ export function useSandboxSwap() {
 // A part of the Sandbox that changes with a choice, for the choices `swapKey` names (the pick,
 // say, or the test's timeframe and amount). On a change it goes smoothly: the moment the
 // choice is made, the old contents fade, soften and sink a little while the new ones are
-// fetched; then they give way to the new contents, which rise in (by their own entrances)
-// as the area eases to its new height (EaseHeight), rather than what is below it jumping.
+// fetched (a small loading mark showing if that takes a while); then the new contents fade
+// and rise in out of the same softness (.sandbox-swap-in), as the area eases to its new
+// height (EaseHeight), rather than anything snapping or what is below it jumping. The first
+// contents, as the page opens, come in by their own entrances alone.
 export function Swap({ swapKey, children }: { swapKey: string; children: React.ReactNode }) {
   const { leaving } = useSandboxSwap();
+  const [first] = useState(swapKey);
+  const out = leaving === swapKey;
   return (
     <EaseHeight changeKey={swapKey}>
-      {/* Keyed, so the new contents are fresh: they come in at full strength (their own
-          entrances do the rest), not fading back from the old ones. */}
-      <div key={swapKey} className="sandbox-swap" data-leaving={leaving === swapKey ? "" : undefined}>
-        {children}
+      <div className="relative">
+        {/* Keyed, so the new contents are fresh, fading in rather than back from the old. */}
+        <div
+          key={swapKey}
+          className={`sandbox-swap ${swapKey !== first ? "sandbox-swap-in" : ""}`}
+          data-leaving={out ? "" : undefined}
+        >
+          {children}
+        </div>
+        {/* While the new contents are fetched: a loading mark over the old, after a moment
+            (so a quick change doesn't flash it). */}
+        {out && (
+          <span
+            aria-hidden
+            className="swap-wait pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 p-2 shadow-md ring-1 ring-slate-200"
+          >
+            <DiamondLoader className="size-4" />
+          </span>
+        )}
       </div>
     </EaseHeight>
   );

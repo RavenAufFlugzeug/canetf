@@ -1,6 +1,7 @@
 "use client";
 
 import DiamondLoader from "@/components/DiamondLoader";
+import FadeText from "@/components/FadeText";
 import { useSandboxSwap } from "@/components/SandboxSwap";
 import { newSeed, sandboxHref } from "@/lib/sandbox";
 
@@ -37,7 +38,8 @@ export default function PickButton({
       }`}
     >
       {picking ? <DiamondLoader className="size-3.5" /> : <ShuffleMark />}
-      {current ? "Pick a new set" : `Pick ${count} companies & ETFs`}
+      {/* Its words cross-fade when they change (a new number, or a set picked). */}
+      <FadeText inline text={current ? "Pick a new set" : `Pick ${count} companies & ETFs`} />
     </button>
   );
 }

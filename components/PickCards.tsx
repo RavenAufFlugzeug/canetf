@@ -1,6 +1,7 @@
 "use client";
 
 import KindMark from "@/components/KindMark";
+import { countryFlag } from "@/lib/fx";
 import { AliasName } from "@/components/SandboxAliases";
 
 // What a company reports today (its latest figures on Yahoo Finance), as the Sandbox shows it:
@@ -24,6 +25,10 @@ export type PickCard = {
   ink: string;
   mark: string; // its kind's mark's colour, on its colour
   line: string;
+  industry: string | null; // its industry (or, for a fund, its category)
+  place: string | null; // where it is based: city, country
+  country: string | null; // that country, for its flag
+  note: string | null; // for a fund, what it holds in a few words (none for a company)
   about: string | null;
   sector: string | null;
   currency: string | null; // what it trades in
@@ -86,11 +91,21 @@ export default function PickCards({ cards }: { cards: PickCard[] }) {
           />
           <div className="flex items-start gap-2">
             <span
-              className="grid size-7 shrink-0 place-items-center rounded-lg"
-              style={{ background: card.color, color: card.mark }}
+              className="kind-badge grid size-7 shrink-0 place-items-center rounded-lg"
+              style={{ background: card.color, color: card.mark, ["--badge" as string]: card.color }}
             >
               <KindMark kind={card.kind} className="size-4" />
             </span>
+            {/* Where it is from: where a company is based, or where a fund is listed. */}
+            {countryFlag(card.country, true) && (
+              // eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG
+              <img
+                src={countryFlag(card.country, true)!}
+                alt={card.country ?? ""}
+                title={`${card.kind === "ETF" ? "Listed in" : "Based in"} ${card.country}`}
+                className="mt-2 h-3 w-auto shrink-0 rounded-[2px] ring-1 ring-black/10"
+              />
+            )}
             <div className="min-w-0 flex-1">
               {/* Aliases are given once the test has started; any given show here. */}
               <AliasName
@@ -100,6 +115,8 @@ export default function PickCards({ cards }: { cards: PickCard[] }) {
                 className="text-sm font-semibold text-slate-900"
               />
               <p className="text-xs text-slate-500">{card.line}</p>
+              {/* A fund: what it holds, in a few words (from its holdings, never naming it). */}
+              {card.note && <p className="text-xs font-medium text-slate-700">{card.note}</p>}
             </div>
           </div>
           {card.about && <p className="mt-1.5 line-clamp-2 text-xs text-slate-600">{card.about}</p>}

@@ -1,7 +1,8 @@
 // Where a listing trades, from Yahoo Finance's exchange code (companies.exchange, stored
 // by search/StockUtils.py), and the exchange's time zone (IANA). Covers the markets the
 // database holds; an unknown code gets no line rather than a bare code.
-export type Listing = { exchange: string; country: string; timeZone: string };
+// `place` and `about` say where it trades when that is no one country (an exchange rate's).
+export type Listing = { exchange: string; country: string; timeZone: string; place?: string; about?: string };
 
 const EXCHANGES: Record<string, Listing> = {
   // United States
@@ -31,6 +32,16 @@ const EXCHANGES: Record<string, Listing> = {
   STO: { exchange: "Nasdaq Stockholm", country: "Sweden", timeZone: "Europe/Stockholm" },
   HEL: { exchange: "Nasdaq Helsinki", country: "Finland", timeZone: "Europe/Helsinki" },
   OSL: { exchange: "Oslo Børs", country: "Norway", timeZone: "Europe/Oslo" },
+  // Currencies: exchange rates (USDCAD=X), traded between banks worldwide, which Yahoo dates
+  // by London time.
+  CCY: {
+    exchange: "Foreign exchange market",
+    country: "Worldwide",
+    timeZone: "Europe/London",
+    place: "Traded worldwide",
+    about:
+      "Currencies trade between banks round the clock, from Sunday evening to Friday evening. Yahoo dates each day by London time.",
+  },
   // Asia-Pacific
   JPX: { exchange: "Tokyo Stock Exchange", country: "Japan", timeZone: "Asia/Tokyo" },
   HKG: { exchange: "Hong Kong Stock Exchange", country: "Hong Kong", timeZone: "Asia/Hong_Kong" },

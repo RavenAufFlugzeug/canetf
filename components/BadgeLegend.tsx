@@ -3,8 +3,8 @@
 import { useId, useState } from "react";
 import FoldButton from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
-import { KINDS } from "@/lib/kinds";
-import { NAICS_GROUPS, markOn, naicsOf } from "@/lib/naics";
+import { KINDS, badgeLook } from "@/lib/kinds";
+import { NAICS_GROUPS, naicsOf } from "@/lib/naics";
 import { kindOf } from "@/lib/sandbox";
 
 // The pop-up under a legend tile when it is pointed at (or focused), as the Sandbox's pick
@@ -34,26 +34,46 @@ function Tip({ title, sub, children }: { title: string; sub?: string; children?:
 // full and what it means (Tip). It folds away and opens again with its Fold / Open button, as
 // the Holdings Map's key does: folding, the tiles slip away last first and it closes up;
 // opening, it opens out and they cascade back in (.legend-fold and .legend-row in globals.css).
+// Without `highlight` (the Watch List's, for many listings at once) none is picked out.
 export default function BadgeLegend({
-  sector,
-  industry,
+  sector = null,
+  industry = null,
   fundFamily = null,
   category = null,
   delay = 0,
+  mark,
+  colour,
+  startOpen = true,
+  highlight = true,
+  className = "mt-8 border-t border-slate-200 pt-6",
 }: {
-  sector: string | null;
-  industry: string | null;
+  sector?: string | null;
+  industry?: string | null;
   fundFamily?: string | null;
   category?: string | null;
   delay?: number;
+  // The mark and colour to pick out, when known already (the Sandbox's chosen pick, whose
+  // sector stays hidden): its kind, and its NAICS group's code (null for none).
+  mark?: string;
+  colour?: string | null;
+  // Whether it starts open (on the Search page) or folded (in the Sandbox, the Watch List).
+  startOpen?: boolean;
+  // Whether one listing's mark and colour are picked out (not on the Watch List).
+  highlight?: boolean;
+  // Its spacing: by default set apart from what is above it by a rule.
+  className?: string;
 }) {
-  const kind = kindOf({ sector, industry, fundFamily, category });
-  const naics = naicsOf(sector, industry);
-  const fund = kind === "ETF";
-  const [open, setOpen] = useState(true);
+  const kind = highlight ? (mark ?? kindOf({ sector, industry, fundFamily, category })) : null;
+  const naics = !highlight
+    ? null
+    : colour !== undefined
+      ? (NAICS_GROUPS.find((g) => g.code === colour) ?? null)
+      : naicsOf(sector, industry);
+  const look = badgeLook(kind ?? "", naics);
+  const [open, setOpen] = useState(startOpen);
   // Whether it is open and done opening: only then may a tile's pop-up reach past its bottom
   // (while it folds or opens, what is outside it is clipped).
-  const [settled, setSettled] = useState(true);
+  const [settled, setSettled] = useState(startOpen);
   const id = useId();
   // Each tile's place in the cascade: the marks, then the colours.
   const rows = KINDS.length + NAICS_GROUPS.length;
@@ -67,7 +87,7 @@ export default function BadgeLegend({
   }
 
   return (
-    <section className="rise-in mt-8 border-t border-slate-200 pt-6" style={{ animationDelay: `${delay}ms` }}>
+    <section className={`rise-in ${className}`} style={{ animationDelay: `${delay}ms` }}>
       <div className="flex items-center gap-4">
         <h3 className="text-lg font-semibold text-slate-900">What the badge means</h3>
         <FoldButton open={open} controls={id} onClick={toggle} className="ml-auto text-xs" />
@@ -145,15 +165,12 @@ export default function BadgeLegend({
                   style={d(i)}
                 >
                   <span
-                    className={`grid size-7 shrink-0 place-items-center rounded-lg ${
-                      mine ? "legend-pop text-white" : "bg-slate-100 text-slate-700"
-                    }`}
+                    className={`kind-badge grid size-7 shrink-0 place-items-center rounded-lg ${
+                      mine ? "legend-pop" : "bg-slate-100 text-slate-700"
+                    } ${mine && look.ring ? "ring-[1.5px] ring-inset ring-slate-900" : ""}`}
                     style={
                       mine
-                        ? {
-                            background: naics?.color ?? (fund ? "#1e293b" : "oklch(0.80 0 0)"),
-                            color: (naics && markOn(naics)) ?? (fund ? "#fff" : "#0f172a"),
-                          }
+                        ? { background: look.background, color: look.color, ["--badge" as string]: look.glow }
                         : undefined
                     }
                   >
@@ -203,9 +220,11 @@ export default function BadgeLegend({
               );
             })}
           </ul>
-          {fund && (
+          {!naics && (kind === "ETF" || kind === "Currency") && (
             <p className="legend-row mt-2 text-xs text-slate-500">
-              A fund has no NAICS group: its badge is dark slate.
+              {kind === "ETF"
+                ? "A fund has no NAICS group: its badge is dark slate."
+                : "An exchange rate has no NAICS group: its badge is white with a black outline."}
             </p>
           )}
         </div>

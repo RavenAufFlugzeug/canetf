@@ -1,4 +1,5 @@
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/watchlist";
+import BadgeLegend from "@/components/BadgeLegend";
 import Prompt from "@/components/Prompt";
 import SearchBox from "@/components/SearchBox";
 import WatchlistTable from "@/components/WatchlistTable";
@@ -59,8 +60,19 @@ export default async function WatchlistPage() {
           )}
         </div>
 
+        {/* The table, and under it, as on the Search page, what its badges mean: every mark
+            (the sector) and colour (the NAICS group), open to begin with. */}
         {companies.length > 0 && (
-          <WatchlistTable companies={companies} justAdded={justAdded} remove={removeFromWatchlist} />
+          <div className="rounded-2xl bg-white shadow">
+            <WatchlistTable companies={companies} justAdded={justAdded} remove={removeFromWatchlist} />
+            <div className="px-8 pb-8">
+              <BadgeLegend
+                highlight={false}
+                delay={200}
+                className="mt-2 border-t border-slate-200 pt-6"
+              />
+            </div>
+          </div>
         )}
       </section>
     </main>

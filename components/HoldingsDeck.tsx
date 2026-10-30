@@ -121,7 +121,10 @@ export default function HoldingsDeck({
             >
               {/* The mark and the number, on top. */}
               <span className="flex items-start justify-between">
-                <span className="grid size-8 place-items-center rounded-lg bg-white/25 ring-1 ring-black/5">
+                <span
+                  className="kind-badge grid size-8 place-items-center rounded-lg bg-white/25 ring-1 ring-black/5"
+                  style={{ ["--badge" as string]: card.color }}
+                >
                   <KindMark kind={card.kind} className="size-5" color={card.mark} />
                 </span>
                 <span className="text-lg font-bold leading-none tabular-nums">{card.number}</span>

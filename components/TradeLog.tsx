@@ -4,14 +4,33 @@ import { useEffect, useId, useRef, useState } from "react";
 import FoldButton from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
 import { BuyMark, SellMark } from "@/components/TestMarks";
+import { moneyFormatter, rateDecimals } from "@/lib/money";
 
 export type LoggedTrade = {
   symbol: string;
   day: number;
   side: "Bought" | "Sold";
   shares: number;
-  price: number;
+  price: number; // per share, in the currency the pick trades in
+  rate: number; // how many CAD one unit of that currency was worth that day (1 for CAD)
 };
+// A trade's price per share in its own currency; in another than CAD, with that day's rate
+// ("182.40 USD · 1 USD = $1.3986").
+function priceText(t: LoggedTrade, currency: string | null) {
+  if (!currency || currency === "CAD") return money.format(t.price);
+  const { decimals } = moneyFormatter(currency);
+  const price = t.price.toLocaleString("en-CA", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return `${price} ${currency} · 1 ${currency} = ${moneyFormatter("CAD", rateDecimals(t.rate)).format(t.rate)}`;
+}
+// The cash a trade moved, in the share's currency: "283.11 TWD", or as money for CAD.
+function amountText(t: LoggedTrade, currency: string | null) {
+  const amount = Math.round(t.shares * t.price * 100) / 100;
+  if (!currency || currency === "CAD") return money.format(amount);
+  const { decimals } = moneyFormatter(currency);
+  return `${amount.toLocaleString("en-CA", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${currency}`;
+}
+// The cash a trade moved, in CAD at the day's rate, to the cent.
+const cadOf = (t: LoggedTrade) => Math.round(t.shares * t.price * t.rate * 100) / 100;
 // How a pick looks: its kind's mark, on its sector's colour.
 export type PickLook = { kind: string; color: string; ink: string; currency?: string | null };
 
@@ -24,8 +43,8 @@ const netText = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${money.forma
 
 // What a run of trades came to: bought, sold, and the cash it made or spent.
 function totals(trades: LoggedTrade[]) {
-  const bought = trades.filter((t) => t.side === "Bought").reduce((sum, t) => sum + t.shares * t.price, 0);
-  const sold = trades.filter((t) => t.side === "Sold").reduce((sum, t) => sum + t.shares * t.price, 0);
+  const bought = trades.filter((t) => t.side === "Bought").reduce((sum, t) => sum + cadOf(t), 0);
+  const sold = trades.filter((t) => t.side === "Sold").reduce((sum, t) => sum + cadOf(t), 0);
   return { bought, sold, net: sold - bought };
 }
 
@@ -33,8 +52,12 @@ function totals(trades: LoggedTrade[]) {
 function Badge({ look, className }: { look?: PickLook; className: string }) {
   return (
     <span
-      className={`grid shrink-0 place-items-center ${className}`}
-      style={{ background: look?.color ?? "#e2e8f0", color: look?.ink ?? "#0f172a" }}
+      className={`kind-badge grid shrink-0 place-items-center ${className}`}
+      style={{
+        background: look?.color ?? "#e2e8f0",
+        color: look?.ink ?? "#0f172a",
+        ["--badge" as string]: look?.color ?? "#94a3b8",
+      }}
     >
       <KindMark kind={look?.kind ?? "Company"} className="size-[70%]" />
     </span>
@@ -75,37 +98,20 @@ export default function TradeLog({
   const day = dayView !== "all" && days.includes(dayView) ? dayView : "all";
   const shown = day === "all" ? ofPick : ofPick.filter((t) => t.day === day);
   const sum = totals(shown);
-  const at = day === "all" ? -1 : days.indexOf(day);
 
+  // The day arrows move along the chips as they are laid out (All, then the latest day first):
+  // the left one to the chip on the left, the right one to the chip on the right.
+  const order: (number | "all")[] = ["all", ...[...days].reverse()];
   const arrow = (dir: -1 | 1) => {
-    // From All days, back goes to the latest day and on to the earliest.
-    const to = day === "all" ? (dir === -1 ? days.length - 1 : 0) : at + dir;
-    const usable = days.length > 0 && to >= 0 && to < days.length;
+    const to = order.indexOf(day) + dir;
+    const usable = days.length > 0 && to >= 0 && to < order.length;
     return (
-      <button
-        type="button"
-        aria-label={dir === -1 ? "Earlier day with trades" : "Later day with trades"}
+      <RoundArrow
+        dir={dir}
+        label={dir === -1 ? "Day to the left (later)" : "Day to the right (earlier)"}
         disabled={!usable}
-        onClick={() => usable && setDayView(days[to])}
-        className="group grid size-7 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-      >
-        <svg
-          aria-hidden
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`size-3 transition-transform duration-300 ease-out ${
-            dir === -1
-              ? "motion-safe:group-hover:-translate-x-0.5"
-              : "motion-safe:group-hover:translate-x-0.5"
-          }`}
-        >
-          <path d={dir === -1 ? "M7.5 2.5 4 6l3.5 3.5" : "M4.5 2.5 8 6 4.5 9.5"} />
-        </svg>
-      </button>
+        onClick={() => usable && setDayView(order[to])}
+      />
     );
   };
 
@@ -148,7 +154,7 @@ export default function TradeLog({
               <dd className="font-semibold text-slate-900">{money.format(sum.sold)}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Cash moved</dt>
+              <dt className="text-slate-500" title="In CAD, each trade at its day's rate">Cash moved (CAD)</dt>
               <dd className={`font-semibold ${tone(sum.net)}`}>{netText(sum.net)}</dd>
             </div>
           </dl>
@@ -164,6 +170,7 @@ export default function TradeLog({
               Holding
             </span>
             <Strip
+              scrolls
               label="Holding"
               chosen={pick}
               onChoose={(v) => setPickView(String(v))}
@@ -226,20 +233,65 @@ export default function TradeLog({
 
 type Item = { value: string | number; label: string; count: number; badge?: PickLook };
 
+// A round button with an arrow pointing back (-1) or on (1), which nudges that way when
+// pointed at; greyed out when there is nowhere to go.
+function RoundArrow({
+  dir,
+  label,
+  disabled,
+  onClick,
+}: {
+  dir: -1 | 1;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="group grid size-7 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={`size-3 transition-transform duration-300 ease-out ${
+          dir === -1 ? "motion-safe:group-hover:-translate-x-0.5" : "motion-safe:group-hover:translate-x-0.5"
+        }`}
+      >
+        <path d={dir === -1 ? "M7.5 2.5 4 6l3.5 3.5" : "M4.5 2.5 8 6 4.5 9.5"} />
+      </svg>
+    </button>
+  );
+}
+
 // A row of chips, one chosen, scrolling sideways when they don't fit: a dark pill slides
-// behind the chosen one, and the strip scrolls it into view.
+// behind the chosen one, and the strip scrolls it into view. With `scrolls`, it has arrows at
+// its ends to scroll it a stretch at a time (greyed out at either end, both while it all
+// fits), and the mouse wheel scrolls it sideways while there is more that way.
 function Strip({
   label,
   items,
   chosen,
   onChoose,
+  scrolls = false,
 }: {
   label: string;
   items: Item[];
   chosen: string | number;
   onChoose: (value: string | number) => void;
+  scrolls?: boolean;
 }) {
   const strip = useRef<HTMLDivElement>(null);
+  // Whether there is more of the strip off to the left, and to the right.
+  const [ends, setEnds] = useState({ left: false, right: false });
   const pill = useRef<HTMLSpanElement>(null);
   const shape = items.map((i) => `${i.value}:${i.count}`).join(",");
   useEffect(() => {
@@ -254,7 +306,41 @@ function Strip({
     box.scrollTo({ left: Math.max(0, left), behavior: calm ? "auto" : "smooth" });
   }, [chosen, shape]);
 
-  return (
+  // Keep track of where the strip is scrolled to (as it scrolls, and as it or its chips
+  // change size), and turn the wheel into sideways scrolling while it can go that way.
+  useEffect(() => {
+    const box = strip.current;
+    if (!scrolls || !box) return;
+    const measure = () =>
+      setEnds({ left: box.scrollLeft > 1, right: box.scrollLeft + box.clientWidth < box.scrollWidth - 1 });
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    for (const chip of box.children) observer.observe(chip);
+    box.addEventListener("scroll", measure, { passive: true });
+    const wheel = (e: WheelEvent) => {
+      const by = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : 0;
+      if (!by) return;
+      const room = by > 0 ? box.scrollWidth - box.clientWidth - box.scrollLeft : box.scrollLeft;
+      if (room <= 1) return; // at that end: let the page scroll on
+      e.preventDefault();
+      box.scrollBy({ left: by });
+    };
+    box.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      box.removeEventListener("scroll", measure);
+      box.removeEventListener("wheel", wheel);
+    };
+  }, [scrolls, shape]);
+
+  const nudge = (dir: -1 | 1) => {
+    const box = strip.current;
+    if (!box) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollBy({ left: dir * box.clientWidth * 0.7, behavior: calm ? "auto" : "smooth" });
+  };
+
+  const row = (
     <div
       ref={strip}
       role="group"
@@ -291,6 +377,25 @@ function Strip({
           </button>
         );
       })}
+    </div>
+  );
+
+  if (!scrolls) return row;
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <RoundArrow
+        dir={-1}
+        label={`Scroll ${label.toLowerCase()} back`}
+        disabled={!ends.left}
+        onClick={() => nudge(-1)}
+      />
+      {row}
+      <RoundArrow
+        dir={1}
+        label={`Scroll ${label.toLowerCase()} on`}
+        disabled={!ends.right}
+        onClick={() => nudge(1)}
+      />
     </div>
   );
 }
@@ -360,15 +465,19 @@ function Board({
                           {buy ? <BuyMark className="size-3" /> : <SellMark className="size-3" />}
                           {buy ? "BUY" : "SELL"}
                         </span>
-                        {sharesText(t.shares)} at {money.format(t.price)}
-                        {looks[t.symbol]?.currency ? ` ${looks[t.symbol]?.currency}` : ""}
+                        {sharesText(t.shares)} at {priceText(t, looks[t.symbol]?.currency ?? null)}
                       </span>
                     </span>
+                    {/* The cash it moved, in the share's currency (a sale's stays in it); for one
+                        not in CAD, about how much that was in CAD under it. */}
                     <span
-                      className={`text-sm font-semibold tabular-nums ${buy ? "text-red-600" : "text-green-700"}`}
+                      className={`text-right text-sm font-semibold tabular-nums ${buy ? "text-red-600" : "text-green-700"}`}
                     >
                       {buy ? "−" : "+"}
-                      {money.format(t.shares * t.price)}
+                      {amountText(t, looks[t.symbol]?.currency ?? null)}
+                      {looks[t.symbol]?.currency && looks[t.symbol]?.currency !== "CAD" && (
+                        <span className="block text-[10px] font-normal text-slate-500">{`≈ ${money.format(cadOf(t))} CAD`}</span>
+                      )}
                     </span>
                   </li>
                 );

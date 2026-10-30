@@ -2,10 +2,13 @@ import Link from "next/link";
 import BadgeLegend from "@/components/BadgeLegend";
 import CompanyAbout from "@/components/CompanyAbout";
 import EtfBreakdown from "@/components/EtfBreakdown";
+import FundAbout from "@/components/FundAbout";
 import KeyStats from "@/components/KeyStats";
 import KindBadge from "@/components/KindBadge";
 import MapMark from "@/components/MapMark";
 import PriceChart from "@/components/PriceChart";
+import RateAbout from "@/components/RateAbout";
+import { pairOf } from "@/lib/fx";
 import SearchBox from "@/components/SearchBox";
 import {
   getCompany,
@@ -29,6 +32,11 @@ export default async function SearchPage({
   const exchange = company ? await getExchange(company.symbol) : null;
   const breakdown = company ? await getEtfBreakdown(company.symbol) : null;
   const profile = company ? await getCompanyProfile(company.symbol) : null;
+  // An exchange rate (USDCAD=X) rather than a company or fund.
+  const rate = company?.category === "Currency";
+  // The same pair the other way round (CADUSD=X for USDCAD=X), when the database has it.
+  const pair = rate && company ? pairOf(company.symbol) : null;
+  const reverse = pair ? await getCompany(`${pair.quote}${pair.base}=X`) : null;
 
   return (
     <main className="flex-1 bg-slate-50">
@@ -49,7 +57,6 @@ export default async function SearchPage({
                   category={company.category}
                   className="size-10 rounded-xl"
                   markClassName="size-5"
-                  shine={false}
                 />
                 <p className="text-lg font-semibold text-slate-900">
                   {/* Name, then the ticker on its own line, so a long name never splits them. */}
@@ -58,12 +65,25 @@ export default async function SearchPage({
                 </p>
               </div>
               <div className="rise-in" style={{ animationDelay: "80ms" }}>
-                <PriceChart history={history} currency={company.currency} exchange={exchange} />
+                <PriceChart history={history} currency={company.currency} exchange={exchange} rate={rate} />
               </div>
-              {stats && <KeyStats stats={stats} currency={company.currency} />}
+              {stats && <KeyStats stats={stats} currency={company.currency} rate={rate} />}
+              {/* An exchange rate gets an About section of its own: what each currency buys of
+                  the other, how it moved over the year, and an example. */}
+              {rate && history.daily.length > 0 && (
+                <RateAbout
+                  symbol={company.symbol}
+                  reverse={reverse?.symbol ?? null}
+                  rate={history.daily[history.daily.length - 1].close}
+                  yearAgo={history.daily[history.daily.length - 253]?.close ?? null}
+                />
+              )}
               {/* A company (not a fund) gets an About section: sector, where it is based,
                   size, website and what it does. */}
-              {profile && !breakdown && !profile.fundFamily && (
+              {/* A fund gets one of its own: which country it is from (where it is listed, by
+                  that country's flag), who runs it and what kind of fund it is. */}
+              {profile && !rate && (breakdown || profile.fundFamily) && <FundAbout profile={profile} />}
+              {profile && !rate && !breakdown && !profile.fundFamily && (
                 <CompanyAbout name={company.name ?? company.symbol} profile={profile} />
               )}
               {breakdown && (
@@ -94,8 +114,8 @@ export default async function SearchPage({
           ) : (
             <p className="rise-in mt-4 text-slate-600">
               {typeof symbol === "string" && symbol
-                ? `No company with the symbol ${symbol.toUpperCase()} in our database.`
-                : "Search for a company or ETF by its ticker or name to see its price chart and key figures."}
+                ? `Nothing with the symbol ${symbol.toUpperCase()} in our database.`
+                : "Search for a company, ETF or exchange rate by its ticker or name to see its price chart and key figures. For a rate, try USDCAD or “US Dollar”."}
             </p>
           )}
         </div>

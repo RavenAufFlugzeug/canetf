@@ -27,6 +27,8 @@ export type Company = {
   changePct: number | null;
   quotedAt: string | null;
   updatedAt: string | null;
+  hqCountry: string | null; // where a company is based (null for a fund)
+  exchange: string | null; // where it trades: Yahoo's code (lib/exchanges.ts)
 };
 
 // The change is measured from the previous close: the last daily close before the
@@ -34,6 +36,9 @@ export type Company = {
 // Yahoo quotes a few markets in minor units: London in pence (GBp), Johannesburg in
 // cents (ZAc) and Tel Aviv in agorot (ILA). Prices are read in the main unit instead.
 const MINOR_UNITS: Record<string, string> = { GBp: "GBP", ZAc: "ZAR", ILA: "ILS" };
+
+// A currency's main unit: GBP for pence (GBp), and so on; any other as it is.
+export const majorOf = (currency: string) => MINOR_UNITS[currency] ?? currency;
 
 // How much to divide a company's stored prices by (100 for pence and cents, else 1).
 function priceScale(db: DatabaseSync, symbol: string) {
@@ -56,7 +61,8 @@ const COMPANY_SELECT = `
          c.pe_trailing AS peTrailing,
          q.price, (q.price - prev.close) / prev.close * 100 AS changePct,
          q.fetched_at  AS quotedAt,
-         c.updated_at  AS updatedAt
+         c.updated_at  AS updatedAt,
+         c.hq_country  AS hqCountry, c.exchange
   FROM companies c
   -- The latest quote. (Picked by rowid: databases not yet migrated by the
   -- pipeline still keep one quote per run.)
@@ -76,7 +82,10 @@ async function withDb<T>(query: (db: DatabaseSync) => T): Promise<T | null> {
     return null;
   }
 
-  const db = new DatabaseSync(DB_PATH, { readOnly: true });
+  // While the pipeline (search/update.py) is writing, wait for it (up to `timeout` ms) rather
+  // than failing with "database is locked". (In WAL mode, which the pipeline sets, a reader
+  // isn't held up by a write at all.)
+  const db = new DatabaseSync(DB_PATH, { readOnly: true, timeout: 5000 });
   try {
     return query(db);
   } finally {
@@ -142,6 +151,8 @@ export type CompanyProfile = {
   totalLiabilities: number | null;
   balanceDate: string | null;
   marketCap: number | null; // its market value today, in what it trades in
+  exchange: string | null; // Yahoo's code for where it trades (lib/exchanges.ts)
+  category: string | null; // a fund's category, e.g. Canadian Equity
 };
 
 export async function getCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
@@ -158,7 +169,8 @@ export async function getCompanyProfile(symbol: string): Promise<CompanyProfile 
                 ${col("fund_family", "fundFamily")}, ${col("revenue", "revenue")},
                 ${col("financial_currency", "financialCurrency")}, ${col("total_assets", "totalAssets")},
                 ${col("total_liabilities", "totalLiabilities")}, ${col("balance_date", "balanceDate")},
-                ${col("market_cap", "marketCap")}
+                ${col("market_cap", "marketCap")}, ${col("exchange", "exchange")},
+                ${col("category", "category")}
          FROM companies WHERE symbol = ?`,
       )
       .get(symbol.toUpperCase()) as CompanyProfile | undefined;
@@ -263,7 +275,7 @@ export async function getPriceHistory(symbol: string): Promise<PriceHistory> {
 
 // A random company or ETF with at least `days` daily closes -> its symbol, or null if none
 // has that many. Only listings in Canadian or US dollars, which the Sandbox's dollar
-// amounts can buy.
+// amounts can buy, and never an exchange rate (USDCAD=X).
 export async function pickRandomListing(days: number): Promise<string | null> {
   const pick = await withDb(
     (db) =>
@@ -272,7 +284,7 @@ export async function pickRandomListing(days: number): Promise<string | null> {
           // Whether a listing has a `days`-th close, looked up rather than counting every
           // close (millions of rows; this reads a few per listing).
           `SELECT c.symbol FROM companies c
-           WHERE c.currency IN ('CAD', 'USD')
+           WHERE c.currency IN ('CAD', 'USD') AND c.symbol NOT LIKE '%=X'
              AND (SELECT date FROM prices p WHERE p.symbol = c.symbol AND p.close IS NOT NULL
                   ORDER BY date LIMIT 1 OFFSET ?) IS NOT NULL
            ORDER BY RANDOM() LIMIT 1`,
@@ -291,9 +303,96 @@ export type SandboxPick = {
   industry: string | null;
   fundFamily: string | null;
   category: string | null;
-  currency: string | null; // what it trades in (CAD or USD)
+  currency: string | null; // what it trades in (any currency with an exchange rate to CAD)
   from: string;
 };
+
+// The exchange rate that turns `currency` (its main unit) into Canadian dollars: the pair
+// priced in CAD (USDCAD=X), else the one the other way round, inverted (CADSGD=X); null for
+// one with neither. search/fx.py stores them.
+function cadPair(db: DatabaseSync, currency: string): { symbol: string; invert: boolean } | null {
+  const has = db.prepare("SELECT 1 FROM prices WHERE symbol = ? LIMIT 1");
+  const major = majorOf(currency);
+  if (has.get(`${major}CAD=X`)) return { symbol: `${major}CAD=X`, invert: false };
+  if (has.get(`CAD${major}=X`)) return { symbol: `CAD${major}=X`, invert: true };
+  return null;
+}
+
+// How many Canadian dollars one unit of `currency` (its main unit) was worth on each of
+// `dates` (oldest first): the rate's close on that day, or the latest before it (currencies
+// and exchanges keep different holidays). All 1 for CAD; null when there is no rate for the
+// currency, or none on or before the first date.
+function cadRatesOn(db: DatabaseSync, currency: string | null, dates: string[]): number[] | null {
+  if (!currency || majorOf(currency) === "CAD") return dates.map(() => 1);
+  if (!dates.length) return [];
+  const pair = cadPair(db, currency);
+  if (!pair) return null;
+  const earlier = db
+    .prepare("SELECT close FROM prices WHERE symbol = ? AND date <= ? AND close IS NOT NULL ORDER BY date DESC LIMIT 1")
+    .get(pair.symbol, dates[0]) as { close: number } | undefined;
+  if (!earlier) return null;
+  const rows = db
+    .prepare(
+      "SELECT date, close FROM prices WHERE symbol = ? AND date > ? AND date <= ? AND close IS NOT NULL ORDER BY date",
+    )
+    .all(pair.symbol, dates[0], dates[dates.length - 1]) as { date: string; close: number }[];
+  let rate = earlier.close;
+  let i = 0;
+  return dates.map((d) => {
+    while (i < rows.length && rows[i].date <= d) rate = rows[i++].close;
+    return pair.invert ? 1 / rate : rate;
+  });
+}
+
+// For the Sandbox: one CAD rate for each of a listing's trading days (see cadRatesOn), by the
+// currency it trades in; null when it can't be turned into Canadian dollars.
+export async function getCadRates(symbol: string, dates: string[]): Promise<number[] | null> {
+  const rates = await withDb((db) => {
+    const row = db.prepare("SELECT currency FROM companies WHERE symbol = ?").get(symbol) as
+      | { currency: string | null }
+      | undefined;
+    return cadRatesOn(db, row?.currency ?? null, dates);
+  });
+  return rates ?? null;
+}
+
+// As getCadRates, but for days that may begin before the currency's rate does (a listing's
+// history, for a chart of the rate): those days are null. Null for a listing in CAD, or one
+// whose currency has no rate at all.
+export async function getCadRatesSince(symbol: string, dates: string[]): Promise<(number | null)[] | null> {
+  const rates = await withDb((db) => {
+    const row = db.prepare("SELECT currency FROM companies WHERE symbol = ?").get(symbol) as
+      | { currency: string | null }
+      | undefined;
+    const currency = row?.currency ?? null;
+    if (!currency || majorOf(currency) === "CAD" || !dates.length) return null;
+    const pair = cadPair(db, currency);
+    if (!pair) return null;
+    const earlier = db
+      .prepare("SELECT close FROM prices WHERE symbol = ? AND date <= ? AND close IS NOT NULL ORDER BY date DESC LIMIT 1")
+      .get(pair.symbol, dates[0]) as { close: number } | undefined;
+    const rows = db
+      .prepare(
+        "SELECT date, close FROM prices WHERE symbol = ? AND date > ? AND date <= ? AND close IS NOT NULL ORDER BY date",
+      )
+      .all(pair.symbol, dates[0], dates[dates.length - 1]) as { date: string; close: number }[];
+    let rate: number | null = earlier?.close ?? null;
+    let i = 0;
+    return dates.map((d) => {
+      while (i < rows.length && rows[i].date <= d) rate = rows[i++].close;
+      return rate === null ? null : pair.invert ? 1 / rate : rate;
+    });
+  });
+  return rates ?? null;
+}
+
+// The latest CAD rate for `currency` (1 for CAD), or null with none: for sizes compared
+// across currencies (the Sandbox's market values).
+export async function getLatestCadRate(currency: string | null): Promise<number | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const rates = await withDb((db) => cadRatesOn(db, currency, [today]));
+  return rates?.[0] ?? null;
+}
 
 // Every Sandbox listing's first and last day of prices, read once in a while: looking up
 // each listing's ends through the index is quick, but not something to do on every pick.
@@ -340,10 +439,31 @@ export async function pickSandboxSet(
                   ${hasColumn(db, "category") ? "c.category" : "NULL"} AS category, c.currency,
                   (SELECT MIN(date) FROM prices p WHERE p.symbol = c.symbol) AS first,
                   (SELECT MAX(date) FROM prices p WHERE p.symbol = c.symbol) AS last
-           FROM companies c WHERE c.currency IN ('CAD', 'USD')`,
+           FROM companies c WHERE c.currency IS NOT NULL AND c.symbol NOT LIKE '%=X'`,
         )
         .all() as (Span & { first: string | null; last: string | null })[];
-      spans = { at: Date.now(), list: list.filter((s): s is Span => Boolean(s.first && s.last)) };
+      // When each currency's CAD rate begins: a listing in another currency can be picked only
+      // for a test its rate covers (the cash is in Canadian dollars).
+      const rateFrom: Record<string, string | null> = { CAD: "0000-01-01" };
+      for (const s of list) {
+        const major = s.currency ? majorOf(s.currency) : "CAD";
+        if (major in rateFrom) continue;
+        const pair = cadPair(db, major);
+        rateFrom[major] = pair
+          ? ((db.prepare("SELECT MIN(date) AS d FROM prices WHERE symbol = ?").get(pair.symbol) as { d: string | null })
+              .d ?? null)
+          : null;
+      }
+      spans = {
+        at: Date.now(),
+        list: list.flatMap((s) => {
+          if (!s.first || !s.last) return [];
+          const from = rateFrom[s.currency ? majorOf(s.currency) : "CAD"];
+          if (!from) return [];
+          // From when it can be traded here: once it has prices and its rate has begun.
+          return [{ ...s, first: s.first > from ? s.first : from } as Span];
+        }),
+      };
     }
     const list = spans.list;
     const random = seeded(seed);
@@ -638,6 +758,28 @@ const MAX_TREE_DEPTH = 8; // funds of funds go 3 deep today; this only stops a r
 
 // The chosen ETF's composition, then each part's own composition, down to the companies
 // (or credit ratings) where nothing more is known. Null when the symbol has no composition.
+// The symbol a holding is stored under here, from the ticker an ETF's holdings list gives it:
+// the same, or as holding_symbols maps it (an ETF lists RY for what is stored as RY.TO, say);
+// null when it isn't stored.
+export async function resolveHolding(ticker: string): Promise<string | null> {
+  const found = await withDb((db) => {
+    const direct = db.prepare("SELECT symbol FROM companies WHERE symbol = ?").get(ticker) as
+      | { symbol: string }
+      | undefined;
+    if (direct) return direct.symbol;
+    if (!hasTable(db, "holding_symbols")) return null;
+    const mapped = db.prepare("SELECT symbol FROM holding_symbols WHERE holding = ?").get(ticker) as
+      | { symbol: string | null }
+      | undefined;
+    if (!mapped?.symbol) return null;
+    const stored = db.prepare("SELECT symbol FROM companies WHERE symbol = ?").get(mapped.symbol) as
+      | { symbol: string }
+      | undefined;
+    return stored?.symbol ?? null;
+  });
+  return found ?? null;
+}
+
 export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
   const tree = await withDb((db) => {
     if (!hasTable(db, "etf_breakdown")) return null;

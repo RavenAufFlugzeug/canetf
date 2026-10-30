@@ -235,6 +235,11 @@ export function squarify(areas: number[], box: Box): Box[] {
       next++;
     }
     const sum = row.reduce((a, b) => a + b, 0);
+    // No room left (or nothing to place): the rest get no size, rather than 0 ÷ 0.
+    if (!(sum > 0) || !(free.w > 0) || !(free.h > 0)) {
+      for (let k = i; k < areas.length; k++) out.push({ x: free.x, y: free.y, w: 0, h: 0 });
+      break;
+    }
     if (free.w >= free.h) {
       // A column down the left of the free area.
       const width = sum / free.h;

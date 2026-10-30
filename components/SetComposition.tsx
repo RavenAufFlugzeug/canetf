@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSwapChanged } from "@/components/SandboxSwap";
 import { squarify, textWidth, type Box } from "@/components/EtfBreakdown";
 import type { PickCard } from "@/components/PickCards";
 
@@ -33,8 +34,14 @@ type Group = { key: string; label: string; color: string; ink: string; cards: Pi
 // Pointing at a tile or a sector lifts that sector's tiles and fades the rest, and the line
 // under the chart says what is pointed at; switching between value and count, the tiles
 // glide to their new places.
+// The least share of the chart a sector's block is given, so it never shrinks out of sight.
+const MIN_SHARE = 0.025;
+
 export default function SetComposition({ cards }: { cards: PickCard[] }) {
   const [mode, setMode] = useState<Mode>("value");
+  // After a change of choices (a new set), the tiles fade in together, quickly: the set comes
+  // in whole, not box by box as it does when the page opens.
+  const changed = useSwapChanged();
   const [group, setGroup] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null);
 
@@ -56,10 +63,15 @@ export default function SetComposition({ cards }: { cards: PickCard[] }) {
   }
   const groups = [...byKey.values()].sort((a, b) => b.weight - a.weight);
   const total = groups.reduce((sum, g) => sum + g.weight, 0) || 1;
+  // Each sector's block's share of the chart: its share of the set, but never under MIN_SHARE,
+  // so a small one (a 1B company beside trillion-dollar ones) is still a box that can be seen
+  // and pointed at. The figures said keep its true share.
+  const shown = groups.map((g) => Math.max(g.weight / total, MIN_SHARE));
+  const shownTotal = shown.reduce((a, b) => a + b, 0);
 
   // Each sector's block, then each pick's tile inside it, largest first.
   const blocks = squarify(
-    groups.map((g) => (g.weight / total) * W * H),
+    shown.map((s) => (s / shownTotal) * W * H),
     { x: 0, y: 0, w: W, h: H },
   );
   const tiles = groups.flatMap((g, gi) => {
@@ -84,7 +96,7 @@ export default function SetComposition({ cards }: { cards: PickCard[] }) {
   const caption = lit
     ? `${lit.name} · ${lit.sector ?? (lit.kind === "ETF" ? "A fund" : "Sector unknown")} · ${
         lit.size
-          ? `market value ${compact.format(lit.size)}${lit.currency ? ` ${lit.currency}` : ""}`
+          ? `market value ${compact.format(lit.size)} CAD${lit.currency && lit.currency !== "CAD" ? ` (trades in ${lit.currency})` : ""}`
           : "market value not known"
       }`
     : litGroup
@@ -153,8 +165,8 @@ export default function SetComposition({ cards }: { cards: PickCard[] }) {
                     setPick(t.card.symbol);
                   }}
                   data-state={on ? "lit" : group !== null ? "dimmed" : undefined}
-                  className="tile-in breakdown-tile set-tile"
-                  style={{ animationDelay: `${150 + Math.min(t.order, 40) * 30}ms` }}
+                  className={`${changed ? "tile-quick" : "tile-in"} breakdown-tile set-tile`}
+                  style={changed ? undefined : { animationDelay: `${150 + Math.min(t.order, 40) * 30}ms` }}
                 >
                   <rect
                     rx={4}
