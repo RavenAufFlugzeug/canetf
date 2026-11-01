@@ -126,23 +126,40 @@ const CARDBOARD = {
 
 // The two flaps: each hinge's corners, then the way in. The front one is hinged on the
 // top's front left edge, the back one on its back right edge.
-const FRONT_FLAP: Flap = { hinge: [[0, 0], [0, 1]], inward: [1, 0], fill: CARDBOARD.frontFlap };
-const BACK_FLAP: Flap = { hinge: [[1, 0], [1, 1]], inward: [-1, 0], fill: CARDBOARD.backFlap };
+const FRONT_FLAP: Flap = {
+  hinge: [
+    [0, 0],
+    [0, 1],
+  ],
+  inward: [1, 0],
+  fill: CARDBOARD.frontFlap,
+};
+const BACK_FLAP: Flap = {
+  hinge: [
+    [1, 0],
+    [1, 1],
+  ],
+  inward: [-1, 0],
+  fill: CARDBOARD.backFlap,
+};
 
 export default function LogoMark({
   id,
   lid = 0,
   className = "",
+  style,
 }: {
   id: string;
   lid?: number;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <svg
       aria-hidden
       viewBox="3.2 15.2 93.6 93.6"
       className={`logo-mark shrink-0 overflow-visible fill-current ${className}`}
+      style={style}
       strokeLinejoin="round"
     >
       <defs>
@@ -190,11 +207,7 @@ export default function LogoMark({
       </g>
       {/* The front flap, over the cat: closed or lifted, the lid is still on top of her; open,
           it hangs down over the front, below her. */}
-      <path
-        d={flapPath(FRONT_FLAP, lid)}
-        style={{ fill: FRONT_FLAP.fill, stroke: PAPER }}
-        strokeWidth="3"
-      />
+      <path d={flapPath(FRONT_FLAP, lid)} style={{ fill: FRONT_FLAP.fill, stroke: PAPER }} strokeWidth="3" />
       {/* The angry mark, in red, seen only once she is cross. */}
       <path
         d={ANGRY}

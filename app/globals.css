@@ -1368,18 +1368,76 @@ body:has(> main.bg-slate-50) {
   }
 }
 
-/* The Sandbox test's holdings deck (components/HoldingsDeck.tsx): a card newly held is dealt
-   in, swooping down onto the deck from above and turning straight as it lands. Its place in
-   the deck is set with transform; the deal uses translate and rotate, which add to it. */
-.deck-deal {
-  animation: deck-deal 600ms cubic-bezier(0.25, 1.2, 0.45, 1) both; /* as it is dealt */
+/* The Sandbox test's cards (components/HoldingsDeck.tsx). A pick newly held comes from the
+   deck (--from: how far right it lies) and turns face up as it lands in the hand
+   (.deck-flip); a card drawn slides off the deck and turns face up beside it (.deck-draw);
+   one put back slides out to the deck's side face down, then tucks in under it, ending where
+   the bottom card lies (--end-x, --end-turn; fading if it is past the cards shown, --end-o)
+   (.deck-return).  */
+.deck-flip {
+  animation: deck-flip 760ms cubic-bezier(0.3, 1.1, 0.4, 1) both;
 }
 
-@keyframes deck-deal {
-  from {
-    opacity: 0;
-    translate: 40px -48px;
-    rotate: 14deg;
+@keyframes deck-flip {
+  0% {
+    translate: var(--from, 0px) -16px;
+    transform: perspective(800px) rotateY(180deg);
+  }
+  65% {
+    transform: perspective(800px) rotateY(-10deg);
+  }
+  100% {
+    translate: 0 0;
+    transform: perspective(800px) rotateY(0deg);
+  }
+}
+
+.deck-draw {
+  animation: deck-draw 620ms cubic-bezier(0.3, 1.1, 0.4, 1) both;
+}
+
+@keyframes deck-draw {
+  0% {
+    translate: var(--from, 0px) 0;
+    transform: perspective(800px) rotateY(180deg);
+  }
+  65% {
+    transform: perspective(800px) rotateY(-8deg);
+  }
+  100% {
+    translate: 0 0;
+    transform: perspective(800px) rotateY(0deg);
+  }
+}
+
+.deck-return {
+  animation: deck-return 760ms cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+@keyframes deck-return {
+  0% {
+    z-index: 3;
+    translate: var(--from, 0px) 0;
+    rotate: 0deg;
+  }
+  45% {
+    z-index: 3;
+    translate: -70px 14px;
+    rotate: -8deg;
+  }
+  50% {
+    z-index: 1;
+    translate: -72px 16px;
+    rotate: -8deg;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    z-index: 1;
+    translate: var(--end-x, 0px) var(--end-x, 0px);
+    rotate: var(--end-turn, 0deg);
+    opacity: var(--end-o, 1);
   }
 }
 
@@ -1829,6 +1887,13 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform: translateY(6px); /* the head out, its chin just behind the rim */
 }
 
+/* Out for good (the Sandbox's card backs, components/HoldingsDeck.tsx): her head stays out,
+   whatever is pointed at.  */
+.logo-mark.logo-mark-out .logo-mark-cat.logo-mark-cat {
+  transform: translateY(6px);
+  transition: none;
+}
+
 /* Clicked once more, she gets cross: an angry mark by her head pops up from nothing,
    overshooting a little, then throbs for as long as she stays cross. */
 .logo-mark-angry {
@@ -2072,7 +2137,9 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .kind-badge,
   .naics-row,
   .naics-swatch,
-  .deck-deal,
+  .deck-flip,
+  .deck-draw,
+  .deck-return,
   .switch-in,
   .result-pop,
   .group:enabled:hover .test-mark-spin,

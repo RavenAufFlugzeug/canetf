@@ -1328,6 +1328,23 @@ export default function SandboxTest({
     const canTrade = !pending && !recap && !ask;
     // Moving on: a day, a week or a month, each while that many days are left (all kept drawn,
     // so one no longer possible folds away rather than vanishing; see StepSlot).
+    // Every pick as a card: held (its shares, worth and gain) or not (one share's price).
+    const cards = picks.map((p) => {
+      const shares = heldOf(p.symbol).shares;
+      return {
+        symbol: p.symbol,
+        name: nameOf(p.symbol),
+        short: aliases[p.symbol] ?? p.kind.replace(/(.)Company$/, "$1"),
+        number: p.name.match(/\((\d+)\)$/)?.[1] ?? "",
+        kind: p.kind,
+        color: p.color,
+        ink: p.ink,
+        mark: p.mark,
+        shares,
+        value: shares ? shares * cadOf(p.symbol) : cadOf(p.symbol),
+        gain: shares ? cents(shares * cadOf(p.symbol) - heldOf(p.symbol).cost) : 0,
+      };
+    });
     const steps = [
       { label: "Next day", days: 1, Mark: DayMark },
       { label: "Next week", days: 5, Mark: WeekMark },
@@ -1627,24 +1644,12 @@ export default function SandboxTest({
             />
           )}
 
-          {/* What is held, as a deck of cards (HoldingsDeck); clicking one chooses its pick. */}
+          {/* What is held, as a hand of cards, and the picks not held, as a deck to draw from
+              (HoldingsDeck); clicking a card chooses its pick. */}
           <div className="mt-5">
             <HoldingsDeck
-              cards={picks
-                .filter((p) => heldOf(p.symbol).shares > 0)
-                .map((p) => ({
-                  symbol: p.symbol,
-                  name: nameOf(p.symbol),
-                  short: aliases[p.symbol] ?? p.kind.replace(/(.)Company$/, "$1"),
-                  number: p.name.match(/\((\d+)\)$/)?.[1] ?? "",
-                  kind: p.kind,
-                  color: p.color,
-                  ink: p.ink,
-                  mark: p.mark,
-                  shares: heldOf(p.symbol).shares,
-                  value: heldOf(p.symbol).shares * cadOf(p.symbol),
-                  gain: cents(heldOf(p.symbol).shares * cadOf(p.symbol) - heldOf(p.symbol).cost),
-                }))}
+              cards={cards.filter((c) => c.shares > 0)}
+              pile={cards.filter((c) => c.shares === 0)}
               selected={swapTo ?? pick.symbol}
               onSelect={choosePick}
             />
