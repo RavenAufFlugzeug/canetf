@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getSandboxExampleDay } from "@/app/actions/sandbox";
 import DiamondLoader from "@/components/DiamondLoader";
 import RangeTabs from "@/components/RangeTabs";
+import SlideTabs from "@/components/SlideTabs";
 import { blend, easeOut, linePath, MORPH_MS, resample, type Shape } from "@/lib/chartMorph";
 import { testDayName } from "@/lib/tradingTime";
 
@@ -382,25 +383,14 @@ export default function SandboxChart({
           setHover(null);
         }}
       />
-        {/* With the days before the test, or the test's own only. */}
-        <div
-          role="group"
-          aria-label="Days shown"
-          className={`flex gap-0.5 rounded-lg bg-slate-100 p-0.5 transition-opacity duration-300 ${
-            showDay ? "pointer-events-none opacity-40" : ""
-          }`}
-        >
-          {(
-            [
-              ["all", "With history"],
-              ["test", "Test only"],
-            ] as const
-          ).map(([s2, label]) => (
-            <button
-              key={s2}
-              type="button"
-              aria-pressed={scope === s2}
-              onClick={() => {
+        {/* With the days before the test, or the test's own only (not when it has none): its pill
+            sliding as the range tabs' does (SlideTabs). */}
+        {prices.length > 0 && (
+          <div className={`transition-opacity duration-300 ${showDay ? "pointer-events-none opacity-40" : ""}`}>
+            <SlideTabs
+              label="Days shown"
+              value={scope}
+              onChange={(s2) => {
                 if (s2 === scope) return;
                 setHover(null);
                 // As for a range: keep the current line until the morph starts.
@@ -409,30 +399,38 @@ export default function SandboxChart({
                 setFrame({ range: `${current}|${s2}`, view: now });
                 setScope(s2);
               }}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-                scope === s2 ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-white hover:text-slate-900"
-              }`}
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="size-3.5"
-              >
-                {s2 === "all" ? (
-                  <path d="M1.5 10 4.5 6.5l2 2L9 5l3.5 4.5M1.5 12.5h11" />
-                ) : (
-                  <path d="M4 2v10M10 2v10M4 7h6M2.5 3.5 4 2l1.5 1.5M8.5 3.5 10 2l1.5 1.5" />
-                )}
-              </svg>
-              {label}
-            </button>
-          ))}
-        </div>
+              options={(
+                [
+                  ["all", "With history"],
+                  ["test", "Test only"],
+                ] as const
+              ).map(([s2, text]) => ({
+                value: s2,
+                label: (
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 14 14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="size-3.5"
+                    >
+                      {s2 === "all" ? (
+                        <path d="M1.5 10 4.5 6.5l2 2L9 5l3.5 4.5M1.5 12.5h11" />
+                      ) : (
+                        <path d="M4 2v10M10 2v10M4 7h6M2.5 3.5 4 2l1.5 1.5M8.5 3.5 10 2l1.5 1.5" />
+                      )}
+                    </svg>
+                    {text}
+                  </span>
+                ),
+              }))}
+            />
+          </div>
+        )}
       </div>
 
       <div

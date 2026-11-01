@@ -10,6 +10,7 @@ import KeyStats from "@/components/KeyStats";
 import KindBadge from "@/components/KindBadge";
 import PriceChart from "@/components/PriceChart";
 import { providerOf } from "@/lib/providers";
+import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
 
 type Data = Awaited<ReturnType<typeof getProviderCompany>>;
 
@@ -61,7 +62,7 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
     if (leaving) return;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setLeaving(true);
-    window.setTimeout(onClose, calm ? 0 : 220);
+    window.setTimeout(onClose, calm ? 0 : POPUP_OUT_MS);
   };
 
   useEffect(() => {
@@ -86,15 +87,12 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
   const company = data && data !== "loading" ? data.company : null;
 
   return createPortal(
-    <div
-      className={`fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-[3px] ${leaving ? "holding-out" : "holding-in"}`}
-      onClick={close}
-    >
+    <div className={popupOverlay(leaving)} onClick={close}>
       <div
         role="dialog"
         aria-label={`${provider.name}, behind ${fundFamily}`}
         onClick={(e) => e.stopPropagation()}
-        className="holding-card my-8 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-2xl"
+        className={`${POPUP_CARD} my-8 max-w-2xl p-6`}
       >
         <div className="flex items-start gap-3">
           {company ? (
@@ -124,7 +122,9 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Behind {fundFamily}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Behind {fundFamily}
+            </p>
             <p className="text-lg font-semibold text-slate-900">{company?.name ?? provider.name}</p>
             {provider.symbol && <p className="text-sm text-slate-500">{provider.symbol}</p>}
           </div>
@@ -159,7 +159,9 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
           <div className="text-fade-in">
             <PriceChart history={data.history} currency={data.company.currency} exchange={data.exchange} />
             {data.stats && <KeyStats stats={data.stats} currency={data.company.currency} />}
-            {data.profile && <CompanyAbout name={data.company.name ?? data.company.symbol} profile={data.profile} />}
+            {data.profile && (
+              <CompanyAbout name={data.company.name ?? data.company.symbol} profile={data.profile} />
+            )}
             <div className="mt-6 flex justify-end">
               <Link
                 href={`/search?symbol=${encodeURIComponent(data.company.symbol)}`}
@@ -170,7 +172,9 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
             </div>
           </div>
         ) : provider.symbol ? (
-          <p className="mt-6 text-sm text-slate-500">{provider.name}&apos;s prices aren&apos;t in the database yet.</p>
+          <p className="mt-6 text-sm text-slate-500">
+            {provider.name}&apos;s prices aren&apos;t in the database yet.
+          </p>
         ) : null}
       </div>
     </div>,

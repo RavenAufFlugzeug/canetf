@@ -98,8 +98,8 @@ export function Swap({ swapKey, children }: { swapKey: string; children: React.R
 
 // A box whose contents change wholesale with `changeKey` (a Swap's, or the Sandbox test's
 // stage): it eases from its old height to its new one (over `duration` ms) rather than
-// jumping, so what is below it glides. While it eases, it clips what spills over its edges; otherwise it doesn't, so a
-// hover card can reach past its foot.
+// jumping, so what is below it glides. While it eases, it cuts off what spills past its foot
+// (only there); otherwise nothing, so a hover card can reach past it.
 export function EaseHeight({
   changeKey,
   duration = RESIZE_MS,
@@ -130,13 +130,15 @@ export function EaseHeight({
     const end = el.offsetHeight;
     if (Math.abs(end - start) < 1) return;
     el.style.height = `${start}px`;
-    el.style.overflow = "clip";
+    // Cut off along its foot only, as it eases (never at its top or sides, where outlines and
+    // shadows would be clipped until it is done).
+    el.style.clipPath = "inset(-24px -24px 0 -24px)";
     el.getBoundingClientRect(); // apply the starting height before easing to the new one
     el.style.transition = `height ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
     el.style.height = `${end}px`;
     const done = window.setTimeout(() => {
       el.style.height = "";
-      el.style.overflow = "";
+      el.style.clipPath = "";
       el.style.transition = "";
     }, duration);
     return () => window.clearTimeout(done);

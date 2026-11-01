@@ -1,5 +1,5 @@
 import Link from "next/link";
-import BadgeLegend from "@/components/BadgeLegend";
+import BadgeInfo from "@/components/BadgeInfo";
 import CompanyAbout from "@/components/CompanyAbout";
 import EtfBreakdown from "@/components/EtfBreakdown";
 import FundAbout from "@/components/FundAbout";
@@ -9,6 +9,8 @@ import MapMark from "@/components/MapMark";
 import PriceChart from "@/components/PriceChart";
 import RateAbout from "@/components/RateAbout";
 import { pairOf } from "@/lib/fx";
+import { naicsOf } from "@/lib/naics";
+import { kindOf } from "@/lib/sandbox";
 import SearchBox from "@/components/SearchBox";
 import {
   getCompany,
@@ -58,11 +60,20 @@ export default async function SearchPage({
                   className="size-10 rounded-xl"
                   markClassName="size-5"
                 />
-                <p className="text-lg font-semibold text-slate-900">
-                  {/* Name, then the ticker on its own line, so a long name never splits them. */}
-                  {company.name ?? company.symbol}
-                  <span className="block text-base font-normal text-slate-500">{company.symbol}</span>
-                </p>
+                <div className="min-w-0">
+                  {/* Name, then the ticker on its own line, so a long name never splits them;
+                      right after the name, what its icon means, in a pop-up (its sector and
+                      its NAICS group picked out). */}
+                  <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-lg font-semibold text-slate-900">
+                    {company.name ?? company.symbol}
+                    <BadgeInfo
+                      labelled
+                      mark={kindOf(company)}
+                      colour={naicsOf(company.sector, company.industry)?.code ?? null}
+                    />
+                  </p>
+                  <p className="text-base text-slate-500">{company.symbol}</p>
+                </div>
               </div>
               <div className="rise-in" style={{ animationDelay: "80ms" }}>
                 <PriceChart history={history} currency={company.currency} exchange={exchange} rate={rate} />
@@ -102,14 +113,6 @@ export default async function SearchPage({
                   </div>
                 </div>
               )}
-              {/* What the badge by its name means: its mark, and its colour. */}
-              <BadgeLegend
-                sector={company.sector}
-                industry={company.industry}
-                fundFamily={company.fundFamily}
-                category={company.category}
-                delay={500}
-              />
             </div>
           ) : (
             <p className="rise-in mt-4 text-slate-600">

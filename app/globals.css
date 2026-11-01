@@ -198,9 +198,27 @@ body:has(> main.bg-slate-50) {
   transition: grid-template-rows 520ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* While folded or folding, what is in it is cut off along its bottom edge only (where it
+   folds), never at its top or sides: outlines, rings and shadows there stay whole throughout,
+   rather than being cut and then appearing once it has opened… */
 .legend-fold > * {
   min-height: 0;
-  overflow: clip;
+  clip-path: inset(-24px -24px 0 -24px);
+}
+
+/* …and once open, not at all, so a menu or a hover card may reach past its foot too; but only
+   once it has finished opening: an animation holds the clip for the fold's 520ms (a delayed
+   transition of clip-path isn't honoured, so what is in it would show before it had opened). */
+.legend-fold:not([data-closed]) > * {
+  clip-path: none;
+  animation: fold-clip 520ms;
+}
+
+@keyframes fold-clip {
+  from,
+  to {
+    clip-path: inset(-24px -24px 0 -24px);
+  }
 }
 
 .legend-fold[data-closed] {
@@ -319,6 +337,23 @@ body:has(> main.bg-slate-50) {
     opacity: 0;
     translate: 0 -6px;
     background-color: rgb(15 23 42 / 0.06);
+  }
+}
+
+/* The icons' info button (components/BadgeInfo.tsx): its outline pulses out a few times as it
+   first appears, so it is noticed, then rests. */
+.info-ping {
+  animation: info-ping 1.6s cubic-bezier(0, 0, 0.2, 1) 0.8s 3 both;
+}
+
+@keyframes info-ping {
+  from {
+    opacity: 0.45;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.25 1.6; /* kept small: the list it sits in scrolls, and clips what spills past its top */
   }
 }
 
@@ -571,9 +606,8 @@ body:has(> main.bg-slate-50) {
 }
 
 /* The Sandbox test's recap of the days just passed (RecapCard in components/SandboxTest.tsx):
-   the panel dims and the card pops up, springing a little; its timer bar runs down, pausing
-   while it is pointed at, and when it runs out (or it is clicked) the card lifts away as the
-   panel clears. */
+   the panel dims and the card pops up, springing a little; once closed, the card lifts away as the
+   panel clears. Every pop-up comes and goes this way (lib/popup.ts). */
 .recap-in {
   animation: recap-dim-in 250ms ease-out both;
 }
@@ -613,21 +647,6 @@ body:has(> main.bg-slate-50) {
   to {
     opacity: 0;
     transform: translateY(-8px) scale(0.98);
-  }
-}
-
-.recap-timer {
-  transform-origin: left;
-  animation: recap-timer linear both; /* its length is set inline (RECAP_MS in SandboxTest) */
-}
-
-.recap:hover .recap-timer {
-  animation-play-state: paused;
-}
-
-@keyframes recap-timer {
-  to {
-    transform: scaleX(0);
   }
 }
 
@@ -808,46 +827,6 @@ body:has(> main.bg-slate-50) {
 
 .map-node[data-pickable]:active {
   scale: 0.97;
-}
-
-/* An ETF's holdings in the Sandbox (components/EtfHoldings.tsx): a holding's pop-up fades in
-   over the dimmed page as its card rises and grows into place; closing, it fades and sinks
-   away. */
-
-.holding-in {
-  animation: text-fade-in 220ms ease-out both;
-}
-
-.holding-in .holding-card {
-  animation: holding-card-in 380ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
-}
-
-.holding-out {
-  animation: holding-fade-out 220ms ease-in both;
-}
-
-.holding-out .holding-card {
-  animation: holding-card-out 220ms ease-in both;
-}
-
-@keyframes holding-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.96);
-  }
-}
-
-@keyframes holding-fade-out {
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes holding-card-out {
-  to {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
 }
 
 /* The calendar beside the test's day (components/SandboxTest.tsx): its date marks fade up
@@ -2040,6 +2019,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .sandbox-swap,
   .sandbox-swap-in,
   .tile-quick,
+  .info-ping,
   .fx-swap-from,
   .fx-swap-to,
   .fx-row-in,
@@ -2079,10 +2059,6 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .group:enabled:hover .test-mark-flag,
   .trade-row,
   .pick-swap-in,
-  .holding-in,
-  .holding-in .holding-card,
-  .holding-out,
-  .holding-out .holding-card,
   .grade-tile,
   .grade-holo,
   .grade-holo-fill,

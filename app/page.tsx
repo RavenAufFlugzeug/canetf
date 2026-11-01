@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ViewTransition } from "react";
-import AccountMark from "@/components/AccountMark";
 import MapMark from "@/components/MapMark";
+import SandboxMark from "@/components/SandboxMark";
 import SearchMark from "@/components/SearchMark";
 import WatchMark from "@/components/WatchMark";
 import { getCurrentUser } from "@/lib/session";
@@ -28,10 +28,10 @@ const FEATURES = [
     icon: <WatchMark id="watch-mark-welcome" className="size-6" />,
   },
   {
-    title: "Investor Profile",
-    text: "Answer a few questions about your goals and comfort with risk to build a plan that suits you.",
-    href: "/onboarding",
-    icon: <AccountMark className="size-6" />,
+    title: "Sandbox",
+    text: "Test your ideas on real market data: trade a mystery set of companies and ETFs day by day, then see how you did.",
+    href: "/sandbox",
+    icon: <SandboxMark className="size-6" />,
   },
 ];
 
@@ -55,7 +55,8 @@ export default async function Home() {
             style={{ animationDelay: "200ms" }}
           >
             Find the right Canadian ETFs without the guesswork. See what each fund really
-            holds, keep an eye on your favourites, and build a simple plan that fits your goals.
+            holds, keep an eye on your favourites, and test your ideas in the Sandbox before
+            you put real money in.
           </p>
         </div>
       </section>
@@ -107,7 +108,7 @@ export default async function Home() {
                 <>
                   <h2 className="text-3xl font-bold text-white">Ready to get started?</h2>
                   <p className="mx-auto mt-3 max-w-lg text-slate-300">
-                    Create a free account to save your watch list and investor profile.
+                    Create a free account to save your watch list.
                   </p>
                   <Link
                     href="/signup"

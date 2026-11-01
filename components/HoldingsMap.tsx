@@ -163,7 +163,7 @@ function detailRows(node: EtfTreeNode): [string, string][] {
   return rows.filter((r): r is [string, string] => Boolean(r[1]));
 }
 
-const LEGEND: { kind: EtfTreeNode["kind"]; text: string }[] = [{ kind: "other", text: "Not itemised" }];
+const LEGEND: { kind: EtfTreeNode["kind"]; text: string }[] = [{ kind: "other", text: "Other holdings" }];
 
 // The badges' colours for what isn't a company: a fund's mark straight on its black box (no
 // badge to set it apart), a credit rating's on slate.
@@ -337,6 +337,7 @@ export default function HoldingsMap({
   links = true,
   onPick,
   sectorKey = true,
+  legend = true,
 }: {
   tree: EtfTreeNode;
   detail?: string | null;
@@ -346,6 +347,8 @@ export default function HoldingsMap({
   onPick?: (id: string) => void;
   // Whether the key of sector colours and marks is shown (not where the page has its own).
   sectorKey?: boolean;
+  // Whether the legend of box kinds is shown above it (not in the Sandbox's ETF maps).
+  legend?: boolean;
 }) {
   // Funds folded shut (their holdings hidden), by id: `to` is how the map is set, `from`
   // how it was before the last change, `ms` how long that change takes to play, and
@@ -440,7 +443,6 @@ export default function HoldingsMap({
   const all = useMemo(() => flatten(tree), [tree]);
   const foldable = all.filter(({ node, depth }) => depth > 0 && node.children.length > 0);
   const levels = Math.max(...all.map((n) => n.depth));
-  const ends = all.filter(({ node }) => node.kind === "holding" || node.kind === "rating").length;
   // Whether any company's sector is unknown (the legend then lists that too).
   const unclassified = all.some(({ node }) => node.kind === "holding" && node.details && !sectorOf(node));
   // The kinds of mark on the map (KindMark): each fund's, each credit rating's, and each
@@ -490,8 +492,8 @@ export default function HoldingsMap({
   const arrow = "transition-transform duration-300 ease-out";
 
   // The route from the chosen ETF to the active product, and what share it is.
-  let caption: React.ReactNode =
-    "Point at a product to see its share of the fund it is in, and of the whole ETF.";
+  // Nothing until a product is pointed at (its line keeps its height, so nothing moves).
+  let caption: React.ReactNode = "";
   if (current) {
     const route: Placed[] = [];
     for (let p: Placed | null = current; p; p = p.parent) route.unshift(p);
@@ -511,61 +513,61 @@ export default function HoldingsMap({
 
   return (
     <div>
-      <p className="text-sm text-slate-500">
-        {nameOf(tree)} opens out over {levels} {levels === 1 ? "level" : "levels"} into {ends}{" "}
-        {ends === 1 ? "end point" : "end points"}. Each fund lists its largest holdings; the rest of it is
-        shown as &ldquo;Other holdings&rdquo;.
-      </p>
-
-      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
-        {/* A fund: its mark on its black box. A company: its mark on its sector's colour, which
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
+        {legend && (
+          <>
+            {/* A fund: its mark on its black box. A company: its mark on its sector's colour, which
             outlines its box too. After
             either, the flag of where it is from. */}
-        <span className="flex items-center gap-1.5">
-          <LegendBox
-            dark
-            badge={FUND_BADGE.background}
-            mark={<KindMark kind="ETF" className="size-2.5" color="#fff" />}
-          />
-          Fund
-        </span>
-        <span className="flex items-center gap-1.5">
-          <LegendBox
-            outline={NAICS_GROUPS[3].color}
-            badge={NAICS_GROUPS[3].color}
-            mark={<KindMark kind="Company" className="size-2.5" color="#fff" />}
-          />
-          {sectorKey
-            ? "Company: badge and outline in its sector’s colour (key below)"
-            : "Company: badge and outline in its sector’s colour"}
-        </span>
-        {all.some(({ node }) => countryFlag(countryOfNode(node), true)) && (
-          <span className="flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG */}
-            <img src="/flags/4x3/ca.svg" alt="" className="h-3 w-auto rounded-[2px] ring-1 ring-black/15" />
-            Flag: where it&rsquo;s based (a fund: where it&rsquo;s listed)
-          </span>
-        )}
-        {all.some(({ node }) => node.kind === "rating") && (
-          <span className="flex items-center gap-1.5">
-            <LegendBox
-              badge={RATING_BADGE.background}
-              mark={<KindMark kind="Rating" className="size-2.5" color="#fff" />}
-            />
-            Credit rating
-          </span>
-        )}
-        {LEGEND.map(({ kind, text }) => (
-          <span key={kind} className="flex items-center gap-1.5">
-            <span className={`h-3 w-5 rounded-sm ${BOX[kind]}`} />
-            {text}
-          </span>
-        ))}
-        {all.some(({ node }) => node.missing) && (
-          <span className="flex items-center gap-1.5">
-            <span className={`h-3 w-5 rounded-sm ${MISSING_BOX}`} />
-            No data (point at it to see why)
-          </span>
+            <span className="flex items-center gap-1.5">
+              <LegendBox
+                dark
+                badge={FUND_BADGE.background}
+                mark={<KindMark kind="ETF" className="size-2.5" color="#fff" />}
+              />
+              Fund
+            </span>
+            <span className="flex items-center gap-1.5">
+              <LegendBox
+                outline={NAICS_GROUPS[3].color}
+                badge={NAICS_GROUPS[3].color}
+                mark={<KindMark kind="Company" className="size-2.5" color="#fff" />}
+              />
+              Company (colour: NAICS)
+            </span>
+            {all.some(({ node }) => countryFlag(countryOfNode(node), true)) && (
+              <span className="flex items-center gap-1.5">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG */}
+                <img
+                  src="/flags/4x3/ca.svg"
+                  alt=""
+                  className="h-3 w-auto rounded-[2px] ring-1 ring-black/15"
+                />
+                Country
+              </span>
+            )}
+            {all.some(({ node }) => node.kind === "rating") && (
+              <span className="flex items-center gap-1.5">
+                <LegendBox
+                  badge={RATING_BADGE.background}
+                  mark={<KindMark kind="Rating" className="size-2.5" color="#fff" />}
+                />
+                Credit rating
+              </span>
+            )}
+            {LEGEND.map(({ kind, text }) => (
+              <span key={kind} className="flex items-center gap-1.5">
+                <span className={`h-3 w-5 rounded-sm ${BOX[kind]}`} />
+                {text}
+              </span>
+            ))}
+            {all.some(({ node }) => node.missing) && (
+              <span className="flex items-center gap-1.5">
+                <span className={`h-3 w-5 rounded-sm ${MISSING_BOX}`} />
+                No data
+              </span>
+            )}
+          </>
         )}
         {foldable.length > 0 && (
           // Each is greyed out when the map is already that way. Their arrows close in
@@ -590,7 +592,7 @@ export default function HoldingsMap({
                 <path d="M3 1.5 6 4.5l3-3" className={`${arrow} motion-safe:group-hover:translate-y-0.5`} />
                 <path d="M3 10.5 6 7.5l3 3" className={`${arrow} motion-safe:group-hover:-translate-y-0.5`} />
               </svg>
-              Fold all
+              Close all
             </button>
             <button
               type="button"
@@ -625,9 +627,7 @@ export default function HoldingsMap({
       {sectorKey && all.some(({ node }) => node.kind === "holding") && (
         <div className="mt-3 w-fit max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="flex items-center gap-4">
-            <p className="text-xs font-semibold text-slate-700">
-              Companies/holdings by NAICS sector and mark
-            </p>
+            <p className="text-xs font-semibold text-slate-700">Key: NAICS and sectors</p>
             <FoldButton
               open={legendOpen}
               controls={legendId}
@@ -674,7 +674,7 @@ export default function HoldingsMap({
                       } as React.CSSProperties
                     }
                   >
-                    Marks: the sector (or, for a fund or a credit rating, what it is)
+                    Sectors (for a fund or a credit rating, what it is)
                   </p>
                   <ul className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1.5 pb-1 text-xs text-slate-600 sm:grid-cols-3">
                     {marks.map((k, i) => (
@@ -713,7 +713,9 @@ export default function HoldingsMap({
         </div>
       )}
 
-      <p className="mt-4 min-h-10 text-sm text-slate-500" aria-live="polite">
+      {/* Its caption line keeps its height, empty or not; without a legend above (the Sandbox's
+          maps, whose captions are short), one line's, close under what is above. */}
+      <p className={`${legend ? "mt-4 min-h-10" : "mt-2 min-h-5"} text-sm text-slate-500`} aria-live="polite">
         {/* Keyed, so each new product's line fades up into place. */}
         <span key={active ?? "hint"} className="map-caption inline-block">
           {caption}
@@ -722,7 +724,7 @@ export default function HoldingsMap({
 
       {/* Wider than a phone: the map scrolls sideways inside its card. The padding leaves
           room for the shadow of a box at the edge. */}
-      <div className="-mx-3 mt-1 overflow-x-auto overflow-y-hidden px-3 py-4">
+      <div className={`-mx-3 mt-1 overflow-x-auto overflow-y-hidden px-3 ${legend ? "py-4" : "pt-2 pb-4"}`}>
         <div
           ref={box}
           className="relative"
@@ -796,7 +798,8 @@ export default function HoldingsMap({
             // Companies we have details on, whose mark sits on their sector's colour.
             const filled = node.kind === "holding" && !node.missing && node.details !== null;
             // What can be picked (onPick): a company with details, or a fund held (not the top one).
-            const pickable = Boolean(onPick) && (filled || (node.kind === "fund" && p.depth > 0 && !node.missing));
+            const pickable =
+              Boolean(onPick) && (filled || (node.kind === "fund" && p.depth > 0 && !node.missing));
             const on = onPath(node.id);
             const open = !fold.to.has(node.id);
             return (

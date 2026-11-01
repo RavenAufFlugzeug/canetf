@@ -77,6 +77,10 @@ function Step({
 // (SandboxTest), while which the set-up (steps 1 to 4 and the picks) folds away. A new set, or
 // a new timeframe or number, fades the set and the test below it
 // out and the new ones in; a new amount, only the test.
+// How many trading days every listing in a set has from its start: a full year, the longest
+// timeframe, so a set suits every timeframe.
+const SET_DAYS = Math.max(...TIMEFRAMES.map((t) => t.days));
+
 export default async function SandboxPage({
   searchParams,
 }: {
@@ -91,8 +95,10 @@ export default async function SandboxPage({
   const seeded = typeof params.seed === "string" && Number.isInteger(seed) && seed >= 0 && seed < SEEDS;
 
   // The set, when one has been asked for, with what each listing is like (to show it without
-  // its name).
-  const set = seeded ? await pickSandboxSet(count, timeframe.days, seed) : null;
+  // its name). Every listing in it has a full year of prices from its start (the longest
+  // timeframe), so the same set serves any timeframe: changing the timeframe (or the amount)
+  // keeps it; only a new number of listings (or Reset) picks another.
+  const set = seeded ? await pickSandboxSet(count, SET_DAYS, seed) : null;
   const names = set ? pickNames(set.picks) : [];
   const profiles = set ? await Promise.all(set.picks.map((p) => getCompanyProfile(p.symbol))) : [];
   // For each fund, a short line on what it holds, without naming it (fundNote).
@@ -148,8 +154,9 @@ export default async function SandboxPage({
     };
   });
 
-  const setKey = seeded ? `set-${count}-${timeframe.key}-${seed}` : `empty-${count}-${timeframe.key}`;
-  const testKey = `${setKey}-${amount}`;
+  const setKey = seeded ? `set-${count}-${seed}` : `empty-${count}`;
+  // The test changes with the set, the timeframe and the amount.
+  const testKey = `${setKey}-${timeframe.key}-${amount}`;
   const choices = { range: timeframe.key, amount, count };
 
   return (
@@ -183,7 +190,7 @@ export default async function SandboxPage({
                 <Step n={2} title="Timeframe" delay={40}>
                   <ChoiceChips
                     label="Timeframe"
-                    swaps={setKey}
+                    swaps={testKey}
                     chosen={timeframe.key}
                     choices={TIMEFRAMES.map((t) => ({
                       key: t.key,
@@ -191,44 +198,41 @@ export default async function SandboxPage({
                       href: sandboxHref({ ...choices, range: t.key, seed: seeded ? seed : undefined }),
                     }))}
                   />
-                  {/* Each description cross-fades to its new wording with the choice (FadeText). */}
-                  <FadeText
-                    className="mt-2 text-sm text-slate-500"
-                    text={`Day 1 – Day ${timeframe.days}, from a random point in time.`}
-                  />
                 </Step>
 
-                <Step n={3} title="How many" delay={80}>
+                <Step n={3} title="Companies & ETFs" delay={80}>
                   <ChoiceChips
-                    label="How many companies and ETFs"
+                    label="Number of companies and ETFs"
                     swaps={setKey}
                     chosen={String(count)}
                     choices={COUNTS.map((c) => ({
                       key: String(c),
-                      label: `${c} companies`,
+                      label: String(c),
                       href: sandboxHref({ ...choices, count: c, seed: seeded ? seed : undefined }),
                     }))}
-                  />
-                  <FadeText
-                    className="mt-2 text-sm text-slate-500"
-                    text={`${count} companies and ETFs, picked at random, all trading through the same ${timeframe.label}.`}
                   />
                 </Step>
 
                 <Step n={4} title="Investment universe" delay={120} id="sandbox-picks">
-                  <div className="rise-in mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
-                    <FadeText
-                      className="min-w-0 flex-1 text-sm text-slate-600"
-                      text={
-                        set
-                          ? `${count} picked from the same stretch of time. Their names stay hidden.`
-                          : seeded
-                            ? `There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`
-                            : `Pick ${count} random companies and ETFs to test with. Their names stay hidden.`
-                      }
-                    />
-                    <PickButton current={set ? setKey : undefined} {...choices} />
-                  </div>
+                  {/* Before a set is picked: the button to get one (with, when none could be, why, in a
+                      box). Once picked, the set itself shows below (no button: Reset, by the
+                      test's Start, clears it). */}
+                  {!set && (
+                    <div
+                      className={`rise-in mt-3 flex flex-wrap items-center gap-4 ${
+                        seeded ? "justify-between rounded-xl bg-slate-50 p-4" : ""
+                      }`}
+                    >
+                      {/* Only when no set could be picked: why, cross-fading in (FadeText). */}
+                      {seeded && (
+                        <FadeText
+                          className="min-w-0 flex-1 text-sm text-slate-600"
+                          text={`There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`}
+                        />
+                      )}
+                      <PickButton current={set ? setKey : undefined} {...choices} />
+                    </div>
+                  )}
                 </Step>
               </SetupArea>
 
@@ -239,7 +243,7 @@ export default async function SandboxPage({
                   <AliasProvider key={setKey} setKey={setKey}>
                     <SetupArea>
                       {/* What the set is made of, then the picks themselves, folded away. */}
-                      <PickOverview cards={cards} />
+                      <PickOverview cards={cards} starts={set.picks.map((p) => p.from)} />
                     </SetupArea>
 
                     <Step n={5} title="Testing ground" delay={200}>

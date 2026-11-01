@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import KindMark from "@/components/KindMark";
+import SlideTabs from "@/components/SlideTabs";
 import { EaseHeight } from "@/components/SandboxSwap";
 import Tween from "@/components/Tween";
 import { LISTING_KINDS as KINDS } from "@/lib/kinds";
@@ -41,16 +42,8 @@ const TYPES: { value: Type; label: string }[] = [
   { value: "etfs", label: "ETFs" },
 ];
 
+// How the board is ordered: as the universe lists it, or by a column (its heading, clicked).
 type Sort = "default" | "price-desc" | "price-asc" | "move-desc" | "move-asc" | "value-desc" | "name";
-const SORTS: { value: Sort; label: string }[] = [
-  { value: "default", label: "Universe order" },
-  { value: "name", label: "Name, A to Z" },
-  { value: "price-desc", label: "Price, high to low" },
-  { value: "price-asc", label: "Price, low to high" },
-  { value: "move-desc", label: "Day change, best first" },
-  { value: "move-asc", label: "Day change, worst first" },
-  { value: "value-desc", label: "Position value, largest first" },
-];
 
 type View = "grid" | "list";
 
@@ -88,10 +81,14 @@ export default function PickBoard({
   picks,
   chosen,
   onChoose,
+  info,
 }: {
   picks: BoardPick[];
   chosen: string;
   onChoose: (symbol: string) => void;
+  // What explains the listings' badges (a BadgeInfo button), set by the Listing heading (or,
+  // in the grid, by the count of listings).
+  info?: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status>("all");
@@ -101,6 +98,11 @@ export default function PickBoard({
   const [naics, setNaics] = useState("all");
   const [sort, setSort] = useState<Sort>("default");
   const [view, setView] = useState<View>("list");
+  // Whether the filters are open (folded to begin with), and done opening (their menus may then
+  // reach past the fold's edges).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersSettled, setFiltersSettled] = useState(false);
+  const filtersId = useId();
   // The filters the board shows, which follow the ones chosen once the board has faded out (so
   // a change fades the old listings out and the new ones in, rather than jumping).
   const chosenKey = JSON.stringify({ query, status, type, sector, naics, sort });
@@ -186,10 +188,11 @@ export default function PickBoard({
     setNaics("all");
   };
   // A table heading that sorts by its column (and back to the universe's order).
-  const heading = (label: string, down: Sort, up: Sort | null, align = "text-right") => {
+  const heading = (label: string, down: Sort, up: Sort | null, align = "text-right", extra?: React.ReactNode) => {
     const on = sort === down || sort === up;
     return (
-      <th className={`px-2 py-1.5 font-medium ${align}`}>
+      <th className={`whitespace-nowrap px-2 py-1.5 font-medium ${align}`}>
+        <span className="inline-flex items-center gap-2">
         <button
           type="button"
           onClick={() => setSort(sort === down && up ? up : sort === up ? "default" : down)}
@@ -200,6 +203,8 @@ export default function PickBoard({
             {sort === up ? "▲" : "▼"}
           </span>
         </button>
+        {extra}
+        </span>
       </th>
     );
   };
@@ -225,21 +230,70 @@ export default function PickBoard({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, alias or sector"
+            placeholder="Search"
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-sm text-slate-900 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-slate-900 focus:bg-white focus:outline-none"
           />
         </label>
-        <SortMenu value={sort} onChange={setSort} />
-        <div role="group" aria-label="View" className="flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
-          {(["grid", "list"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              aria-label={v === "grid" ? "Show as cards" : "Show as a list"}
-              onClick={() => setView(v)}
-              className={`${segment(view === v)} px-2`}
+        {/* The filters (Show, Type, Sector, NAICS), folded away until asked for: the button
+            says how many are in use. */}
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls={filtersId}
+          onClick={() => {
+            setFiltersSettled(false);
+            setFiltersOpen(!filtersOpen);
+          }}
+          className={`group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
+            filtersOpen
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-200 bg-white text-slate-900 hover:border-slate-400"
+          }`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            className="size-3.5"
+          >
+            <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+          </svg>
+          Filters
+          {tokens.length > 0 && (
+            <span
+              key={tokens.length}
+              className={`text-fade-in rounded-full px-1.5 text-[10px] tabular-nums ${
+                filtersOpen ? "bg-white/20 text-white" : "bg-slate-900 text-white"
+              }`}
             >
+              {tokens.length}
+            </span>
+          )}
+          <svg
+            aria-hidden
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`size-3 transition-transform duration-300 ease-out ${filtersOpen ? "rotate-180" : ""}`}
+          >
+            <path d="M3 4.5 6 7.5l3-3" />
+          </svg>
+        </button>
+        {/* Cards or a list, its pill sliding as the charts' range tabs'. */}
+        <SlideTabs
+          label="View"
+          value={view}
+          onChange={setView}
+          options={(["grid", "list"] as const).map((v) => ({
+            value: v,
+            ariaLabel: v === "grid" ? "Show as cards" : "Show as a list",
+            label: (
               <svg
                 aria-hidden
                 viewBox="0 0 16 16"
@@ -257,11 +311,22 @@ export default function PickBoard({
                   <path d="M2.5 4h11M2.5 8h11M2.5 12h11" strokeLinecap="round" />
                 )}
               </svg>
-            </button>
-          ))}
-        </div>
+            ),
+          }))}
+        />
       </div>
 
+      {/* The filters, folding open and shut; once open, their menus may reach past its edges. */}
+      <div
+        id={filtersId}
+        className="legend-fold"
+        data-closed={filtersOpen ? undefined : ""}
+        inert={!filtersOpen}
+        onTransitionEnd={(e) => {
+          if (e.target === e.currentTarget && filtersOpen) setFiltersSettled(true);
+        }}
+      >
+        <div style={filtersSettled ? { overflow: "visible" } : undefined}>
       {/* What to show: what is held or how it moved, and what type. */}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
@@ -400,12 +465,17 @@ export default function PickBoard({
         );
       })()}
 
+        </div>
+      </div>
+
       {/* What is shown, and the filters in use, each removable. */}
       <div className="mt-2.5 flex min-h-6 flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
         <span key={`${shown.length}-${picks.length}`} className="text-fade-in mr-1">
           {tokens.length ? `Showing ${shown.length} of ${picks.length}` : `${picks.length} listings`} · choose
           one to trade it
         </span>
+        {/* In the grid (which has no headings), what the badges mean sits here. */}
+        {view === "grid" && info}
         {tokens.map((t) => (
           <button
             key={t.key}
@@ -445,7 +515,7 @@ export default function PickBoard({
         >
           <div
             key={view}
-            className={`pick-board text-fade-in -mx-1 mt-1 max-h-72 overflow-y-auto px-1 pb-1 ${view === "grid" ? "pt-2" : "pt-0"}`}
+            className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-y-auto px-2 pb-2 ${view === "grid" ? "pt-2" : "pt-0"}`}
           >
             {shown.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
@@ -543,7 +613,7 @@ export default function PickBoard({
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-semibold text-slate-500 shadow-[0_1px_0_#e2e8f0]">
                   <tr>
-                    {heading("Listing", "name", null, "text-left")}
+                    {heading("Listing", "name", null, "text-left", info)}
                     {heading("Price", "price-desc", "price-asc")}
                     {heading("Day change", "move-desc", "move-asc")}
                     <th className="px-2 py-1.5 text-right font-medium">Shares</th>
@@ -640,135 +710,6 @@ export default function PickBoard({
           </div>
         </div>
       </EaseHeight>
-    </div>
-  );
-}
-
-// The sort menu: a button saying the order in use, opening a list of the orders below it,
-// white with the one in use in black. It opens and closes with a quick fade and drop (its
-// chevron turning over), its options sliding in one after another; a click outside, Escape
-// or a choice closes it. Up and down move through the options, Enter or Space chooses.
-function SortMenu({ value, onChange }: { value: Sort; onChange: (s: Sort) => void }) {
-  const [open, setOpen] = useState(false);
-  const [focus, setFocus] = useState(0);
-  const root = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLUListElement>(null);
-  const current = SORTS.find((s) => s.value === value) ?? SORTS[0];
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", away);
-    list.current?.focus({ preventScroll: true });
-    return () => document.removeEventListener("pointerdown", away);
-  }, [open]);
-
-  const choose = (s: Sort) => {
-    onChange(s);
-    setOpen(false);
-  };
-
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => {
-          setFocus(Math.max(0, SORTS.indexOf(current)));
-          setOpen(!open);
-        }}
-        className={`group inline-flex items-center gap-2 rounded-lg border bg-white py-1.5 pl-3 pr-2.5 text-xs font-semibold text-slate-900 transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-          open ? "border-slate-900 shadow-sm" : "border-slate-200 hover:border-slate-400"
-        }`}
-      >
-        <svg
-          aria-hidden
-          viewBox="0 0 14 14"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="size-3.5 text-slate-500 transition group-hover:text-slate-900"
-        >
-          <path d="M4 2.5v9M1.8 9.3 4 11.5l2.2-2.2M10 11.5v-9M7.8 4.7 10 2.5l2.2 2.2" />
-        </svg>
-        <span key={current.value} className="text-fade-in">
-          {current.label}
-        </span>
-        <svg
-          aria-hidden
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`size-3 text-slate-500 transition duration-300 ease-out ${open ? "rotate-180 text-slate-900" : ""}`}
-        >
-          <path d="M3 4.5 6 7.5l3-3" />
-        </svg>
-      </button>
-      <ul
-        ref={list}
-        role="listbox"
-        aria-label="Sort by"
-        tabIndex={-1}
-        aria-activedescendant={open ? `sort-${SORTS[focus].value}` : undefined}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
-          else if (e.key === "ArrowDown") setFocus((f) => Math.min(SORTS.length - 1, f + 1));
-          else if (e.key === "ArrowUp") setFocus((f) => Math.max(0, f - 1));
-          else if (e.key === "Enter" || e.key === " ") choose(SORTS[focus].value);
-          else return;
-          e.preventDefault();
-        }}
-        className={`sort-menu absolute right-0 top-full z-30 mt-1.5 w-56 origin-top-right rounded-xl border border-slate-200 bg-white p-1 shadow-lg shadow-slate-900/10 outline-none ${
-          open ? "" : "pointer-events-none"
-        }`}
-        data-open={open ? "" : undefined}
-      >
-        {SORTS.map((s, i) => {
-          const on = s.value === value;
-          return (
-            <li
-              key={s.value}
-              id={`sort-${s.value}`}
-              role="option"
-              aria-selected={on}
-              onPointerEnter={() => setFocus(i)}
-              onClick={() => choose(s.value)}
-              className={`sort-option flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors duration-150 ${
-                on
-                  ? "bg-slate-900 text-white"
-                  : focus === i
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-700"
-              }`}
-              style={{ "--i": i } as React.CSSProperties}
-            >
-              {s.label}
-              {on && (
-                <svg
-                  aria-hidden
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="size-3"
-                >
-                  <path d="m2.5 6.5 2.3 2.3 4.7-5" />
-                </svg>
-              )}
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

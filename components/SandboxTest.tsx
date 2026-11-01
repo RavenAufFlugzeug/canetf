@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { getSandboxSetHistory, getSandboxSetPrices, revealSandboxSet } from "@/app/actions/sandbox";
 import DiamondLoader from "@/components/DiamondLoader";
-import BadgeLegend from "@/components/BadgeLegend";
+import BadgeInfo from "@/components/BadgeInfo";
 import { NAICS_GROUPS } from "@/lib/naics";
 import EtfHoldings from "@/components/EtfHoldings";
 import { Flag, Place } from "@/components/FlagPair";
@@ -40,6 +40,7 @@ import TradeLog from "@/components/TradeLog";
 import Tween from "@/components/Tween";
 import { currencyName, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
+import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
 import { newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
 
@@ -119,14 +120,19 @@ type Recap = {
   // Each pick held: its shares, how its worth in CAD moved over the days (its price and its
   // currency's rate together), and what that made or lost.
   // `pricePct`: its price's change alone; `pct`: its worth in CAD (the same for a CAD pick).
-  positions: { name: string; shares: number; foreign: boolean; pricePct: number; pct: number; gain: number }[];
+  positions: {
+    name: string;
+    shares: number;
+    foreign: boolean;
+    pricePct: number;
+    pct: number;
+    gain: number;
+  }[];
   days: Record<string, { closes: number[]; rates: number[]; yearStarts: number[] }>;
 };
 
-// How long a recap stays up before the test moves on by itself (unless pointed at), and how
-// long it takes to fade away (.recap-timer, .recap-out in globals.css).
-const RECAP_MS = 5000;
-const RECAP_OUT_MS = 260;
+// How long a recap takes to fade away (.recap-out in globals.css).
+const RECAP_OUT_MS = POPUP_OUT_MS;
 // How long passed, for a recap's heading: "A day passes", "A week passes", "3 days pass".
 function passedText(n: number) {
   const { text } = tradingSpan(n);
@@ -339,7 +345,9 @@ export default function SandboxTest({
   const [yearStarts, setYearStarts] = useState<Record<string, number[]>>({});
   // For each pick in another currency than CAD, its CAD rate on the days before Day 1 (from the
   // first the rate has) and where years begin among them, for the chart of its rate.
-  const [rateHistory, setRateHistory] = useState<Record<string, { rates: number[]; yearStarts: number[] }>>({});
+  const [rateHistory, setRateHistory] = useState<Record<string, { rates: number[]; yearStarts: number[] }>>(
+    {},
+  );
   // The range and scope the charts show, shared by a pick's price chart and its rate's, so the
   // two always cover the same days.
   const [chartRange, setChartRange] = useState<ChartRange>("1M");
@@ -372,9 +380,7 @@ export default function SandboxTest({
   // A trade asked for and waiting to be confirmed, and whether its card is going away.
   const [ask, setAsk] = useState<Ask | null>(null);
   const [askLeaving, setAskLeaving] = useState(false);
-  // The badge that floats up from the position after a trade ("+10", "−5"), keyed so each
-  // trade starts a new one; and how many errors there have been, so each one comes in anew.
-  const [flash, setFlash] = useState<{ key: number; text: string; side: Side; symbol: string } | null>(null);
+  // How many errors there have been, so each one comes in anew.
   const [errors, setErrors] = useState(0);
   // Each pick's two order tickets' numbers of shares, as typed (or stepped), kept until the
   // test moves on; the ticket in use (clicking the other switches to it); and the tickets'
@@ -437,7 +443,10 @@ export default function SandboxTest({
   };
   const invested = picks.reduce((sum, p) => sum + heldOf(p.symbol).shares * cadOf(p.symbol), 0);
   // The currencies there are: CAD, and each one a pick trades in.
-  const currencies = ["CAD", ...new Set(picks.flatMap((p) => (p.currency && p.currency !== "CAD" ? [p.currency] : [])))];
+  const currencies = [
+    "CAD",
+    ...new Set(picks.flatMap((p) => (p.currency && p.currency !== "CAD" ? [p.currency] : []))),
+  ];
   const currencyOf = (symbol: string) => picks.find((p) => p.symbol === symbol)?.currency ?? "CAD";
   // A currency's rate to CAD on a test day (by index, from 0), from a pick that trades in it,
   // in `from` (the rates loaded so far, or days just loaded).
@@ -457,9 +466,8 @@ export default function SandboxTest({
   const pick = picks.find((p) => p.symbol === selected) ?? picks[0];
   const price = priceOf(pick.symbol);
   const rate = rateOf(pick.symbol);
-  const cadPrice = cadOf(pick.symbol);
   const foreign = Boolean(pick.currency && pick.currency !== "CAD");
-  const { shares, cost } = heldOf(pick.symbol);
+  const { shares } = heldOf(pick.symbol);
   // How `n` shares of `symbol` would be paid for today: from the cash already in its currency,
   // then, for one not in CAD, the rest exchanged from CAD (rounded up to the cent); null when the
   // cash doesn't stretch to it.
@@ -522,7 +530,12 @@ export default function SandboxTest({
         Object.fromEntries(
           picks.flatMap((p) =>
             past[p.symbol].rates
-              ? [[p.symbol, { rates: past[p.symbol].rates!, yearStarts: past[p.symbol].rateYearStarts ?? [] }]]
+              ? [
+                  [
+                    p.symbol,
+                    { rates: past[p.symbol].rates!, yearStarts: past[p.symbol].rateYearStarts ?? [] },
+                  ],
+                ]
               : [],
           ),
         ),
@@ -579,18 +592,16 @@ export default function SandboxTest({
               v *
                 (k === 0
                   ? fxNow(c)
-                  : fxOn(
-                      c,
-                      k - 1,
-                      Object.fromEntries(picks.map((p) => [p.symbol, loaded[p.symbol].rates])),
-                    )),
+                  : fxOn(c, k - 1, Object.fromEntries(picks.map((p) => [p.symbol, loaded[p.symbol].rates])))),
             0,
           ) +
             picks.reduce(
               (sum, p) =>
                 sum +
                 heldOf(p.symbol).shares *
-                  (k === 0 ? cadOf(p.symbol) : loaded[p.symbol].closes[k - 1] * loaded[p.symbol].rates[k - 1]),
+                  (k === 0
+                    ? cadOf(p.symbol)
+                    : loaded[p.symbol].closes[k - 1] * loaded[p.symbol].rates[k - 1]),
               0,
             ),
         ),
@@ -614,6 +625,16 @@ export default function SandboxTest({
         days: loaded,
       });
     });
+  }
+
+  // Closes the recap without its days: the test stays on the day it was opened from.
+  function stay() {
+    if (!recap || recapLeaving) return;
+    setRecapLeaving(true);
+    window.setTimeout(() => {
+      setRecap(null);
+      setRecapLeaving(false);
+    }, RECAP_OUT_MS);
   }
 
   // Closes the recap and brings its days in, with today's value to measure the change from.
@@ -657,6 +678,14 @@ export default function SandboxTest({
   function exit() {
     setTesting(false);
     change(setKey, () => sandboxHref(choices));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Before the test: back to the Sandbox as it first opens, everything cleared (the amount,
+  // timeframe and number back to their defaults, the set gone), the page gliding up to it.
+  function reset() {
+    setTesting(false);
+    change(setKey, () => sandboxHref({}));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -716,7 +745,6 @@ export default function SandboxTest({
       setHoldings({});
       setSelected(picks[0].symbol);
       setAsk(null);
-      setFlash(null);
       setOrders({});
       setWorking("Bought");
       setBefore({ day: 0, value: amount });
@@ -767,7 +795,7 @@ export default function SandboxTest({
   }
 
   // Exchanges `paid` of one currency for another, at today's rates (by way of CAD), the amount
-  // got rounded down to the cent; and says so.
+  // got rounded down to the cent (the panel's list and its button say so; no notice).
   function exchange(from: string, to: string, paid: number) {
     const amountPaid = cents(Math.min(paid, wallet[from] ?? 0));
     if (from === to || amountPaid <= 0) return;
@@ -778,7 +806,6 @@ export default function SandboxTest({
       [to]: cents((w[to] ?? 0) + got),
     }));
     setExchanges((e) => [...e, { day, from, to, paid: amountPaid, got, auto: false }]);
-    setMoneyNote({ key: Date.now(), text: `Exchanged ${nativeText(amountPaid, from)} for ${nativeText(got, to)}.` });
   }
 
   // Closes the confirming card; confirmed, the trade is made as it goes, for good.
@@ -814,7 +841,10 @@ export default function SandboxTest({
             return next;
           });
           if (pay.short > 0) {
-            setExchanges((e) => [...e, { day, from: "CAD", to: cur, paid: pay.cadPaid, got: pay.short, auto: true }]);
+            setExchanges((e) => [
+              ...e,
+              { day, from: "CAD", to: cur, paid: pay.cadPaid, got: pay.short, auto: true },
+            ]);
             setMoneyNote({
               key: Date.now(),
               text: `Exchanged ${money.format(pay.cadPaid)} CAD for ${nativeText(pay.short, cur)} at ${rateText(fx, cur)}${
@@ -822,7 +852,10 @@ export default function SandboxTest({
               } to pay for ${n} ${sharesWord(n)}.`,
             });
           } else if (cur !== "CAD") {
-            setMoneyNote({ key: Date.now(), text: `Paid ${nativeText(pay.cost, cur)} from your ${cur} cash.` });
+            setMoneyNote({
+              key: Date.now(),
+              text: `Paid ${nativeText(pay.cost, cur)} from your ${cur} cash.`,
+            });
           }
         } else {
           // Kept in the share's currency, not exchanged back: that is for the player to do.
@@ -843,7 +876,6 @@ export default function SandboxTest({
               : { shares: held.shares - n, cost: held.shares === n ? 0 : held.cost - n * average },
         }));
         setTrades((t) => [...t, { symbol, name, day, side, shares: n, price: at, rate: fx }]);
-        setFlash({ key: Date.now(), text: `${side === "Bought" ? "+" : "−"}${n}`, side, symbol });
       }
       setAsk(null);
       setAskLeaving(false);
@@ -887,12 +919,11 @@ export default function SandboxTest({
               </span>
               {pending ? "Starting…" : "Start the test"}
             </button>
-            <p
-              className={`min-w-0 flex-1 text-sm text-slate-600 transition-opacity duration-300 ${pending ? "opacity-50" : ""}`}
-            >
-              Day 1&apos;s prices will be shown. Buy as many shares of your {picks.length} picks as you like
-              with your {money.format(amount)}, then go day by day to Day {days}.
-            </p>
+            {/* Beside it, clearing everything chosen so far. */}
+            <button type="button" onClick={reset} disabled={pending} className={`${LIGHT} ${ACTION}`}>
+              <RetryMark className="size-4" />
+              Reset
+            </button>
             {error && <p className="w-full text-sm text-red-600">{error}</p>}
           </div>
         </div>
@@ -913,7 +944,10 @@ export default function SandboxTest({
         const lastCad = cadOf(p.symbol);
         const traded = trades.filter((t) => t.symbol === p.symbol);
         const made =
-          traded.reduce((sum, t) => sum + (t.side === "Sold" ? 1 : -1) * cents(t.shares * t.price * t.rate), 0) +
+          traded.reduce(
+            (sum, t) => sum + (t.side === "Sold" ? 1 : -1) * cents(t.shares * t.price * t.rate),
+            0,
+          ) +
           heldOf(p.symbol).shares * lastCad;
         return {
           ...p,
@@ -1204,7 +1238,9 @@ export default function SandboxTest({
                             <span className={`block ${look}`}>{nativeText(at, r.currency)}</span>
                             {r.currency && r.currency !== "CAD" && (
                               <>
-                                <span className="block text-[11px] text-slate-400">{rateText(fx, r.currency)}</span>
+                                <span className="block text-[11px] text-slate-400">
+                                  {rateText(fx, r.currency)}
+                                </span>
                                 <span className="block text-[11px] font-semibold text-slate-700">
                                   {`${money.format(inCad)} CAD`}
                                 </span>
@@ -1282,9 +1318,6 @@ export default function SandboxTest({
               <ExitMark className="size-4" />
               Exit
             </button>
-            <p className="text-xs text-slate-500">
-              A new set: {picks.length} more picks, from another stretch of time.
-            </p>
           </div>
         </div>
       );
@@ -1348,15 +1381,20 @@ export default function SandboxTest({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-900">
               Investment universe
             </p>
-            <p className="text-[11px] text-slate-500">
-              The listings you can trade. Choose one to trade it; give it a name of your own with{" "}
-              <span className="font-semibold text-slate-500">✎ Add alias</span>.
-            </p>
           </div>
           <div className="mt-2">
             <PickBoard
               chosen={swapTo ?? pick.symbol}
               onChoose={choosePick}
+              // By the Listing heading: what the badges mean, in a pop-up, the chosen pick's
+              // mark and colour picked out.
+              info={
+                <BadgeInfo
+                  labelled
+                  mark={pick.kind}
+                  colour={NAICS_GROUPS.find((g) => g.name === pick.sector)?.code ?? null}
+                />
+              }
               picks={picks.map((p) => {
                 const then = lastOf(p.symbol);
                 const now = priceOf(p.symbol);
@@ -1379,14 +1417,6 @@ export default function SandboxTest({
               })}
             />
           </div>
-          {/* What the badges mean, as on the Search page: open to begin with, the chosen
-              pick's mark and colour picked out. */}
-          <BadgeLegend
-            sector={null}
-            industry={null}
-            mark={pick.kind}
-            colour={NAICS_GROUPS.find((g) => g.name === pick.sector)?.code ?? null}
-          />
         </div>
 
         {/* The pick shown: its name, its general figures and its chart. Choosing another, its
@@ -1419,18 +1449,6 @@ export default function SandboxTest({
                   </p>
                 )}
               </div>
-              {/* In another currency: its price there, today's exchange rate, and so its price in
-                  CAD; then today's change on its price alone, and with the rate's move too. */}
-              {foreign && (
-                <FxStrip
-                  day={day}
-                  price={price}
-                  currency={pick.currency}
-                  rate={rate}
-                  pricePct={day > 1 && lastOf(pick.symbol) ? ((price - lastOf(pick.symbol)) / lastOf(pick.symbol)) * 100 : null}
-                  cadPct={cadMoveOf(pick.symbol)}
-                />
-              )}
               {/* Its general info, as the Search page's About has it (but with its name hidden):
                 open to begin with; folded, a line saying it opens. */}
               <PickInfo
@@ -1456,29 +1474,6 @@ export default function SandboxTest({
                 scope={chartScope}
                 onScope={setChartScope}
               />
-              {/* In another currency than CAD: its rate to CAD over the same days, folded to
-                  begin with. */}
-              {foreign && rateHistory[pick.symbol] && (
-                <FxChart
-                  symbol={pick.symbol}
-                  day={day}
-                  currency={pick.currency}
-                  history={rateHistory[pick.symbol].rates}
-                  rates={rates[pick.symbol] ?? []}
-                  // Where years begin: the history's, then the test's (as the price chart has
-                  // them, moved to the rate's history's length).
-                  yearStarts={[
-                    ...rateHistory[pick.symbol].yearStarts,
-                    ...(yearStarts[pick.symbol] ?? [])
-                      .filter((i) => i >= (history[pick.symbol]?.length ?? 0))
-                      .map((i) => i - (history[pick.symbol]?.length ?? 0) + rateHistory[pick.symbol].rates.length),
-                  ]}
-                  range={chartRange}
-                  onRange={setChartRange}
-                  scope={chartScope}
-                  onScope={setChartScope}
-                />
-              )}
             </div>
           </EaseHeight>
         </div>
@@ -1497,7 +1492,10 @@ export default function SandboxTest({
                     .map((c) => (
                       <span key={c} className="flex items-center gap-1.5">
                         <Flag code={c} className="size-3.5" />
-                        <Tween value={wallet[c] ?? 0} format={(x) => nativeText(x, c === "CAD" ? "CAD" : c)} />
+                        <Tween
+                          value={wallet[c] ?? 0}
+                          format={(x) => nativeText(x, c === "CAD" ? "CAD" : c)}
+                        />
                         {c === "CAD" && <span className="text-[10px] font-bold text-slate-500">CAD</span>}
                       </span>
                     ))}
@@ -1566,6 +1564,55 @@ export default function SandboxTest({
             </p>
           )}
 
+          {/* For the pick shown, in another currency than CAD: its price there times the day's
+              rate, and its rate over the same days as its price; then the exchange. */}
+          {foreign && (
+            <div className="mt-3">
+              {/* In another currency: its price there, today's exchange rate, and so its price in
+              CAD; then today's change on its price alone, and with the rate's move too. */}
+              {foreign && (
+                <FxStrip
+                  day={day}
+                  price={price}
+                  currency={pick.currency}
+                  rate={rate}
+                  pricePct={
+                    day > 1 && lastOf(pick.symbol)
+                      ? ((price - lastOf(pick.symbol)) / lastOf(pick.symbol)) * 100
+                      : null
+                  }
+                  cadPct={cadMoveOf(pick.symbol)}
+                />
+              )}
+              {/* In another currency than CAD: its rate to CAD over the same days, folded to
+              begin with. */}
+              {foreign && rateHistory[pick.symbol] && (
+                <FxChart
+                  symbol={pick.symbol}
+                  day={day}
+                  currency={pick.currency}
+                  history={rateHistory[pick.symbol].rates}
+                  rates={rates[pick.symbol] ?? []}
+                  // Where years begin: the history's, then the test's (as the price chart has
+                  // them, moved to the rate's history's length).
+                  yearStarts={[
+                    ...rateHistory[pick.symbol].yearStarts,
+                    ...(yearStarts[pick.symbol] ?? [])
+                      .filter((i) => i >= (history[pick.symbol]?.length ?? 0))
+                      .map(
+                        (i) =>
+                          i - (history[pick.symbol]?.length ?? 0) + rateHistory[pick.symbol].rates.length,
+                      ),
+                  ]}
+                  range={chartRange}
+                  onRange={setChartRange}
+                  scope={chartScope}
+                  onScope={setChartScope}
+                />
+              )}
+            </div>
+          )}
+
           {/* Exchanging currencies, whenever the player likes, at the day's rates. */}
           {currencies.length > 1 && (
             <ExchangePanel
@@ -1603,67 +1650,9 @@ export default function SandboxTest({
           </div>
         </div>
 
-        {/* What is held of the pick shown, then trading it: likewise, a beat behind. */}
+        {/* Trading the pick shown: likewise, a beat behind. */}
         <div {...enter(4)} className="rise-in mt-5">
           <EaseHeight changeKey={pick.symbol} duration={600}>
-            <div
-              key={pick.symbol}
-              className={`pick-swap-in ${swapTo ? "pick-swap-out" : ""}`}
-              style={{ "--dir": swapDir, animationDelay: "70ms" } as React.CSSProperties}
-            >
-              {/* What is held of it: how many shares, what they cost on average, and how they're
-                doing; and the badge that floats up after a trade. */}
-              <div className="relative mt-4 rounded-lg bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-                {flash && flash.symbol === pick.symbol && (
-                  <span
-                    key={flash.key}
-                    aria-hidden
-                    className={`trade-flash pointer-events-none absolute -top-2 right-3 rounded-full px-1.5 text-xs font-bold ${
-                      flash.side === "Bought" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                    }`}
-                  >
-                    {flash.text}
-                  </span>
-                )}
-                {shares > 0 ? (
-                  <p key="holding" className="text-fade-in">
-                    You hold{" "}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      <Tween value={shares} format={countText} /> {sharesWord(shares)}
-                    </span>
-                    , bought at an average of{" "}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      <Tween value={cost / shares} format={moneyText} />
-                    </span>{" "}
-                    each: worth{" "}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      <Tween value={shares * cadPrice} format={moneyText} />
-                    </span>
-                    {` on Day ${day}, `}
-                    <span
-                      className={`font-semibold tabular-nums transition-colors duration-500 ${tone(shares * cadPrice - cost)}`}
-                    >
-                      <Tween value={shares * cadPrice - cost} format={changeText} />
-                    </span>{" "}
-                    {foreign ? "on what you paid, in CAD (the exchange rate's moves included)." : "on what you paid."}
-                  </p>
-                ) : (
-                  <p key="none" className="text-fade-in">
-                    {`You hold none of it. Day ${day}'s price is `}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      {nativeText(price, pick.currency)}
-                    </span>
-                    {foreign && ` (about ${money.format(cadPrice)} CAD)`}
-                    : you can afford up to{" "}
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      {affordable.toLocaleString("en-CA")} {sharesWord(affordable)}
-                    </span>
-                    .
-                  </p>
-                )}
-              </div>
-            </div>
-
             {/* Trading it at the day's price: a ticket to buy and a ticket to sell, side by side
               (where the money is shows once, above the holdings). */}
             <div className="mt-3 rounded-lg bg-white p-4 shadow-sm">
@@ -1728,7 +1717,7 @@ export default function SandboxTest({
             className={`${LIGHT} ${ACTION} mr-auto`}
           >
             <ExitMark className="size-4" />
-            Exit test
+            Exit
           </button>
           {pending && (
             <span className="flex items-center gap-2 text-sm text-slate-500">
@@ -1751,11 +1740,11 @@ export default function SandboxTest({
           {left === 0 && (
             <button type="button" onClick={() => setFinishing(true)} className={`${DARK} ${ACTION}`}>
               <FinishMark className="size-4" />
-              Finish the test
+              Finish
             </button>
           )}
         </div>
-        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} />}
+        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} onCancel={stay} />}
         {finishing && (
           <FinishCard days={days} start={amount} end={value} leaving={finishLeaving} onDone={finish} />
         )}
@@ -1808,7 +1797,11 @@ function FxStrip({
         <div className={tile}>
           <p
             className="flex items-center gap-1.5 text-[11px] text-slate-500"
-            title={currency ? `${currencyName(currency)}${usedIn(currency) ? `, used in ${usedIn(currency)}` : ""}` : undefined}
+            title={
+              currency
+                ? `${currencyName(currency)}${usedIn(currency) ? `, used in ${usedIn(currency)}` : ""}`
+                : undefined
+            }
           >
             <span className="truncate">Price in {currency}</span>
           </p>
@@ -1889,16 +1882,14 @@ function PickInfo({
         >
           <KindMark kind={pick.kind} className="size-4" />
         </span>
-        <button type="button" onClick={onToggle} className="group min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-slate-900">General info</span>
-          <span className="block truncate text-xs text-slate-500 transition group-hover:text-slate-900">
+          <span className="block truncate text-xs text-slate-500">
             {open
               ? pick.line || "About this pick"
-              : `${pick.sector ?? (pick.kind === "ETF" ? "A fund" : "Sector unknown")} · open to see what it ${
-                  pick.kind === "ETF" ? "does and what it holds" : f ? "does and its figures" : "does"
-                }`}
+              : (pick.sector ?? (pick.kind === "ETF" ? "A fund" : "Sector unknown"))}
           </span>
-        </button>
+        </div>
         <FoldButton open={open} controls={`info-${pick.symbol}`} onClick={onToggle} className="text-xs" />
       </div>
       <div
@@ -1980,8 +1971,7 @@ function PickInfo({
               </>
             ) : (
               <>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What it holds</p>
-                <div className="mt-1.5">
+                <div>
                   {/* Fetched while still folded (and again each new day), so it is ready, at its
                       full size, as the info opens, and stays as it folds; its map slides in
                       afresh at each opening. */}
@@ -2026,7 +2016,7 @@ function FigureRow({ figures }: { figures: NonNullable<Figures> }) {
 // The card that asks before the test is left early, over the trading panel (which it dims),
 // as the order card does: a warning that nothing done in the test is kept (how far it got,
 // how many trades), and that the set-up comes back with the same picks and choices. Keep
-// testing (or Escape, or a click beside it) closes it; Exit test leaves.
+// testing (or Escape, or a click beside it) closes it; Exit leaves.
 function QuitCard({
   day,
   trades,
@@ -2040,25 +2030,24 @@ function QuitCard({
 }) {
   const button = useRef<HTMLButtonElement>(null);
 
-  // Ready for the keyboard (on the safe choice), and in sight, without jumping the page.
+  // Ready for the keyboard (on the safe choice), without jumping the page.
   useEffect(() => {
     const el = button.current;
     el?.focus({ preventScroll: true });
-    el?.closest("[role=dialog]")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
-  return (
+  // Over the screen (a portal), centred in view wherever the page is scrolled, as the day's
+  // recap and the finishing card are.
+  return createPortal(
     <div
-      className={`absolute inset-0 z-20 grid place-items-center rounded-xl bg-slate-50/70 p-4 backdrop-blur-[2px] ${
-        leaving ? "recap-out" : "recap-in"
-      }`}
+      className={popupOverlay(leaving)}
       onClick={() => onDone(false)}
       onKeyDown={(e) => e.key === "Escape" && onDone(false)}
     >
       <div
         role="dialog"
         aria-label="Leave the test?"
-        className="recap-card w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className={`${POPUP_CARD} max-w-sm overflow-hidden p-5`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -2095,11 +2084,12 @@ function QuitCard({
             className={`${LIGHT} ${ACTION} flex-1 justify-center hover:border-red-300 hover:text-red-700`}
           >
             <ExitMark className="size-4" />
-            Exit test
+            Exit
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2109,9 +2099,19 @@ function QuitCard({
 // much its price moved and what that made or lost (nothing on the picks not held). It comes alive as it opens: its day, week or month mark
 // plays, its rows rise in one after another, and its figures count from where the days began
 // to where they ended as the little chart draws itself. Pointing along the little chart shows
-// each day's value. It moves on by itself once its timer bar runs out (paused while pointed
-// at), or at once when clicked anywhere, or with Escape.
-function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
+// each day's value. Continue moves on; Cancel (or a click outside it, or Escape) closes it and
+// stays on the day it was opened from.
+function RecapCard({
+  recap,
+  leaving,
+  onDone,
+  onCancel,
+}: {
+  recap: Recap;
+  leaving: boolean;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const { from, to, values, positions } = recap;
   const button = useRef<HTMLButtonElement>(null);
   const chart = useRef<HTMLDivElement>(null);
@@ -2140,11 +2140,10 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   const color = move >= 0 ? "#15803d" : "#dc2626";
   const shown = spot ?? values.length - 1;
 
-  // Ready for the keyboard, and in sight, without jumping the page; then the figures move on.
+  // Ready for the keyboard, without jumping the page; then the figures move on.
   useEffect(() => {
     const el = button.current;
     el?.focus({ preventScroll: true });
-    el?.closest("[role=dialog]")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     const timer = window.setTimeout(() => setAfter(true), 300);
     return () => window.clearTimeout(timer);
   }, []);
@@ -2160,18 +2159,18 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   // One row of the card rising in, `i` rows after the first.
   const row = (i: number) => ({ className: "rise-in", style: { animationDelay: `${100 + i * 70}ms` } });
 
-  return (
+  // Over the screen (a portal), as the finishing card is, so all of it is in view wherever the
+  // page is scrolled, with no need to scroll to it.
+  return createPortal(
     <div
-      className={`recap absolute inset-0 z-20 grid place-items-center rounded-xl bg-slate-50/70 p-4 backdrop-blur-[2px] ${
-        leaving ? "recap-out" : "recap-in"
-      }`}
-      onClick={onDone}
-      onKeyDown={(e) => e.key === "Escape" && onDone()}
+      className={`recap ${popupOverlay(leaving)}`}
+      onClick={onCancel}
+      onKeyDown={(e) => e.key === "Escape" && onCancel()}
     >
       <div
         role="dialog"
         aria-label={`Day ${from} to Day ${to}`}
-        className="recap-card w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+        className={`${POPUP_CARD} max-w-sm overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5">
@@ -2320,12 +2319,15 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
             </div>
           </div>
 
-          <div {...row(3)}>
+          <div {...row(3)} className="rise-in mt-4 flex gap-2">
+            <button type="button" onClick={onCancel} className={`${LIGHT} ${ACTION} flex-1 justify-center`}>
+              Cancel
+            </button>
             <button
               ref={button}
               type="button"
               onClick={onDone}
-              className={`${DARK} ${ACTION} mt-4 w-full justify-center`}
+              className={`${DARK} ${ACTION} flex-1 justify-center`}
             >
               Continue
               <svg
@@ -2343,15 +2345,9 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
             </button>
           </div>
         </div>
-        {/* How long until it moves on by itself. */}
-        <span
-          aria-hidden
-          className="recap-timer block h-1 bg-slate-900"
-          style={{ animationDuration: `${RECAP_MS}ms` }}
-          onAnimationEnd={(e) => e.animationName === "recap-timer" && onDone()}
-        />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -2392,22 +2388,19 @@ function FxChart({
     <div className="mt-3 rounded-lg bg-white px-3 py-2.5 shadow-sm">
       <div className="flex items-center gap-3">
         {currency && <Flag code={currency} className="size-6" />}
-        <button type="button" onClick={() => setOpen(!open)} className="group min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-slate-900">Exchange rate</span>
-          <span className="block truncate text-xs text-slate-500 transition group-hover:text-slate-900">
+          <span className="block truncate text-xs text-slate-500">
             {`1 ${currency} = ${format(now)} on Day ${day}`}
-            {change !== null && (
-              <span className={tone(change)}>{` · ${pctText(change)} since Day 1`}</span>
-            )}
-            {open ? "" : " · open to see it over the same days as the price"}
+            {change !== null && <span className={tone(change)}>{` · ${pctText(change)} since Day 1`}</span>}
           </span>
-        </button>
+        </div>
         <FoldButton open={open} controls={id} onClick={() => setOpen(!open)} className="text-xs" />
       </div>
       <div id={id} className="legend-fold" data-closed={open ? undefined : ""} inert={!open}>
         <div>
           <p className="mt-2 text-xs text-slate-500">
-            {`How many Canadian dollars one ${currency} was worth each day: a rise makes a holding in ${currency} worth more in CAD, a fall less, whatever its price does.`}
+            {`The value of one ${currency} in Canadian dollars on each trading day. A stronger ${currency} raises the CAD value of ${currency} holdings; a weaker one lowers it, regardless of price movements.`}
           </p>
           <SandboxChart
             symbol={`${symbol}-fx`}
@@ -2509,12 +2502,9 @@ function ExchangePanel({
             <path d="M3.5 7.5h12M12.5 4.5l3 3-3 3M16.5 12.5h-12M7.5 9.5l-3 3 3 3" />
           </svg>
         </span>
-        <button type="button" onClick={toggle} className="group min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-slate-900">Exchange currency</span>
-          <span className="block truncate text-xs text-slate-500 transition group-hover:text-slate-900">
-            {`At Day ${day}'s rates, whenever you like. Shares in another currency are paid from cash in it first.`}
-          </span>
-        </button>
+        </div>
         <FoldButton open={open} controls={id} onClick={toggle} className="text-xs" />
       </div>
       <div
@@ -2657,7 +2647,7 @@ function ExchangePanel({
                   className={`flex justify-between gap-3 tabular-nums ${i === 0 ? "fx-row-in" : ""}`}
                 >
                   <span>{`Day ${e.day}: ${nativeText(e.paid, e.from)} → ${nativeText(e.got, e.to)}`}</span>
-                  <span className="text-slate-400">{e.auto ? "to pay for shares" : "by you"}</span>
+                  <span className="text-slate-400">{e.auto ? "Share Purchase" : "Currency Exchange"}</span>
                 </li>
               ))}
             </ul>
@@ -2670,8 +2660,8 @@ function ExchangePanel({
 
 // The card that comes up when the test is finished, as each day's recap does (the night sky's
 // moon swinging up as its stars twinkle): congratulations, the days traded, and the account
-// from its start to its end with how much that is up or down; then on, by its button or by
-// itself once its bar runs out, to the summary. Over the page wherever it is scrolled, the page
+// from its start to its end with how much that is up or down; then on, by its button, to the
+// summary. Over the page wherever it is scrolled, the page
 // dimmed and softened behind it.
 function FinishCard({
   days,
@@ -2704,16 +2694,14 @@ function FinishCard({
   // not in the test's panel (whose entrance leaves a transform that would hold it there).
   return createPortal(
     <div
-      className={`recap fixed inset-0 z-50 grid place-items-center bg-slate-900/20 p-4 backdrop-blur-[3px] ${
-        leaving ? "recap-out" : "recap-in"
-      }`}
+      className={`recap ${popupOverlay(leaving)}`}
       onClick={onDone}
       onKeyDown={(e) => e.key === "Escape" && onDone()}
     >
       <div
         role="dialog"
         aria-label="The test is finished"
-        className="recap-card w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        className={`${POPUP_CARD} max-w-sm overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5">
@@ -2751,7 +2739,12 @@ function FinishCard({
           </div>
 
           <div {...row(2)}>
-            <button ref={button} type="button" onClick={onDone} className={`${DARK} ${ACTION} mt-4 w-full justify-center`}>
+            <button
+              ref={button}
+              type="button"
+              onClick={onDone}
+              className={`${DARK} ${ACTION} mt-4 w-full justify-center`}
+            >
               See your results
               <svg
                 aria-hidden
@@ -2768,13 +2761,6 @@ function FinishCard({
             </button>
           </div>
         </div>
-        {/* How long until it moves on by itself. */}
-        <span
-          aria-hidden
-          className="recap-timer block h-1 bg-slate-900"
-          style={{ animationDuration: `${RECAP_MS}ms` }}
-          onAnimationEnd={(e) => e.animationName === "recap-timer" && onDone()}
-        />
       </div>
     </div>,
     document.body,
@@ -3075,7 +3061,9 @@ function ConfirmTrade({
   const cashAfter = cents(buying ? cash - total : cash + total);
   // The cash in CAD and in the share's currency, after: a purchase takes from the share's
   // currency first, exchanging the rest from CAD; a sale's money stays in its currency.
-  const cadAfter = cents(buying ? cad - (foreign ? (payment?.cadPaid ?? 0) : amount) : foreign ? cad : cad + amount);
+  const cadAfter = cents(
+    buying ? cad - (foreign ? (payment?.cadPaid ?? 0) : amount) : foreign ? cad : cad + amount,
+  );
   const heldAfter = cents(buying ? held - (payment?.fromHeld ?? 0) : held + amount);
   const sharesAfter = buying ? shares + ask.shares : shares - ask.shares;
   // Whether the figures have moved on to after the trade (just after the card opens), and
@@ -3087,11 +3075,10 @@ function ConfirmTrade({
   const cashShare =
     ((after ? cashAfter : cash) / worth(after ? cashAfter : cash, after ? sharesAfter : shares)) * 100;
 
-  // Ready for the keyboard, and in sight, without jumping the page; then the figures move on.
+  // Ready for the keyboard, without jumping the page; then the figures move on.
   useEffect(() => {
     const el = button.current;
     el?.focus({ preventScroll: true });
-    el?.closest("[role=dialog]")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     const timer = window.setTimeout(() => setAfter(true), 350);
     return () => window.clearTimeout(timer);
   }, []);
@@ -3106,18 +3093,18 @@ function ConfirmTrade({
   // One row of the card rising in, `i` rows after the first.
   const row = (i: number) => ({ className: "rise-in", style: { animationDelay: `${120 + i * 60}ms` } });
 
-  return (
+  // Over the screen (a portal), centred in view wherever the page is scrolled, as the day's
+  // recap and the finishing card are.
+  return createPortal(
     <div
-      className={`absolute inset-0 z-20 grid place-items-center rounded-xl bg-slate-50/70 p-4 backdrop-blur-[2px] ${
-        leaving ? "recap-out" : "recap-in"
-      }`}
+      className={popupOverlay(leaving)}
       onClick={() => !confirmed && onDone(false)}
       onKeyDown={(e) => e.key === "Escape" && !confirmed && onDone(false)}
     >
       <div
         role="dialog"
         aria-label={`${buying ? "Buy" : "Sell"} ${ask.shares} ${sharesWord(ask.shares)}`}
-        className="confirm-card recap-card w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className={`${POPUP_CARD} confirm-card max-w-sm overflow-hidden p-5`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -3161,7 +3148,9 @@ function ConfirmTrade({
               <dd className="text-right font-semibold text-slate-900">
                 {ask.shares.toLocaleString("en-CA")} × {nativeText(price, currency)} ={" "}
                 <span className="text-base">{nativeText(amount, cur)}</span>
-                {foreign && <span className="block text-xs font-normal text-slate-500">{`≈ ${money.format(total)} CAD`}</span>}
+                {foreign && (
+                  <span className="block text-xs font-normal text-slate-500">{`≈ ${money.format(total)} CAD`}</span>
+                )}
               </dd>
             </div>
           </div>
@@ -3315,7 +3304,8 @@ function ConfirmTrade({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

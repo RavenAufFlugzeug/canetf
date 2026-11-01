@@ -8,6 +8,7 @@ import HoldingsMap from "@/components/HoldingsMap";
 import KindMark from "@/components/KindMark";
 import SandboxChart from "@/components/SandboxChart";
 import type { EtfTreeNode } from "@/lib/db";
+import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
 
 type Holdings = Awaited<ReturnType<typeof getSandboxEtfHoldings>>;
 type Chart = Awaited<ReturnType<typeof getSandboxEtfHoldingChart>>;
@@ -116,12 +117,19 @@ export default function EtfHoldings({
     stored: false,
     missing: null,
     details: country
-      ? { sector: null, industry: null, hqCity: null, hqCountry: country, fundFamily: null, category: null, exchange: null }
+      ? {
+          sector: null,
+          industry: null,
+          hqCity: null,
+          hqCountry: country,
+          fundFamily: null,
+          category: null,
+          exchange: null,
+        }
       : null,
     weight: 1,
     children: nodesOf(data.items, "0", data.kind === "rating", data.listed),
   };
-  const nested = data.items.some((h) => h.children?.length);
 
   return (
     <div className="text-fade-in">
@@ -140,16 +148,11 @@ export default function EtfHoldings({
           <path d="M8 7.2v3.6M8 5.1v.1" />
         </svg>
         <span>
-          <span className="font-semibold text-slate-900">Holdings as of today, not of your test&apos;s days.</span>{" "}
-          {`Yahoo Finance only gives a fund's current list, so what it held over Day 1 to Day ${day} may have differed; the prices shown are from your test's days.`}
+          <span className="font-semibold text-slate-900">
+            Holdings shown are current, not as of the test period.
+          </span>{" "}
+          {`Yahoo Finance publishes only a fund's latest holdings, so its composition between Day 1 and Day ${day} may have differed. Prices reflect the test period.`}
         </span>
-      </p>
-      <p className="mt-2 text-xs text-slate-500">
-        {data.kind === "rating"
-          ? "Its bonds by credit rating."
-          : `Its ${data.items.length} largest holdings (${pct(Math.min(data.listed, 1))} of the fund), their names hidden. Click a company or fund to see its price${
-              nested ? "; open a fund's arrow to see what it holds" : ""
-            }.`}
       </p>
       <div className="sandbox-map">
         <HoldingsMap
@@ -157,6 +160,7 @@ export default function EtfHoldings({
           tree={tree}
           links={false}
           sectorKey={false}
+          legend={false}
           onPick={(id) => {
             const h = byId.get(id);
             if (h && !h.id.includes("r")) setOpen(h); // not a credit rating, which has no price
@@ -191,7 +195,7 @@ function HoldingChart({
     if (leaving) return;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setLeaving(true);
-    window.setTimeout(onClose, calm ? 0 : 220);
+    window.setTimeout(onClose, calm ? 0 : POPUP_OUT_MS);
   };
 
   useEffect(() => {
@@ -213,15 +217,12 @@ function HoldingChart({
   });
 
   return createPortal(
-    <div
-      className={`fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-[3px] ${leaving ? "holding-out" : "holding-in"}`}
-      onClick={close}
-    >
+    <div className={popupOverlay(leaving)} onClick={close}>
       <div
         role="dialog"
         aria-label={`${holding.name}: its price`}
         onClick={(e) => e.stopPropagation()}
-        className="holding-card kind-hover w-full max-w-2xl rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-2xl"
+        className={`${POPUP_CARD} kind-hover my-8 max-w-2xl p-5`}
       >
         <div className="flex items-start gap-3">
           <span
@@ -274,7 +275,11 @@ function HoldingChart({
               />
             </div>
           ) : (
-            <p className="mt-6 text-sm text-slate-500">{"No prices on record for it over your test's days: it may not have been trading yet (the holdings shown are today's)."}</p>
+            <p className="mt-6 text-sm text-slate-500">
+              {
+                "No prices on record for it over your test's days: it may not have been trading yet (the holdings shown are today's)."
+              }
+            </p>
           )}
         </div>
       </div>

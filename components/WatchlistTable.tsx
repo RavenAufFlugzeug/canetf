@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { Company } from "@/lib/db";
 import { moneyFormatter } from "@/lib/money";
+import BadgeInfo from "@/components/BadgeInfo";
 import KindBadge from "@/components/KindBadge";
 import { listingOf } from "@/lib/exchanges";
 import { countryFlag } from "@/lib/fx";
@@ -89,7 +90,13 @@ export default function WatchlistTable({
           <tr>
             <th className="p-4">Symbol</th>
             <th className="p-4">Name</th>
-            <th className="p-4">Sector</th>
+            <th className="p-4">
+              {/* Beside it, what the icons mean, in a pop-up (none picked out: there are many). */}
+              <span className="inline-flex items-center gap-2">
+                Sector
+                <BadgeInfo labelled highlight={false} />
+              </span>
+            </th>
             <th className="p-4 text-right">Price</th>
             <th className="p-4 text-right">Change</th>
             <th className="p-4 text-right">Market cap</th>

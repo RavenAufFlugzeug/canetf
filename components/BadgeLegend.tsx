@@ -46,6 +46,7 @@ export default function BadgeLegend({
   startOpen = true,
   highlight = true,
   className = "mt-8 border-t border-slate-200 pt-6",
+  popup = false,
 }: {
   sector?: string | null;
   industry?: string | null;
@@ -62,6 +63,9 @@ export default function BadgeLegend({
   highlight?: boolean;
   // Its spacing: by default set apart from what is above it by a rule.
   className?: string;
+  // Shown in a pop-up (BadgeInfo): always open, with no heading or fold of its own (the pop-up
+  // has its title and its close).
+  popup?: boolean;
 }) {
   const kind = highlight ? (mark ?? kindOf({ sector, industry, fundFamily, category })) : null;
   const naics = !highlight
@@ -70,10 +74,10 @@ export default function BadgeLegend({
       ? (NAICS_GROUPS.find((g) => g.code === colour) ?? null)
       : naicsOf(sector, industry);
   const look = badgeLook(kind ?? "", naics);
-  const [open, setOpen] = useState(startOpen);
+  const [open, setOpen] = useState(popup || startOpen);
   // Whether it is open and done opening: only then may a tile's pop-up reach past its bottom
   // (while it folds or opens, what is outside it is clipped).
-  const [settled, setSettled] = useState(startOpen);
+  const [settled, setSettled] = useState(popup || startOpen);
   const id = useId();
   // Each tile's place in the cascade: the marks, then the colours.
   const rows = KINDS.length + NAICS_GROUPS.length;
@@ -88,21 +92,23 @@ export default function BadgeLegend({
 
   return (
     <section className={`rise-in ${className}`} style={{ animationDelay: `${delay}ms` }}>
-      <div className="flex items-center gap-4">
-        <h3 className="text-lg font-semibold text-slate-900">What the badge means</h3>
-        <FoldButton open={open} controls={id} onClick={toggle} className="ml-auto text-xs" />
-      </div>
+      {!popup && (
+        <div className="flex items-center gap-4">
+          <h3 className="text-lg font-semibold text-slate-900">What the icon means</h3>
+          <FoldButton open={open} controls={id} onClick={toggle} className="ml-auto text-xs" />
+        </div>
+      )}
       {/* What a badge is, always in view, folded or not. */}
-      <p className="mt-1 text-sm text-slate-600">
-        A badge has two parts. Its <span className="font-semibold text-slate-900">mark</span>
-        {" comes from the listing’s sector as Yahoo Finance gives it; its "}
-        <span className="font-semibold text-slate-900">colour</span> from the NAICS sector group that works
-        out to. The two can differ: a technology firm in IT services counts as professional services, one
-        making hardware as manufacturing.
+      <p className={`${popup ? "" : "mt-1"} text-sm text-slate-600`}>
+        {"Each icon combines two classifications: its "}
+        <span className="font-semibold text-slate-900">symbol</span>
+        {" shows the sector, as reported by Yahoo Finance, and its "}
+        <span className="font-semibold text-slate-900">colour</span>
+        {" the NAICS industry group. The two may differ; an IT-services firm, for example, is classed under professional services in NAICS."}
       </p>
       {/* Folded, a line saying there is more, which opens it: it unfolds as the legend folds
           away, and folds away as the legend opens. */}
-      <div className="legend-fold" data-closed={open ? "" : undefined} inert={open}>
+      <div className={popup ? "hidden" : "legend-fold"} data-closed={open ? "" : undefined} inert={open}>
         <div>
           <button
             type="button"
@@ -121,7 +127,7 @@ export default function BadgeLegend({
                 />
               ))}
             </span>
-            See all {KINDS.length} marks and {NAICS_GROUPS.length} colours
+            See all {KINDS.length} sectors and {NAICS_GROUPS.length} NAICS groups
             <svg
               aria-hidden
               viewBox="0 0 12 12"
@@ -148,7 +154,7 @@ export default function BadgeLegend({
         {/* The folding element's only child; nothing outside it shows unless it has settled open. */}
         <div style={settled ? { overflow: "visible" } : undefined}>
           <p className="legend-row pt-4 text-xs font-semibold uppercase tracking-wide text-slate-900">
-            Marks: the sector
+            Sectors
           </p>
           <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {KINDS.map((k, i) => {
@@ -189,7 +195,7 @@ export default function BadgeLegend({
           </ul>
 
           <p className="legend-row mt-5 text-xs font-semibold uppercase tracking-wide text-slate-900">
-            Colours: the NAICS group
+            NAICS
           </p>
           <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
             {NAICS_GROUPS.map((g, i) => {
@@ -223,8 +229,8 @@ export default function BadgeLegend({
           {!naics && (kind === "ETF" || kind === "Currency") && (
             <p className="legend-row mt-2 text-xs text-slate-500">
               {kind === "ETF"
-                ? "A fund has no NAICS group: its badge is dark slate."
-                : "An exchange rate has no NAICS group: its badge is white with a black outline."}
+                ? "A fund has no NAICS group: its icon is dark slate."
+                : "An exchange rate has no NAICS group: its icon is white with a black outline."}
             </p>
           )}
         </div>
