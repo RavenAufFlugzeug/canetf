@@ -1326,12 +1326,13 @@ export default function SandboxTest({
     const sinceBefore = cents(value - before.value);
     const left = days - day;
     const canTrade = !pending && !recap && !ask;
-    // Moving on: a day, a week or a month, each while that many days are left.
+    // Moving on: a day, a week or a month, each while that many days are left (all kept drawn,
+    // so one no longer possible folds away rather than vanishing; see StepSlot).
     const steps = [
       { label: "Next day", days: 1, Mark: DayMark },
       { label: "Next week", days: 5, Mark: WeekMark },
       { label: "Next month", days: 21, Mark: MonthMark },
-    ].filter((s) => s.days <= left);
+    ];
     return (
       <div ref={panelTop} className="rise-in relative mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5">
         <div {...enter(0)}>
@@ -1707,7 +1708,7 @@ export default function SandboxTest({
         {/* Moving on: by a day, a week or a month while that many are left; then finishing. */}
         <div
           {...enter(5)}
-          className="rise-in mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4"
+          className="rise-in mt-4 flex flex-wrap items-center justify-end gap-y-2 border-t border-slate-200 pt-4"
         >
           {/* Leaving the test early (it asks first: nothing done in it is kept). */}
           <button
@@ -1720,29 +1721,35 @@ export default function SandboxTest({
             Exit
           </button>
           {pending && (
-            <span className="flex items-center gap-2 text-sm text-slate-500">
+            <span className="ml-2 flex items-center gap-2 text-sm text-slate-500">
               <DiamondLoader className="size-3.5" />
               Loading…
             </span>
           )}
           {steps.map((s, i) => (
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => goTo(day + s.days)}
-              disabled={pending || recap !== null || ask !== null}
-              className={`${i === 0 ? DARK : LIGHT} ${ACTION}`}
-            >
-              <s.Mark className="size-4" />
-              {s.label}
-            </button>
+            <StepSlot key={s.label} on={s.days <= left}>
+              <button
+                type="button"
+                onClick={() => goTo(day + s.days)}
+                disabled={s.days > left || pending || recap !== null || ask !== null}
+                className={`${i === 0 ? DARK : LIGHT} ${ACTION}`}
+              >
+                <s.Mark className="size-4" />
+                {s.label}
+              </button>
+            </StepSlot>
           ))}
-          {left === 0 && (
-            <button type="button" onClick={() => setFinishing(true)} className={`${DARK} ${ACTION}`}>
+          <StepSlot on={left === 0}>
+            <button
+              type="button"
+              onClick={() => setFinishing(true)}
+              disabled={left !== 0}
+              className={`${DARK} ${ACTION}`}
+            >
               <FinishMark className="size-4" />
               Finish
             </button>
-          )}
+          </StepSlot>
         </div>
         {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} onCancel={stay} />}
         {finishing && (
@@ -2090,6 +2097,18 @@ function QuitCard({
       </div>
     </div>,
     document.body,
+  );
+}
+
+// One of the test's move-on buttons (Next day / week / month, Finish), kept in place while it
+// isn't possible so it can come and go smoothly: it fades and shrinks, then folds its width
+// away (the others sliding over to fill it); coming back, it opens out, then fades in
+// (.step-slot in globals.css). The gap before it is its own, folding away with it.
+function StepSlot({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return (
+    <div className="step-slot" data-on={on} aria-hidden={!on} inert={!on}>
+      <div>{children}</div>
+    </div>
   );
 }
 

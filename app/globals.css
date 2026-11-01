@@ -829,6 +829,47 @@ body:has(> main.bg-slate-50) {
   scale: 0.97;
 }
 
+/* The test's move-on buttons (StepSlot in components/SandboxTest.tsx): going, a button fades
+   and shrinks, then its width folds away; coming, its width opens, then it fades and grows in.
+   The clip lets its shadow and lift show past its edges while it is in place. */
+.step-slot {
+  display: inline-grid;
+  grid-template-columns: 0fr;
+  padding-left: 0;
+  opacity: 0;
+  scale: 0.9;
+  transition:
+    opacity 220ms ease-in,
+    scale 260ms ease-in,
+    grid-template-columns 420ms cubic-bezier(0.65, 0, 0.35, 1) 160ms,
+    padding-left 420ms cubic-bezier(0.65, 0, 0.35, 1) 160ms;
+}
+
+.step-slot[data-on="true"] {
+  grid-template-columns: 1fr;
+  padding-left: 0.5rem; /* the gap before it, folding away with it */
+  opacity: 1;
+  scale: 1;
+  transition:
+    grid-template-columns 420ms cubic-bezier(0.65, 0, 0.35, 1),
+    padding-left 420ms cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 300ms ease-out 260ms,
+    scale 380ms cubic-bezier(0.22, 1.2, 0.36, 1) 260ms;
+}
+
+.step-slot > div {
+  min-width: 0;
+  overflow: clip;
+  overflow-clip-margin: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-slot,
+  .step-slot[data-on="true"] {
+    transition: none;
+  }
+}
+
 /* The calendar beside the test's day (components/SandboxTest.tsx): its date marks fade up
    afresh each new day. */
 .calendar-tick {
