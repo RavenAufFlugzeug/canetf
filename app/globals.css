@@ -1894,6 +1894,68 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transition: none;
 }
 
+/* The cat's moods on the Sandbox's deck (components/HoldingsDeck.tsx). Pointed at, she is
+   surprised: three yellow strokes pop out by her head and her mouth opens into a little
+   triangle. Clicked (data-happy, until the pointer leaves), she is happy instead: her mouth a
+   little "ω", and in the strokes' place two flowers, a big one and a small one, turning
+   opposite ways. Each part fades and grows in or out as her mood changes; at rest, only her
+   usual mouth shows.  */
+.logo-mark-gasp,
+.logo-mark-smile,
+.logo-mark-mouth {
+  transition: opacity 220ms ease-out;
+}
+
+.logo-mark-surprise,
+.logo-mark-flowers {
+  transform-box: view-box;
+  transform-origin: 64px 16px;
+  transition:
+    opacity 260ms ease-out,
+    transform 420ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.logo-mark-gasp,
+.logo-mark-smile,
+.logo-mark-surprise,
+.logo-mark-flowers {
+  opacity: 0;
+}
+
+.logo-mark-surprise,
+.logo-mark-flowers {
+  transform: scale(0.5);
+}
+
+.deck-pile:hover:not([data-happy]) .logo-mark-out :is(.logo-mark-surprise, .logo-mark-gasp),
+.deck-pile[data-happy] .logo-mark-out :is(.logo-mark-flowers, .logo-mark-smile) {
+  opacity: 1;
+  transform: none;
+}
+
+:is(.deck-pile:hover, .deck-pile[data-happy]) .logo-mark-out .logo-mark-mouth {
+  opacity: 0;
+}
+
+/* The flowers turning, each about its own middle, the small one the other way and faster. */
+.logo-mark-spin,
+.logo-mark-spin-back {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: logo-mark-spin 6s linear infinite;
+}
+
+.logo-mark-spin-back {
+  animation-duration: 4s;
+  animation-direction: reverse;
+}
+
+@keyframes logo-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Clicked once more, she gets cross: an angry mark by her head pops up from nothing,
    overshooting a little, then throbs for as long as she stays cross. */
 .logo-mark-angry {
@@ -2251,9 +2313,22 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
     transition: none;
   }
 
-  /* The logo's cat still pokes its head out, but at once. */
+  /* The logo's cat still pokes its head out, but at once; surprised, her marks just appear. */
   .logo-mark-cat {
     transition: none;
+  }
+
+  .logo-mark-surprise,
+  .logo-mark-flowers,
+  .logo-mark-gasp,
+  .logo-mark-smile,
+  .logo-mark-mouth {
+    transition: none;
+  }
+
+  .logo-mark-spin,
+  .logo-mark-spin-back {
+    animation: none;
   }
 
   /* Her angry mark appears at once and holds still. */

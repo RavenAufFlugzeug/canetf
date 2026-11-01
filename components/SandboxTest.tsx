@@ -334,6 +334,8 @@ export default function SandboxTest({
   const [finishLeaving, setFinishLeaving] = useState(false);
   const [quitLeaving, setQuitLeaving] = useState(false);
   const panelTop = useRef<HTMLDivElement>(null);
+  // The pick shown (its name, figures and chart), to glide to when a card drawn is viewed.
+  const shownTop = useRef<HTMLDivElement>(null);
   // Each pick's closes so far, Day 1 first (today is the last); its closes before Day 1, for
   // the chart to look back on; and where each year begins among them all (by index), for
   // the chart's YTD range.
@@ -695,10 +697,16 @@ export default function SandboxTest({
   // panel's top sits just under the header, so it glides there and follows it, rather than the
   // panel sliding out of sight and being fetched back. With motion reduced, it jumps there.
   function toPanelTop() {
+    glideTo(panelTop);
+  }
+
+  // Glides the page to `target`'s top (less its scroll margin), following it for a while as
+  // the page around it eases to new sizes.
+  function glideTo(target: React.RefObject<HTMLDivElement | null>) {
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const until = performance.now() + GROW_MS + 600;
     const step = () => {
-      const el = panelTop.current;
+      const el = target.current;
       if (!el) return;
       const want = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
       const off = el.getBoundingClientRect().top - want;
@@ -1440,7 +1448,7 @@ export default function SandboxTest({
         {/* The pick shown: its name, its general figures and its chart. Choosing another, its
             parts slide in from that side as they fade up (.pick-swap-in), and the space they
             take eases to the new size rather than jumping. */}
-        <div {...enter(2)} className="rise-in mt-5">
+        <div ref={shownTop} {...enter(2)} className="rise-in mt-5 scroll-mt-24">
           <EaseHeight changeKey={pick.symbol} duration={600}>
             <div
               key={pick.symbol}
@@ -1652,6 +1660,11 @@ export default function SandboxTest({
               pile={cards.filter((c) => c.shares === 0)}
               selected={swapTo ?? pick.symbol}
               onSelect={choosePick}
+              // A card drawn, clicked: its pick shown, the page gliding up to it.
+              onView={(symbol) => {
+                choosePick(symbol);
+                glideTo(shownTop);
+              }}
             />
           </div>
         </div>

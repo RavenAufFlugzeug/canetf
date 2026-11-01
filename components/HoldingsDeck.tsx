@@ -33,8 +33,9 @@ const signedMoney = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${money.f
 const randomIndex = (n: number) => Math.floor(Math.random() * n);
 
 // A card's back, as a playing card's: a white border, then a near-black band round a field in
-// its sector's colour, framed by a double white line, and the logo in the middle (its box
-// open and the cat's head out of it).
+// its sector's colour, and the logo in the middle (its box open and the cat's head out of
+// it): the box outlined in white, her head, eyes and mouth in the near-black; and a white fish
+// in two corners.
 const BAND = "#111214";
 
 function CardBack({ color }: { color: string }) {
@@ -45,25 +46,46 @@ function CardBack({ color }: { color: string }) {
         className="relative block size-full rounded-lg border-[4px]"
         style={{ background: color, borderColor: BAND }}
       >
-        {/* The double frame. */}
-        <span className="absolute inset-[3px] rounded-md border-[1.5px] border-white/90" />
-        <span className="absolute inset-[7px] rounded-[5px] border border-white/55" />
         {/* The emblem: the logo, the cat's head out of her box (.logo-mark-out). */}
         <span className="absolute inset-0 grid place-items-center">
           <LogoMark
             id={id}
             lid={200}
             className="logo-mark-out size-[60px] text-white"
-            style={{ ["--mark-paper" as string]: color }}
+            style={{ ["--mark-paper" as string]: BAND, ["--mark-seam" as string]: "white" }}
           />
         </span>
+        {/* A fish in two corners, as on its face (the bottom one upside down). */}
+        <Fish color="white" className="absolute left-1 top-1.5 h-3 w-[18px]" />
+        <Fish color="white" className="absolute bottom-1.5 right-1 h-3 w-[18px] rotate-180" />
       </span>
     </span>
   );
 }
 
+// A fish (for the cat), drawn in one line in one colour: its body two arcs from its nose that
+// cross at its tail and run on, open, to the tail's two tips, and
+// a round eye.
+const FISH = "M21 7 16 12C13 17.8 7 17.8 3 12C7 6.2 13 6.2 16 12L21 17";
+
+function Fish({ color, className }: { color: string; className: string }) {
+  return (
+    <svg aria-hidden viewBox="1 4.6 22 14.8" className={className}>
+      <path
+        d={FISH}
+        fill="none"
+        style={{ stroke: color }}
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.3" cy="11.1" r="1.35" style={{ fill: color }} />
+    </svg>
+  );
+}
+
 // A corner of a card's face, as a playing card's: the number of shares held (its "rank") over
-// its kind's mark (its "suit").
+// a fish in its sector's colour (its "suit").
 function Corner({ card, flip }: { card: DeckCard; flip?: boolean }) {
   return (
     <span
@@ -72,7 +94,7 @@ function Corner({ card, flip }: { card: DeckCard; flip?: boolean }) {
       <span className="text-base font-bold tabular-nums text-slate-900">
         {card.shares.toLocaleString("en-CA")}
       </span>
-      <KindMark kind={card.kind} className="mt-0.5 size-3.5" color={card.color} />
+      <Fish color={card.color} className="mt-0.5 h-3 w-[18px]" />
     </span>
   );
 }
@@ -144,21 +166,23 @@ function Card({ card, flip, chosen }: { card: DeckCard; flip: string; chosen: bo
 // playing card (its shares its rank, in the corners; its sector's colour round its edge). At
 // rest the hand lies stacked, each card a little behind and turned from the last; pointed at
 // (or tabbed into), it fans out so each shows whole, and the chosen pick's card stands a
-// little proud. On the right, the deck: the picks not yet held, face down, their backs all
-// alike. Clicking it (or "Draw at random!" under it) draws a card at random, turning it face
-// up beside it and showing its pick (its chart and ticket, to buy); clicking the card drawn
-// puts it back under the deck. A pick newly bought leaves the deck and turns face up into the
+// little proud. On the right, the deck: the picks not yet held, face down in their sectors'
+// colours. Clicking it (or "Draw at random!" under it) draws a card at random, turning it face
+// up beside it. Clicking the card drawn shows its pick (its chart and ticket, to buy), the
+// page gliding up to it; clicking it again, once shown, puts it back under the deck. A pick newly bought leaves the deck and turns face up into the
 // hand. Clicking a card in the hand chooses its pick.
 export default function HoldingsDeck({
   cards,
   pile,
   selected,
   onSelect,
+  onView,
 }: {
   cards: DeckCard[];
   pile: DeckCard[];
   selected: string;
   onSelect: (symbol: string) => void;
+  onView: (symbol: string) => void; // a card drawn, clicked: its pick shown and scrolled to
 }) {
   const row = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
@@ -169,6 +193,8 @@ export default function HoldingsDeck({
   const [drawn, setDrawn] = useState<string | null>(null);
   const [returning, setReturning] = useState<string | null>(null);
   const [draws, setDraws] = useState(0);
+  // Whether the deck has been clicked since the pointer came onto it (its cat happy).
+  const [happy, setHappy] = useState(false);
   // A pick bought while drawn, whose card comes into the hand from the drawn place.
   const [fromDrawn, setFromDrawn] = useState<string | null>(null);
   // The hand in the order its cards came in, each new one joining the end.
@@ -227,8 +253,6 @@ export default function HoldingsDeck({
     ]);
     setDrawn(top.symbol);
     setDraws((d) => d + 1);
-    // Shown at once: its chart and ticket, to buy.
-    onSelect(top.symbol);
   }
 
   // Putting the drawn card back under the deck: face down, it slides out to the deck's side,
@@ -319,10 +343,10 @@ export default function HoldingsDeck({
             <div key={`${shown.symbol}-${draws}`}>
               <button
                 type="button"
-                onClick={() => (shown.symbol === selected ? putBack() : onSelect(shown.symbol))}
+                onClick={() => (shown.symbol === selected ? putBack() : onView(shown.symbol))}
                 aria-pressed={shown.symbol === selected}
                 aria-label={`${shown.name}: not held, ${money.format(shown.value)} a share. ${
-                  shown.symbol === selected ? "Click to put it back" : "Click to show it"
+                  shown.symbol === selected ? "Click to put it back" : "Click to view it"
                 }`}
                 className="kind-hover relative block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
                 style={{ width: CARD_W, height: CARD_H, ["--from" as string]: `${CARD_W + GAP}px` }}
@@ -334,7 +358,7 @@ export default function HoldingsDeck({
                 className="text-fade-in mt-2.5 text-center text-[11px] leading-snug text-slate-500"
                 style={{ animationDelay: "350ms" }}
               >
-                {shown.symbol === selected ? "Click to put it back" : "Click to show it"}
+                {shown.symbol === selected ? "Click to put it back" : "Click to view it"}
               </p>
             </div>
           ) : null}
@@ -350,7 +374,13 @@ export default function HoldingsDeck({
           ) : (
             <button
               type="button"
-              onClick={draw}
+              onClick={() => {
+                draw();
+                setHappy(true);
+              }}
+              // Clicked, the cat on its top card is happy until the pointer leaves it.
+              data-happy={happy || undefined}
+              onPointerLeave={() => setHappy(false)}
               disabled={deck.length === 0}
               aria-label={`Having trouble deciding? Draw at random from the deck (${deck.length} ${deck.length === 1 ? "card" : "cards"})`}
               className="deck-pile group relative block size-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"

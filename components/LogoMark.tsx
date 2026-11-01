@@ -109,8 +109,39 @@ const ANGRY = [0, 90, 180, 270]
   })
   .join("");
 
-// The colour of whatever the mark sits on (see the Watch List's mark), for the seams.
+// Her surprise: three short strokes fanning out evenly round her right ear.
+const SURPRISE = "M63.6 13.2 65.6 8.2M67 16.2 71.4 13.2M68.2 20.6 73.6 20.6";
+
+// A simple flower for her happiness: five round petals about a round middle, drawn about
+// (0, 0), petals 1.9 across, outlined in white.
+const PETALS = [0, 72, 144, 216, 288].map((deg) => {
+  const r = (deg * Math.PI) / 180;
+  // Rounded, so the page drawn on the server and in the browser agree to the digit.
+  return [(2.2 * Math.sin(r)).toFixed(3), (-2.2 * Math.cos(r)).toFixed(3)] as const;
+});
+
+function Flower({ x, y, size, spin }: { x: number; y: number; size: number; spin: string }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${size})`}>
+      <g className={spin}>
+        {PETALS.map(([px, py]) => (
+          <circle key={`o${px}`} cx={px} cy={py} r="2.6" fill="white" />
+        ))}
+        {PETALS.map(([px, py]) => (
+          <circle key={`p${px}`} cx={px} cy={py} r="1.75" fill="#f9a8d4" />
+        ))}
+        <circle r="1.35" fill="#facc15" stroke="white" strokeWidth="0.6" />
+      </g>
+    </g>
+  );
+}
+
+// The colour of whatever the mark sits on (see the Watch List's mark), for the seams, the
+// rim round the cat's head, and her eyes and mouth.
 const PAPER = "var(--mark-paper, white)";
+// The thin seams between the box's faces and flaps: the background's colour, unless set
+// apart (--mark-seam; the Sandbox's card backs make them white).
+const SEAM = `var(--mark-seam, ${PAPER})`;
 
 // The cardboard's browns, darkest to lightest: the inside, the left face (in shadow), the
 // right face, and the two flaps (the back one a touch darker than the front), then the back
@@ -168,10 +199,10 @@ export default function LogoMark({
         </clipPath>
       </defs>
       {/* The seams: each face is edged in the background colour. */}
-      <g style={{ stroke: PAPER }} strokeWidth="3">
+      <g style={{ stroke: SEAM }} strokeWidth="3">
         <polygon points={INSIDE} style={{ fill: CARDBOARD.inside }} />
       </g>
-      <g style={{ stroke: PAPER }} strokeWidth="3">
+      <g style={{ stroke: SEAM }} strokeWidth="3">
         {/* The back flap, then the front faces, so as it folds down behind the box the faces
             stand in front of it; both are behind the cat. */}
         <path
@@ -194,20 +225,51 @@ export default function LogoMark({
           {/* Her eyes. */}
           <circle cx="43" cy="39" r="2.8" style={{ fill: PAPER }} />
           <circle cx="57" cy="39" r="2.8" style={{ fill: PAPER }} />
-          {/* Her mouth: a small "^" between and just below her eyes. */}
+          {/* Her mouth: a small "^" between and just below her eyes; surprised, the same size
+              filled in as a little triangle, its corners softly rounded (.logo-mark-gasp);
+              happy, a little "ω" (.logo-mark-smile). */}
           <path
-            d="M48.2 46.2 50 44.4 51.8 46.2"
+            d="M47.9 46.5 50 44.3 52.1 46.5"
+            className="logo-mark-mouth"
             fill="none"
             style={{ stroke: PAPER }}
-            strokeWidth="1.3"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M48.15 46.25H51.85L50 44.55Z"
+            className="logo-mark-gasp"
+            style={{ fill: PAPER, stroke: PAPER }}
+            strokeWidth="2.1"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M47.1 45C47.3 47.5 49.7 47.6 50 45.5 50.3 47.6 52.7 47.5 52.9 45"
+            className="logo-mark-smile"
+            fill="none"
+            style={{ stroke: PAPER }}
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         </g>
       </g>
+      {/* Her surprise, seen only when she is surprised (.logo-mark-surprise): three short
+          strokes bursting out by the top right of her head, yellow, outlined in white. */}
+      <g className="logo-mark-surprise" fill="none" strokeLinecap="round">
+        <path d={SURPRISE} stroke="white" strokeWidth="4.6" />
+        <path d={SURPRISE} stroke="#facc15" strokeWidth="2.4" />
+      </g>
+      {/* Her happiness, seen only when she is happy (.logo-mark-flowers), in the surprise's
+          place: a big flower and a small one by her right ear, turning opposite ways. */}
+      <g className="logo-mark-flowers">
+        <Flower x={66.5} y={11.5} size={1} spin="logo-mark-spin" />
+        <Flower x={73.2} y={19.5} size={0.62} spin="logo-mark-spin-back" />
+      </g>
       {/* The front flap, over the cat: closed or lifted, the lid is still on top of her; open,
           it hangs down over the front, below her. */}
-      <path d={flapPath(FRONT_FLAP, lid)} style={{ fill: FRONT_FLAP.fill, stroke: PAPER }} strokeWidth="3" />
+      <path d={flapPath(FRONT_FLAP, lid)} style={{ fill: FRONT_FLAP.fill, stroke: SEAM }} strokeWidth="3" />
       {/* The angry mark, in red, seen only once she is cross. */}
       <path
         d={ANGRY}
