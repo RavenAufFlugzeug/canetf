@@ -49,6 +49,7 @@ const HEIGHT = 220;
 const MARGIN = { top: 40, right: 64, bottom: 28, left: 8 }; // the tooltip sits in the top margin
 const TIP_PAD = 26; // the tooltip's horizontal padding (px-3) and border, around its text
 const SLIDE_MS = 600; // how long new days take to slide in
+const REPLAY_MS = 1400; // how long days take to slide in again (`replay`)
 
 const money = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 
@@ -101,6 +102,7 @@ export default function SandboxChart({
   onRange,
   scope: scopeShared,
   onScope,
+  replay,
 }: {
   symbol: string;
   history: number[];
@@ -121,6 +123,10 @@ export default function SandboxChart({
   onRange?: (r: Range) => void;
   scope?: "all" | "test";
   onScope?: (s: "all" | "test") => void;
+  // Each time `key` changes, the chart goes back to before the last `days` days and stays there
+  // while `hold` is on; let go, they slide in again, a little slower than new days do, so they
+  // are seen coming in (as the test walks through the days just passed).
+  replay?: { key: number; days: number; hold: boolean };
 }) {
   const [ownRange, setOwnRange] = useState<Range>("1M");
   const range = rangeShared ?? ownRange;
@@ -243,17 +249,44 @@ export default function SandboxChart({
   // chart eases from what it spanned before to what it spans now.
   const [slide, setSlide] = useState<Span | null>(null);
   const slideRef = useRef<Span | null>(null);
-  const settled = useRef({ span: { lo: first, hi: total - 1, yMin, yMax } as Span, range: key, total });
+  const replayKey = replay?.key ?? 0;
+  const replayDays = replay?.days ?? 0;
+  const replayHold = replay?.hold ?? false;
+  // Days to slide in again, held back until let go (`replay.hold`).
+  const waiting = useRef(false);
+  const settled = useRef({
+    span: { lo: first, hi: total - 1, yMin, yMax } as Span,
+    range: key,
+    total,
+    // A chart that comes in held (a new pick swapped in) holds from the start.
+    replay: replayHold ? NaN : replayKey,
+  });
 
   useEffect(() => {
     const before = settled.current;
     const to: Span = { lo: first, hi: total - 1, yMin, yMax };
-    const from = slideRef.current ?? before.span;
-    settled.current = { span: to, range: key, total };
+    // Days slid in again start from where the chart stood before them: as far back as there
+    // were days, the line beyond its right edge.
+    // Held, the chart stays there (any change meanwhile, such as the pick shown, held there too)
+    // until let go, then they slide in.
+    if (replayKey !== before.replay && replayDays > 0) waiting.current = true;
+    const replayed = waiting.current;
+    const from: Span = replayed
+      ? { lo: Math.max(first - replayDays, 0), hi: Math.max(total - 1 - replayDays, first), yMin, yMax }
+      : (slideRef.current ?? before.span);
+    settled.current = { span: to, range: key, total, replay: replayKey };
 
     let raf = 0;
+    if (replayed && replayHold) {
+      raf = requestAnimationFrame(() => {
+        slideRef.current = from;
+        setSlide(from);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    waiting.current = false;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (before.range !== key || total <= before.total || reduceMotion) {
+    if (!replayed && (before.range !== key || total <= before.total || reduceMotion)) {
       // Not new days (a range switch morphs instead): settle on the final span.
       if (slideRef.current) {
         raf = requestAnimationFrame(() => {
@@ -267,9 +300,11 @@ export default function SandboxChart({
     let start: number | null = null;
     const step = (now: number) => {
       start ??= now;
-      const t = Math.min((now - start) / SLIDE_MS, 1);
+      const t = Math.min((now - start) / (replayed ? REPLAY_MS : SLIDE_MS), 1);
+      // Slid in again, it eases in as well as out, so it sets off gently.
+      const e = replayed ? (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2) : easeOut(t);
       if (t < 1) {
-        slideRef.current = blendSpan(from, to, easeOut(t));
+        slideRef.current = blendSpan(from, to, e);
         setSlide(slideRef.current);
         raf = requestAnimationFrame(step);
       } else {
@@ -279,7 +314,7 @@ export default function SandboxChart({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [first, total, yMin, yMax, key]);
+  }, [first, total, yMin, yMax, key, replayKey, replayDays, replayHold]);
 
   // Where a day (an index into every day) and a price fall, on the span shown.
   const span = slide ?? { lo: first, hi: total - 1, yMin, yMax };

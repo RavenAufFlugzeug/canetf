@@ -49,7 +49,7 @@ export default async function SearchPage({
           <SearchBox symbol={company?.symbol ?? null} name={company?.name ?? null} />
           {company && history ? (
             // Keyed by symbol, so each newly chosen company plays its entrance.
-            <div key={`company-${company.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
+            <div key={`company-${company.symbol}`} className="company-view mt-6 border-t border-slate-200 pt-6">
               <div className="rise-in flex items-center gap-3">
                 {/* Its badge: its sector's colour and its kind's mark. */}
                 <KindBadge

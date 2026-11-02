@@ -109,7 +109,7 @@ type Ask = { symbol: string; name: string; side: Side; shares: number };
 // What is held of a pick: how many shares, and what they cost in Canadian dollars (for their
 // average price; a sale takes its shares out at that average).
 type Holding = { shares: number; cost: number };
-// What happened over the days just passed, shown before they come in: from Day `from` to
+// What happened over the days just passed, summed up once they have come in: from Day `from` to
 // Day `to`, the account's value on each of those days (at the shares held throughout), how
 // each pick moved, and how each position did; with each pick's new closes and which of
 // those days (by number) begin a new year, to bring in once it is seen.
@@ -121,9 +121,14 @@ type Recap = {
   // currency's rate together), and what that made or lost.
   // `pricePct`: its price's change alone; `pct`: its worth in CAD (the same for a CAD pick).
   positions: {
+    symbol: string;
     name: string;
     shares: number;
     foreign: boolean;
+    // Its currency, and its price where it trades at the start and the end of the days.
+    currency: string;
+    startPrice: number;
+    endPrice: number;
     pricePct: number;
     pct: number;
     gain: number;
@@ -133,6 +138,19 @@ type Recap = {
 
 // How long a recap takes to fade away (.recap-out in globals.css).
 const RECAP_OUT_MS = POPUP_OUT_MS;
+// The walk through new days: how long the test takes to fade out; how long the page then takes
+// to move up to its top, unseen; how long the days passed show on their own; how long the test
+// takes to fade back in, on the new day; how long the page takes to glide to a holding's chart,
+// and how long after that its new days slide in again; how long it stays after; and how long
+// the walk's guide takes to go.
+const TOUR_FADE_MS = 480;
+const TOUR_UP_MS = 650;
+const TOUR_DAY_MS = 1700;
+const TOUR_IN_MS = 1100;
+const TOUR_GLIDE_MS = 1100;
+const TOUR_REPLAY_MS = 1250;
+const TOUR_HOLD_MS = 2600;
+const TOUR_OUT_MS = 280;
 // How long passed, for a recap's heading: "A day passes", "A week passes", "3 days pass".
 function passedText(n: number) {
   const { text } = tradingSpan(n);
@@ -285,10 +303,10 @@ const START =
 // How long the play mark takes to launch (.start-mark-launch in globals.css).
 const LAUNCH_MS = 380;
 // Starting the test is unhurried: the loading mark shows for at least START_WAIT_MS from
-// the click, then the start panel's contents fade away over LEAVE_MS, and the panel grows
-// to the trading panel over GROW_MS as the trading panel's parts rise in one by one.
+// the click, then the start panel fades away over LEAVE_MS; the trading panel takes its place
+// out of sight as the page settles on it, then fades in slowly, its parts rising in one by one.
 const START_WAIT_MS = 1100;
-const LEAVE_MS = 350;
+const LEAVE_MS = 480;
 // How long the shown pick's parts take to fade out when another is chosen (.pick-swap-out).
 const SWAP_OUT_MS = 260;
 const GROW_MS = 750;
@@ -297,7 +315,13 @@ const pause = (ms: number) => new Promise((done) => window.setTimeout(done, ms))
 // One part of the trading panel rising in, `i` parts after the first, as the test starts.
 const enter = (i: number) => ({
   className: "rise-in",
-  style: { animationDelay: `${120 + i * 110}ms`, animationDuration: "700ms" },
+  style: { animationDelay: `${200 + i * 160}ms`, animationDuration: "1000ms" },
+});
+
+// The same, slower and further apart: the results coming in once the test has faded away.
+const enterSlow = (i: number) => ({
+  className: "rise-in",
+  style: { animationDelay: `${500 + i * 280}ms`, animationDuration: "1100ms" },
 });
 
 const NO_ORDERS: Record<Side, string> = { Bought: "", Sold: "" };
@@ -375,8 +399,8 @@ export default function SandboxTest({
   const [swapTo, setSwapTo] = useState<string | null>(null);
   const swapTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(swapTimer.current), []);
-  // Whether the chosen pick's general info is open (open to begin with; it can be folded).
-  const [infoOpen, setInfoOpen] = useState(true);
+  // Whether the chosen pick's general info is open (folded to begin with; it can be opened).
+  const [infoOpen, setInfoOpen] = useState(false);
   // How many times it has been opened, so what plays as it opens (an ETF's map) plays each time.
   const [infoOpenings, setInfoOpenings] = useState(0);
   // A trade asked for and waiting to be confirmed, and whether its card is going away.
@@ -404,6 +428,25 @@ export default function SandboxTest({
   // The days just loaded, summed up before they come in, and whether that summary is fading.
   const [recap, setRecap] = useState<Recap | null>(null);
   const [recapLeaving, setRecapLeaving] = useState(false);
+  // The walk through days just come in: the test fading out ("out"), the days passed shown on
+  // their own ("day"), the test fading back in on the new day ("in"), then each holding's chart
+  // in turn ("walk", `at` its place among the recap's positions), before the recap sums them up.
+  // Whether the test is fading away (finished, for the results to come in; or left), and
+  // whether the trading panel, just started, is waiting out of sight to fade in.
+  const [ending, setEnding] = useState(false);
+  const [arriving, setArriving] = useState(false);
+  const [tour, setTour] = useState<{
+    recap: Recap;
+    stage: "out" | "day" | "in" | "walk";
+    at: number;
+    leaving: boolean;
+  } | null>(null);
+  // Each holding's chart's new days sliding in again, as the walk comes to it.
+  const [replay, setReplay] = useState({ key: 0, days: 0, hold: false });
+  const chartTop = useRef<HTMLDivElement>(null);
+  const tourTimer = useRef<number | undefined>(undefined);
+  // The pick shown or on its way, for the walk's timers (which outlive the render they began in).
+  const showing = useRef("");
 
   const entries = picks.map(({ symbol, from }) => ({ symbol, from }));
   // Once the test is over: the stretch of time it ran over, and each pick's real name.
@@ -549,7 +592,12 @@ export default function SandboxTest({
       setStatus("trading");
       setLeaving(false);
       setTesting(true);
-      // The set-up folds away above; the page glides to the test's top as it does.
+      // The set-up folds away above; the page glides to the test's top as it does, out of
+      // sight, and then the test fades in.
+      if (!calm) {
+        setArriving(true);
+        window.setTimeout(() => setArriving(false), GROW_MS + 700);
+      }
       toPanelTop();
     });
   }
@@ -610,60 +658,164 @@ export default function SandboxTest({
       );
       // A share's worth in CAD at the end of the days.
       const endOf = (s: string) => loaded[s].closes[steps - 1] * loaded[s].rates[steps - 1];
-      setRecap({
+      play({
         from: day,
         to: next,
         values,
         positions: picks
           .filter((p) => heldOf(p.symbol).shares > 0)
           .map((p) => ({
+            symbol: p.symbol,
             name: nameOf(p.symbol),
             shares: heldOf(p.symbol).shares,
             foreign: Boolean(p.currency && p.currency !== "CAD"),
+            currency: p.currency ?? "CAD",
+            startPrice: priceOf(p.symbol),
+            endPrice: cents(loaded[p.symbol].closes[steps - 1]),
             pricePct: ((loaded[p.symbol].closes[steps - 1] - priceOf(p.symbol)) / priceOf(p.symbol)) * 100,
             pct: ((endOf(p.symbol) - cadOf(p.symbol)) / cadOf(p.symbol)) * 100,
             gain: cents(heldOf(p.symbol).shares * (endOf(p.symbol) - cadOf(p.symbol))),
           })),
         days: loaded,
+      }, trades.at(-1)?.symbol);
+    });
+  }
+
+  // Brings the days in and walks through them. The test fades out; then the page moves up to its
+  // top, unseen; the days passed show on their own, the day counting up; the test fades back
+  // in on the new day. Then, for each pick held, the page glides to its chart and its new days
+  // slide in, the guide at the foot of the screen saying how its price moved. Once through them
+  // all, it shows the pick last traded (`last`); skipped (the guide's Skip, or Escape), it stays
+  // on the holding it had come to. Then the recap sums the days up. Holding nothing, the walk
+  // ends once the test is back. With reduced motion, the days come in and the recap comes up.
+  function play(done: Recap, last?: string) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      bringIn(done);
+      setRecap(done);
+      return;
+    }
+    const at = (stage: "out" | "day" | "in" | "walk", i = -1) =>
+      setTour({ recap: done, stage, at: i, leaving: false });
+    const later = (ms: number, then: () => void) => {
+      tourTimer.current = window.setTimeout(then, ms);
+    };
+    const order = done.positions.map((p) => p.symbol);
+    const hold = () => setReplay((r) => ({ key: r.key + 1, days: done.to - done.from, hold: true }));
+    const walk = (i: number) => {
+      if (i >= order.length) {
+        if (last && order.length) {
+          showPick(last);
+          easeTo(chartTop, TOUR_GLIDE_MS);
+        }
+        return endTour(done);
+      }
+      at("walk", i);
+      // A pick come to anew goes back to before the days as it swaps in, out of sight; the one
+      // already shown went back as the test faded in. Once the page is there, the days slide in.
+      showPick(order[i], hold);
+      easeTo(chartTop, TOUR_GLIDE_MS);
+      later(TOUR_REPLAY_MS, () => {
+        setReplay((r) => ({ ...r, hold: false }));
+        later(TOUR_HOLD_MS, () => walk(i + 1));
+      });
+    };
+    at("out");
+    later(TOUR_FADE_MS, () => {
+      easeTo(panelTop, TOUR_UP_MS);
+      later(TOUR_UP_MS, () => {
+        at("day");
+        later(TOUR_DAY_MS, () => {
+          at("in");
+          bringIn(done);
+          if (order.length) hold();
+          later(TOUR_IN_MS, () => walk(0));
+        });
       });
     });
   }
 
-  // Closes the recap without its days: the test stays on the day it was opened from.
-  function stay() {
-    if (!recap || recapLeaving) return;
-    setRecapLeaving(true);
-    window.setTimeout(() => {
-      setRecap(null);
-      setRecapLeaving(false);
-    }, RECAP_OUT_MS);
+  // Glides the page to the pick shown and its chart (a card clicked): slowly, easing in and
+  // out, taking longer the further it goes.
+  function toShown() {
+    const el = shownTop.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return glideTo(shownTop);
+    const far = Math.abs(el.getBoundingClientRect().top - 96);
+    easeTo(shownTop, Math.min(Math.max(700 + far * 0.6, 900), 1600));
   }
 
-  // Closes the recap and brings its days in, with today's value to measure the change from.
+  // Scrolls the page to `target`'s top (less its scroll margin) over `ms`, easing in and out;
+  // where the target is, is measured afresh each frame, so it is met even as the page around it
+  // changes size on the way.
+  function easeTo(target: React.RefObject<HTMLDivElement | null>, ms: number) {
+    const from = window.scrollY;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const el = target.current;
+      if (!el) return;
+      const want = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      const to = Math.min(
+        el.getBoundingClientRect().top + window.scrollY - want,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      const t = Math.min((now - t0) / ms, 1);
+      const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+      window.scrollTo(0, from + (to - from) * e);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // The walk's guide fades away and the recap comes up in its place.
+  function endTour(done: Recap) {
+    window.clearTimeout(tourTimer.current);
+    setTour((t) => (t ? { ...t, leaving: true } : t));
+    setReplay((r) => (r.hold ? { ...r, hold: false } : r));
+    tourTimer.current = window.setTimeout(() => {
+      setTour(null);
+      setRecap(done);
+    }, TOUR_OUT_MS);
+  }
+
+  // Shows a pick, as choosing it does, from the walk's timers; `then`, as it swaps in.
+  function showPick(symbol: string, then?: () => void) {
+    if (symbol === showing.current) return;
+    setSwapDir(1);
+    setSwapTo(symbol);
+    window.clearTimeout(swapTimer.current);
+    swapTimer.current = window.setTimeout(() => {
+      setSelected(symbol);
+      setSwapTo(null);
+      then?.();
+    }, SWAP_OUT_MS);
+  }
+
+  // Brings the days in, with the value the day before them to measure the change from: the
+  // chart sliding on and the figures counting.
+  function bringIn(done: Recap) {
+    setBefore({ day: done.from, value: done.values[0] });
+    setPrices((all) =>
+      Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].closes]])),
+    );
+    setRates((all) =>
+      Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].rates]])),
+    );
+    setYearStarts((all) =>
+      Object.fromEntries(
+        picks.map((p) => [
+          p.symbol,
+          [...all[p.symbol], ...done.days[p.symbol].yearStarts.map((d) => history[p.symbol].length + d - 1)],
+        ]),
+      ),
+    );
+    setOrders({});
+  }
+
+  // Closes the recap, the days it sums up already in.
   function moveOn() {
     if (!recap || recapLeaving) return;
-    const done = recap;
     setRecapLeaving(true);
     window.setTimeout(() => {
-      setBefore({ day: done.from, value });
-      setPrices((all) =>
-        Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].closes]])),
-      );
-      setRates((all) =>
-        Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].rates]])),
-      );
-      setYearStarts((all) =>
-        Object.fromEntries(
-          picks.map((p) => [
-            p.symbol,
-            [
-              ...all[p.symbol],
-              ...done.days[p.symbol].yearStarts.map((d) => history[p.symbol].length + d - 1),
-            ],
-          ]),
-        ),
-      );
-      setOrders({});
       setRecap(null);
       setRecapLeaving(false);
     }, RECAP_OUT_MS);
@@ -720,27 +872,51 @@ export default function SandboxTest({
 
   // Finishing: the congratulating card goes, the summary comes in in its place, and the page
   // glides to the summary's top, so it is read from the start.
+  // With motion, the test fades away as the card goes, as it does when days pass; the results
+  // take its place and the page moves up to them, unseen; then they come in slowly, a part at a
+  // time.
   function finish() {
     if (finishLeaving) return;
     setFinishLeaving(true);
-    window.setTimeout(() => {
-      setFinishing(false);
-      setFinishLeaving(false);
-      setStatus("done");
-      toPanelTop();
-    }, RECAP_OUT_MS);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      window.setTimeout(() => {
+        setFinishing(false);
+        setFinishLeaving(false);
+        setStatus("done");
+        toPanelTop();
+      }, RECAP_OUT_MS);
+      return;
+    }
+    setEnding(true);
+    window.setTimeout(
+      () => {
+        // The results come in out of sight (their parts waiting to rise in), the page following
+        // them up as the set-up opens above; then they show.
+        setFinishing(false);
+        setFinishLeaving(false);
+        setStatus("done");
+        toPanelTop();
+        window.setTimeout(() => setEnding(false), GROW_MS + 700);
+      },
+      Math.max(RECAP_OUT_MS, TOUR_FADE_MS),
+    );
   }
 
   // Leaving the test early, once the player has said so on the card that warns them: the test
   // goes back to just before it started (the same picks and choices, the Start button ready),
   // everything done in it gone; the set-up opens again above, and the page glides up to it.
+  // With motion, the test fades away as the card goes, then comes back as it was before it
+  // started, out of sight as the page glides up, and fades in.
   function quit(confirmed: boolean) {
     if (quitLeaving) return;
     setQuitLeaving(true);
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (confirmed && !calm) setEnding(true);
     window.setTimeout(() => {
       setQuitting(false);
       setQuitLeaving(false);
       if (!confirmed) return;
+      if (!calm) window.setTimeout(() => setEnding(false), 900);
       setStatus("ready");
       setPrices({});
       setRates({});
@@ -759,11 +935,18 @@ export default function SandboxTest({
       setTrades([]);
       setError(null);
       setRecap(null);
+      window.clearTimeout(tourTimer.current);
+      setTour(null);
       setRipple(null);
       setTesting(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }, RECAP_OUT_MS);
+    }, calm || !confirmed ? RECAP_OUT_MS : Math.max(RECAP_OUT_MS, TOUR_FADE_MS));
   }
+
+  useEffect(() => {
+    showing.current = swapTo ?? selected;
+  }, [swapTo, selected]);
+  useEffect(() => () => window.clearTimeout(tourTimer.current), []);
 
   // Changing the pick shown: its parts fade out and slide away first (SWAP_OUT_MS), then the
   // new pick's fade and slide in from its side. Choosing again meanwhile just changes where it
@@ -901,12 +1084,11 @@ export default function SandboxTest({
   function panel() {
     if (status === "ready") {
       return (
-        <div className="rise-in mt-5 rounded-xl bg-slate-50 p-5">
-          <div
-            className={`flex flex-wrap items-center gap-4 transition duration-[350ms] ease-out ${
-              leaving ? "-translate-y-1 opacity-0 blur-[2px]" : ""
-            }`}
-          >
+        <div
+          data-hidden={leaving || ending ? "" : undefined}
+          className="tour-panel result-in rise-in mt-5 rounded-xl bg-slate-50 p-5"
+        >
+          <div className="flex flex-wrap items-center gap-4">
             <button type="button" onClick={start} disabled={pending} aria-busy={pending} className={START}>
               {ripple && (
                 <span
@@ -1004,7 +1186,11 @@ export default function SandboxTest({
             ? `Day ${days} · ${longDay(reveal.last)}`
             : `Day ${k + 1}`;
       return (
-        <div ref={panelTop} className="rise-in mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5">
+        <div
+          ref={panelTop}
+          data-hidden={ending ? "" : undefined}
+          className="tour-panel result-in rise-in mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5"
+        >
           {/* The grade, marked in red as on a test paper: a paper with a tick beside the result,
               and the letter on a tile, which opens what the grades mean. */}
           <div className="flex items-center gap-4">
@@ -1129,7 +1315,7 @@ export default function SandboxTest({
               </span>
             )}
           </div>
-          <dl {...enter(0)} className="rise-in mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+          <dl {...enterSlow(0)} className="rise-in mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <Stat label="Started with" value={money.format(amount)} />
             <Stat label={`Worth on Day ${days}`} value={<Tween value={value} format={moneyText} />} />
             <Stat
@@ -1139,7 +1325,7 @@ export default function SandboxTest({
             />
           </dl>
           {/* What the account was worth each day: gains above the starting line, losses below. */}
-          <div {...enter(1)} className="rise-in mt-5 rounded-lg border border-slate-200 bg-white p-4">
+          <div {...enterSlow(1)} className="rise-in mt-5 rounded-lg border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold text-slate-900">Your account over the test</p>
             <p className="text-xs text-slate-500">
               Its value at each day&apos;s close, with your buys (▲) and sales (▼) marked under it. Point
@@ -1156,7 +1342,7 @@ export default function SandboxTest({
           </div>
           {/* How each pick did, and what trading it made. */}
           <div
-            {...enter(1)}
+            {...enterSlow(1)}
             className="rise-in mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white"
           >
             <table className="w-full text-sm tabular-nums">
@@ -1317,7 +1503,7 @@ export default function SandboxTest({
             </table>
           </div>
           {/* What next: a new set with the same choices, or out, back to before any set. */}
-          <div {...enter(2)} className="rise-in mt-5 flex flex-wrap items-center gap-2">
+          <div {...enterSlow(2)} className="rise-in mt-5 flex flex-wrap items-center gap-2">
             <button type="button" onClick={tryAgain} className={`${DARK} ${ACTION}`}>
               <RetryMark className="size-4" />
               Try a new set
@@ -1359,7 +1545,14 @@ export default function SandboxTest({
       { label: "Next month", days: 21, Mark: MonthMark },
     ];
     return (
-      <div ref={panelTop} className="rise-in relative mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5">
+      <div
+        ref={panelTop}
+        data-hidden={
+          ending || arriving || (tour && (tour.stage === "out" || tour.stage === "day")) ? "" : undefined
+        }
+        data-touring={tour ? "" : undefined}
+        className="tour-panel rise-in relative mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5"
+      >
         <div {...enter(0)}>
           <div className="flex items-baseline justify-between gap-4">
             <p className="flex items-center gap-2 text-lg font-semibold text-slate-900">
@@ -1476,7 +1669,7 @@ export default function SandboxTest({
                 )}
               </div>
               {/* Its general info, as the Search page's About has it (but with its name hidden):
-                open to begin with; folded, a line saying it opens. */}
+                folded to begin with, a line saying it opens. */}
               <PickInfo
                 pick={pick}
                 day={day}
@@ -1487,8 +1680,10 @@ export default function SandboxTest({
                   setInfoOpen(!infoOpen);
                 }}
               />
+              <div ref={chartTop} className="scroll-mt-24" />
               <SandboxChart
                 symbol={pick.symbol}
+                replay={replay}
                 history={history[pick.symbol] ?? []}
                 prices={prices[pick.symbol] ?? []}
                 yearStarts={yearStarts[pick.symbol] ?? []}
@@ -1659,11 +1854,14 @@ export default function SandboxTest({
               cards={cards.filter((c) => c.shares > 0)}
               pile={cards.filter((c) => c.shares === 0)}
               selected={swapTo ?? pick.symbol}
-              onSelect={choosePick}
-              // A card drawn, clicked: its pick shown, the page gliding up to it.
+              // A card held or drawn, clicked: its pick shown, the page gliding up to it.
+              onSelect={(symbol) => {
+                choosePick(symbol);
+                toShown();
+              }}
               onView={(symbol) => {
                 choosePick(symbol);
-                glideTo(shownTop);
+                toShown();
               }}
             />
           </div>
@@ -1732,7 +1930,7 @@ export default function SandboxTest({
           <button
             type="button"
             onClick={() => setQuitting(true)}
-            disabled={pending || recap !== null || ask !== null}
+            disabled={pending || recap !== null || tour !== null || ask !== null}
             className={`${LIGHT} ${ACTION} mr-auto`}
           >
             <ExitMark className="size-4" />
@@ -1749,7 +1947,7 @@ export default function SandboxTest({
               <button
                 type="button"
                 onClick={() => goTo(day + s.days)}
-                disabled={s.days > left || pending || recap !== null || ask !== null}
+                disabled={s.days > left || pending || recap !== null || tour !== null || ask !== null}
                 className={`${i === 0 ? DARK : LIGHT} ${ACTION}`}
               >
                 <s.Mark className="size-4" />
@@ -1761,7 +1959,7 @@ export default function SandboxTest({
             <button
               type="button"
               onClick={() => setFinishing(true)}
-              disabled={left !== 0}
+              disabled={left !== 0 || recap !== null || tour !== null}
               className={`${DARK} ${ACTION}`}
             >
               <FinishMark className="size-4" />
@@ -1769,7 +1967,18 @@ export default function SandboxTest({
             </button>
           </StepSlot>
         </div>
-        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} onCancel={stay} />}
+        {tour && (tour.stage === "day" || tour.stage === "in") && (
+          <DaysPassed recap={tour.recap} leaving={tour.stage === "in"} />
+        )}
+        {tour?.stage === "walk" && (
+          <TourGuide
+            recap={tour.recap}
+            at={tour.at}
+            leaving={tour.leaving}
+            onSkip={() => endTour(tour.recap)}
+          />
+        )}
+        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} />}
         {finishing && (
           <FinishCard days={days} start={amount} end={value} leaving={finishLeaving} onDone={finish} />
         )}
@@ -2130,25 +2339,123 @@ function StepSlot({ on, children }: { on: boolean; children: React.ReactNode }) 
   );
 }
 
+// The days passed, shown on their own in the middle of the screen while the test is faded out:
+// a day, week or month's mark, how long passed, and the day counting from the old to the new.
+// It springs in, and fades as the test comes back.
+function DaysPassed({ recap, leaving }: { recap: Recap; leaving: boolean }) {
+  const { from, to } = recap;
+  const passed = to - from;
+  const Mark = passed === 1 ? MoonMark : passed <= 5 ? WeekMark : MonthMark;
+  const [after, setAfter] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAfter(true), 350);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return createPortal(
+    <div
+      role="status"
+      className="pointer-events-none fixed inset-0 z-40 grid place-items-center p-4"
+    >
+      <div
+        data-leaving={leaving || undefined}
+        className="days-passed flex flex-col items-center rounded-2xl border border-slate-200 bg-white px-10 py-7 text-center shadow-xl shadow-slate-900/10"
+      >
+        <span className="test-mark-live grid size-14 place-items-center rounded-full bg-slate-100 text-slate-900">
+          <Mark className="size-7" />
+        </span>
+        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{passedText(passed)}</p>
+        <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-900">
+          Day <Tween value={after ? to : from} format={dayText} />
+        </p>
+        <p className="mt-1 text-sm tabular-nums text-slate-500">
+          from Day {from}
+        </p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// The guide at the foot of the screen while the page walks through the charts of the picks
+// held: the holding come to (its name and shares), how its price moved over the days, and what
+// that made or lost, with a dot for each holding and a Skip button (or Escape) to go straight to
+// the recap. It rises in, its words fade from one holding to the next, and it sinks away as the
+// recap comes up.
+function TourGuide({
+  recap,
+  at,
+  leaving,
+  onSkip,
+}: {
+  recap: Recap;
+  at: number;
+  leaving: boolean;
+  onSkip: () => void;
+}) {
+  const { positions } = recap;
+  const p = positions[at];
+  const priceOf = (x: number) => (p.foreign ? `${plainText(x, p.currency)} ${p.currency}` : money.format(x));
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onSkip();
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onSkip]);
+  return createPortal(
+    <div
+      role="status"
+      data-leaving={leaving || undefined}
+      className="tour-guide fixed inset-x-0 bottom-5 z-40 mx-auto flex w-[min(30rem,calc(100%-2rem))] items-center gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 pl-4 shadow-xl shadow-slate-900/10 backdrop-blur"
+    >
+      <div key={at} className="text-fade-in min-w-0 flex-1">
+        <p className="flex items-baseline justify-between gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span>
+            Your holdings · {at + 1} of {positions.length}
+          </span>
+          <span className="normal-case tracking-normal">You made (CAD)</span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3 text-sm">
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-slate-900">{p.name}</span>{" "}
+            <span className="text-slate-500">
+              · {p.shares.toLocaleString("en-CA")} {sharesWord(p.shares)}
+            </span>
+          </span>
+          <span className={`shrink-0 font-semibold tabular-nums ${tone(p.gain)}`}>{changeText(p.gain)}</span>
+        </p>
+        <p className="flex items-baseline gap-2 text-xs tabular-nums text-slate-500">
+          <span>
+            {priceOf(p.startPrice)} <span className="text-slate-400">→</span>{" "}
+            <span className="font-semibold text-slate-900">{priceOf(p.endPrice)}</span>
+          </span>
+          <span className={`font-semibold ${tone(p.pricePct)}`}>{pctText(p.pricePct)}</span>
+        </p>
+        <span aria-hidden className="mt-1.5 flex gap-1">
+          {positions.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1 rounded-full transition-all duration-500 ease-out ${
+                i === at ? "w-4 bg-slate-900" : i < at ? "w-1.5 bg-slate-400" : "w-1.5 bg-slate-200"
+              }`}
+            />
+          ))}
+        </span>
+      </div>
+      <button type="button" onClick={onSkip} className={`${LIGHT} ${ACTION} shrink-0`}>
+        {at === positions.length - 1 ? "Summary" : "Skip"}
+      </button>
+    </div>,
+    document.body,
+  );
+}
+
 // The recap of the days just passed, over the trading panel (which it dims): how long passed;
 // what the account was worth then and now, with a little chart of it over those days (over
 // more than one day, while anything was held); and how each of the shares held did, by how
 // much its price moved and what that made or lost (nothing on the picks not held). It comes alive as it opens: its day, week or month mark
 // plays, its rows rise in one after another, and its figures count from where the days began
 // to where they ended as the little chart draws itself. Pointing along the little chart shows
-// each day's value. Continue moves on; Cancel (or a click outside it, or Escape) closes it and
-// stays on the day it was opened from.
-function RecapCard({
-  recap,
-  leaving,
-  onDone,
-  onCancel,
-}: {
-  recap: Recap;
-  leaving: boolean;
-  onDone: () => void;
-  onCancel: () => void;
-}) {
+// each day's value. Continue (or a click outside it, or Escape) closes it.
+function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
   const { from, to, values, positions } = recap;
   const button = useRef<HTMLButtonElement>(null);
   const chart = useRef<HTMLDivElement>(null);
@@ -2201,8 +2508,8 @@ function RecapCard({
   return createPortal(
     <div
       className={`recap ${popupOverlay(leaving)}`}
-      onClick={onCancel}
-      onKeyDown={(e) => e.key === "Escape" && onCancel()}
+      onClick={onDone}
+      onKeyDown={(e) => e.key === "Escape" && onDone()}
     >
       <div
         role="dialog"
@@ -2357,9 +2664,6 @@ function RecapCard({
           </div>
 
           <div {...row(3)} className="rise-in mt-4 flex gap-2">
-            <button type="button" onClick={onCancel} className={`${LIGHT} ${ACTION} flex-1 justify-center`}>
-              Cancel
-            </button>
             <button
               ref={button}
               type="button"

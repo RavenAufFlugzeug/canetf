@@ -245,11 +245,11 @@ export default function LogoMark({
             strokeLinejoin="round"
           />
           <path
-            d="M47.1 45C47.3 47.5 49.7 47.6 50 45.5 50.3 47.6 52.7 47.5 52.9 45"
+            d="M46.8 45C47 47.9 49.7 48 50 45.6 50.3 48 53 47.9 53.2 45"
             className="logo-mark-smile"
             fill="none"
             style={{ stroke: PAPER }}
-            strokeWidth="1.5"
+            strokeWidth="1.6"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -264,8 +264,8 @@ export default function LogoMark({
       {/* Her happiness, seen only when she is happy (.logo-mark-flowers), in the surprise's
           place: a big flower and a small one by her right ear, turning opposite ways. */}
       <g className="logo-mark-flowers">
-        <Flower x={66.5} y={11.5} size={1} spin="logo-mark-spin" />
-        <Flower x={73.2} y={19.5} size={0.62} spin="logo-mark-spin-back" />
+        <Flower x={68.5} y={9.5} size={1.75} spin="logo-mark-spin" />
+        <Flower x={77} y={20.5} size={1.1} spin="logo-mark-spin-back" />
       </g>
       {/* The front flap, over the cat: closed or lifted, the lid is still on top of her; open,
           it hangs down over the front, below her. */}

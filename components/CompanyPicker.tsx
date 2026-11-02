@@ -12,6 +12,8 @@ const DEBOUNCE_MS = 200;
 const MIN_THINKING_MS = 350;
 const ENTER_STAGGER_MS = 90; // gap between options appearing one at a time
 const LEAVE_MS = 300; // matches .picker-collapse in globals.css
+// How long the company shown takes to fade away before another is fetched (.company-view).
+const COMPANY_FADE_MS = 450;
 
 // An option in the dropdown. Options that stop matching stay a moment longer
 // (leftAt is set) so they can fade out and fold away.
@@ -157,9 +159,22 @@ export default function CompanyPicker({
     dismiss();
     startNavigation(async () => {
       if (onChoose) await onChoose(match.symbol);
-      else router.replace(`${pathname}?symbol=${encodeURIComponent(match.symbol)}`, { scroll: false });
+      else {
+        // The company shown fades away first (.company-view in globals.css), then the new one
+        // is fetched and fades in.
+        if (document.querySelector(".company-view") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          document.documentElement.dataset.companyLeaving = "";
+          await new Promise((done) => setTimeout(done, COMPANY_FADE_MS));
+        }
+        router.replace(`${pathname}?symbol=${encodeURIComponent(match.symbol)}`, { scroll: false });
+      }
     });
   }
+
+  // Once the new company is in, it fades in.
+  useEffect(() => {
+    if (!navigating) delete document.documentElement.dataset.companyLeaving;
+  }, [navigating]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown" && live.length) {

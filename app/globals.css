@@ -529,29 +529,29 @@ body:has(> main.bg-slate-50) {
    little while the new ones are fetched (for at least as long as this takes). */
 .sandbox-swap {
   transition:
-    opacity 260ms ease-out,
-    filter 260ms ease-out,
-    translate 260ms ease-out;
+    opacity 450ms ease-in,
+    filter 450ms ease-in,
+    translate 450ms ease-in;
 }
 
 .sandbox-swap[data-leaving] {
-  opacity: 0.35;
-  filter: blur(2px);
-  translate: 0 6px;
+  opacity: 0;
+  filter: blur(3px);
+  translate: 0 8px;
   pointer-events: none; /* nothing in it can be used until the new contents are in */
 }
 
 /* New contents after a change (Swap in components/SandboxSwap.tsx): fading and rising in out
    of the softness the old ones left in, so nothing snaps. */
 .sandbox-swap-in {
-  animation: sandbox-swap-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sandbox-swap-in 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 @keyframes sandbox-swap-in {
   from {
-    opacity: 0.35;
-    filter: blur(2px);
-    translate: 0 6px;
+    opacity: 0;
+    filter: blur(3px);
+    translate: 0 8px;
   }
 }
 
@@ -602,6 +602,121 @@ body:has(> main.bg-slate-50) {
   to {
     scale: 1;
     opacity: 0;
+  }
+}
+
+/* The Sandbox test's guide while it walks through new days (TourGuide in
+   components/SandboxTest.tsx): it rises in from the foot of the screen and sinks back away. */
+.tour-guide {
+  animation: tour-in 420ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+.tour-guide[data-leaving] {
+  animation: tour-out 280ms ease-in both;
+}
+
+@keyframes tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+@keyframes tour-out {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+/* The test fading out as the days move on, and back in on the new day. A filter, not opacity,
+   so it doesn't fight the panel's own rise-in (an animation of opacity). */
+.tour-panel {
+  transition:
+    filter 1000ms ease-out,
+    translate 1000ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Room below the test while the walk is on, so the page can always glide a chart to the top of
+   the screen, even as the pick shown (and so the page's length) changes on the way. */
+.tour-panel[data-touring] {
+  margin-bottom: 70vh;
+}
+
+.tour-panel[data-hidden] {
+  filter: opacity(0) blur(3px);
+  translate: 0 8px;
+  transition:
+    filter 450ms ease-in,
+    translate 450ms ease-in;
+}
+
+/* The test's results, once it has faded away: the panel comes in slowly (its parts after it,
+   slower still: enterSlow in components/SandboxTest.tsx). */
+.rise-in.result-in {
+  animation-duration: 1000ms;
+  animation-delay: 150ms;
+}
+
+/* While a panel is out of sight (just started, or the results), its parts wait to rise in,
+   so they do once seen. */
+.tour-panel[data-hidden],
+.tour-panel[data-hidden] :is(.rise-in, .grade-tick, .grade-tile, .chart-draw, .chart-area-in, .chart-fade) {
+  animation-play-state: paused;
+}
+
+/* A company chosen in Search: the one shown fades and softens away while the new one is
+   fetched (html[data-company-leaving], set by components/CompanyPicker.tsx), and the new one
+   fades in slowly out of the same softness (as Sandbox's days passing do). */
+.company-view {
+  animation: company-in 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  transition:
+    filter 450ms ease-in,
+    translate 450ms ease-in;
+}
+
+html[data-company-leaving] .company-view {
+  filter: opacity(0) blur(3px);
+  translate: 0 8px;
+}
+
+@keyframes company-in {
+  from {
+    filter: opacity(0) blur(3px);
+    translate: 0 10px;
+  }
+}
+
+/* The days passed, on their own while the test is faded out: it springs in, and fades and
+   lifts away as the test comes back. */
+.days-passed {
+  animation: days-passed-in 520ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+.days-passed[data-leaving] {
+  animation: days-passed-out 420ms ease-in both;
+}
+
+@keyframes days-passed-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(8px);
+  }
+}
+
+@keyframes days-passed-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-guide,
+  .tour-guide[data-leaving],
+  .days-passed,
+  .days-passed[data-leaving] {
+    animation: none;
   }
 }
 
@@ -2071,27 +2186,30 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
-/* Page transitions (app/template.tsx): the old page fades out quickly, then the new
-   one fades in while rising slightly. The navbar stays put throughout. */
+/* Page transitions (app/template.tsx): the old page fades and softens away, then the new
+   one fades in slowly out of the same softness, rising a little, as the Sandbox's days do
+   when they pass. The navbar stays put throughout. */
 ::view-transition-old(.page-exit) {
-  animation: 180ms ease-in both page-out;
+  animation: 420ms ease-in both page-out;
 }
 
 ::view-transition-new(.page-enter) {
-  animation: 380ms cubic-bezier(0.2, 0.7, 0.2, 1) 120ms both page-in;
+  animation: 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) 380ms both page-in;
 }
 
 @keyframes page-out {
   to {
     opacity: 0;
-    transform: translateY(-6px);
+    filter: blur(3px);
+    transform: translateY(8px);
   }
 }
 
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    filter: blur(3px);
+    transform: translateY(10px);
   }
 }
 

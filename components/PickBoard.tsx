@@ -116,6 +116,24 @@ export default function PickBoard({
     return () => window.clearTimeout(wait);
   }, [chosenKey, changing]);
 
+  // The listings' scrolling box: when the chosen listing changes (from here, or from a card in
+  // the holdings), it glides within the box to show that listing, if it's out of sight there.
+  const board = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = board.current;
+    const row = box?.querySelector<HTMLElement>("[data-on]");
+    if (!box || !row) return;
+    const head = box.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+    const b = box.getBoundingClientRect();
+    const r = row.getBoundingClientRect();
+    const top = r.top - b.top - head - 8;
+    const bottom = r.bottom - b.bottom + 8;
+    const by = top < 0 ? top : bottom > 0 ? bottom : 0;
+    if (by === 0) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollBy({ top: by, behavior: calm ? "auto" : "smooth" });
+  }, [chosen, view]);
+
   const words = query.trim().toLowerCase();
   const matchesStatus = (p: BoardPick, s: Status) =>
     s === "all" ||
@@ -515,7 +533,8 @@ export default function PickBoard({
         >
           <div
             key={view}
-            className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-y-auto px-2 pb-2 ${view === "grid" ? "pt-2" : "pt-0"}`}
+            ref={board}
+            className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-auto overscroll-x-contain px-2 pb-2 ${view === "grid" ? "pt-2" : "pt-0"}`}
           >
             {shown.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
@@ -535,7 +554,7 @@ export default function PickBoard({
               </p>
             ) : view === "grid" ? (
               <div
-                className="grid grid-cols-2 gap-2 md:grid-cols-4"
+                className="grid min-w-[22rem] grid-cols-2 gap-2 md:grid-cols-4"
                 role="group"
                 aria-label="Investment universe"
               >
@@ -601,7 +620,7 @@ export default function PickBoard({
                 })}
               </div>
             ) : (
-              <table className="w-full table-fixed text-sm tabular-nums" aria-label="Investment universe">
+              <table className="w-full min-w-[36rem] table-fixed text-sm tabular-nums" aria-label="Investment universe">
                 {/* Fixed column widths (table-fixed), so the columns stay put as the listing being
                     traded (in bold, with its tag) changes; the listing's name takes what is left. */}
                 <colgroup>

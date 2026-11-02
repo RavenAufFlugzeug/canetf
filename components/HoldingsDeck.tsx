@@ -144,12 +144,12 @@ function CardFace({ card }: { card: DeckCard }) {
 
 // A card that can turn over: its face, with its back behind it. `flip` names the animation
 // that turns it face up as it comes in (.deck-flip, .deck-draw in globals.css). Chosen, it is
-// ringed, the ring travelling with it as it comes in.
+// lifted, ringed and tagged "Trading" (the same wherever it lies), the ring travelling with it as it comes in.
 function Card({ card, flip, chosen }: { card: DeckCard; flip: string; chosen: boolean }) {
   return (
     <span
-      className={`${flip} relative block size-full rounded-xl transition-shadow duration-300 [transform-style:preserve-3d] ${
-        chosen ? "shadow-xl ring-2 ring-slate-900 ring-offset-2" : ""
+      className={`${flip} relative block size-full rounded-xl transition-[box-shadow,translate] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] [transform-style:preserve-3d] ${
+        chosen ? "-translate-y-2 shadow-xl ring-2 ring-slate-900 ring-offset-2" : ""
       }`}
     >
       <span className="absolute inset-0 [backface-visibility:hidden]">
@@ -157,6 +157,17 @@ function Card({ card, flip, chosen }: { card: DeckCard; flip: string; chosen: bo
       </span>
       <span className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
         <CardBack color={card.color} />
+      </span>
+      {/* The pick being traded, tagged on its top edge as its row is in the investment universe. */}
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute -top-2 left-1/2 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] [backface-visibility:hidden] ${
+          chosen
+            ? "opacity-100 [transform:translateX(-50%)_translateZ(1px)_scale(1)]"
+            : "opacity-0 [transform:translateX(-50%)_translateZ(1px)_scale(0.6)]"
+        }`}
+      >
+        Trading
       </span>
     </span>
   );
@@ -311,7 +322,7 @@ export default function HoldingsDeck({
             // At rest: stacked, each a little to the right of and turned from the one before;
             // spread out: across its room, upright.
             const x = open ? i * spread : i * 9;
-            const y = (chosen ? -8 : 0) + (open ? 0 : i * -1.5);
+            const y = open ? 0 : i * -1.5;
             const turn = open ? 0 : (i - (n - 1) / 2) * 2.5;
             return (
               <button
