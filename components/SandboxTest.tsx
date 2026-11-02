@@ -520,6 +520,8 @@ export default function SandboxTest({
   const price = priceOf(pick.symbol);
   const rate = rateOf(pick.symbol);
   const foreign = Boolean(pick.currency && pick.currency !== "CAD");
+  // Its price as Search writes it, with its currency's symbol ("US$67.40", "$21.61").
+  const priceText = foreign ? moneyFormatter(pick.currency).format : moneyText;
   const { shares } = heldOf(pick.symbol);
   // How `n` shares of `symbol` would be paid for today: from the cash already in its currency,
   // then, for one not in CAD, the rest exchanged from CAD (rounded up to the cent); null when the
@@ -1711,11 +1713,12 @@ export default function SandboxTest({
                   name={pick.name}
                   className="text-base font-semibold text-slate-900"
                 />
-                {/* Its price, in the currency it trades in (its code beside it). */}
+                {/* Its price, in the currency it trades in, with its symbol as Search has it ("US$67.40"),
+                    its code beside it. */}
                 <p className="text-sm text-slate-500">
                   Price{" "}
                   <span className="text-lg font-semibold tabular-nums text-slate-900">
-                    <Tween value={price} format={foreign ? (x) => plainText(x, pick.currency) : moneyText} />
+                    <Tween value={price} format={priceText} />
                   </span>
                   {pick.currency && (
                     <span className="ml-1 rounded bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
