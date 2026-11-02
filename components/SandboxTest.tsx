@@ -143,7 +143,7 @@ const RECAP_OUT_MS = POPUP_OUT_MS;
 // takes to fade back in, on the new day; how long the page takes to glide to a holding's chart,
 // and how long after that its new days slide in again; how long it stays after; and how long
 // the walk's guide takes to go.
-const TOUR_FADE_MS = 480;
+const TOUR_FADE_MS = 780;
 const TOUR_UP_MS = 650;
 const TOUR_DAY_MS = 1700;
 const TOUR_IN_MS = 1100;
@@ -308,7 +308,7 @@ const LAUNCH_MS = 380;
 // the click, then the start panel fades away over LEAVE_MS; the trading panel takes its place
 // out of sight as the page settles on it, then fades in slowly, its parts rising in one by one.
 const START_WAIT_MS = 1100;
-const LEAVE_MS = 480;
+const LEAVE_MS = 780;
 // How long the shown pick's parts take to fade out when another is chosen (.pick-swap-out).
 const SWAP_OUT_MS = 260;
 const GROW_MS = 750;

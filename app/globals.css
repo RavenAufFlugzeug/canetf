@@ -529,9 +529,9 @@ body:has(> main.bg-slate-50) {
    little while the new ones are fetched (for at least as long as this takes). */
 .sandbox-swap {
   transition:
-    opacity 450ms ease-in,
-    filter 450ms ease-in,
-    translate 450ms ease-in;
+    opacity 750ms ease-in-out,
+    filter 750ms ease-in-out,
+    translate 750ms ease-in-out;
 }
 
 .sandbox-swap[data-leaving] {
@@ -557,7 +557,7 @@ body:has(> main.bg-slate-50) {
 
 /* The loading mark over an area being changed: only after a moment, then fading in. */
 .swap-wait {
-  animation: swap-wait 300ms ease-out 450ms both;
+  animation: swap-wait 300ms ease-out 800ms both;
 }
 
 @keyframes swap-wait {
@@ -647,8 +647,8 @@ body:has(> main.bg-slate-50) {
   filter: opacity(0) blur(3px);
   translate: 0 8px;
   transition:
-    filter 450ms ease-in,
-    translate 450ms ease-in;
+    filter 750ms ease-in-out,
+    translate 750ms ease-in-out;
 }
 
 /* The test's results, once it has faded away: the panel comes in slowly (its parts after it,
@@ -671,8 +671,8 @@ body:has(> main.bg-slate-50) {
 .company-view {
   animation: company-in 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
   transition:
-    filter 450ms ease-in,
-    translate 450ms ease-in;
+    filter 750ms ease-in-out,
+    translate 750ms ease-in-out;
 }
 
 html[data-company-leaving] .company-view {
@@ -694,7 +694,7 @@ html[data-company-leaving] .company-view {
 }
 
 .days-passed[data-leaving] {
-  animation: days-passed-out 420ms ease-in both;
+  animation: days-passed-out 600ms ease-in-out both;
 }
 
 @keyframes days-passed-in {
@@ -2190,11 +2190,11 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
    one fades in slowly out of the same softness, rising a little, as the Sandbox's days do
    when they pass. The navbar stays put throughout. */
 ::view-transition-old(.page-exit) {
-  animation: 420ms ease-in both page-out;
+  animation: 700ms ease-in-out both page-out;
 }
 
 ::view-transition-new(.page-enter) {
-  animation: 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) 380ms both page-in;
+  animation: 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) 620ms both page-in;
 }
 
 @keyframes page-out {

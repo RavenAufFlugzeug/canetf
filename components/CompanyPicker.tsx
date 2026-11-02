@@ -13,7 +13,7 @@ const MIN_THINKING_MS = 350;
 const ENTER_STAGGER_MS = 90; // gap between options appearing one at a time
 const LEAVE_MS = 300; // matches .picker-collapse in globals.css
 // How long the company shown takes to fade away before another is fetched (.company-view).
-const COMPANY_FADE_MS = 450;
+const COMPANY_FADE_MS = 760;
 
 // An option in the dropdown. Options that stop matching stay a moment longer
 // (leftAt is set) so they can fade out and fold away.

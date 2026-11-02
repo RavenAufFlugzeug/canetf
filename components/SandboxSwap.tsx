@@ -6,7 +6,7 @@ import DiamondLoader from "@/components/DiamondLoader";
 
 // How long a swapped area takes to fade out (.sandbox-swap in globals.css): a change waits
 // at least this long, so the old contents always fade out fully before the new come in.
-const FADE_MS = 480;
+const FADE_MS = 780;
 // How long a swapped area takes to ease to its new height.
 const RESIZE_MS = 500;
 
