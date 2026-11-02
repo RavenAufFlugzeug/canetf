@@ -148,7 +148,7 @@ const TOUR_UP_MS = 650;
 const TOUR_DAY_MS = 1700;
 const TOUR_IN_MS = 1100;
 const TOUR_GLIDE_MS = 1100;
-const TOUR_REPLAY_MS = 1250;
+const TOUR_REPLAY_MS = 450;
 const TOUR_HOLD_MS = 2600;
 const TOUR_OUT_MS = 280;
 // How long the page takes to glide to the holdings after a purchase, before it is dealt in.
@@ -451,6 +451,10 @@ export default function SandboxTest({
   const tourTimer = useRef<number | undefined>(undefined);
   // The pick shown or on its way, for the walk's timers (which outlive the render they began in).
   const showing = useRef("");
+  // Whether the walk through new days is under way.
+  const walking = useRef(false);
+  // Stops the page's glide under way (easeTo), if any.
+  const stopEase = useRef(() => {});
 
   const entries = picks.map(({ symbol, from }) => ({ symbol, from }));
   // Once the test is over: the stretch of time it ran over, and each pick's real name.
@@ -704,21 +708,26 @@ export default function SandboxTest({
       tourTimer.current = window.setTimeout(then, ms);
     };
     const order = done.positions.map((p) => p.symbol);
-    const hold = () => setReplay((r) => ({ key: r.key + 1, days: done.to - done.from, hold: true }));
+    // (Not once the walk is over: skipped as a pick was on its way in.)
+    const hold = () =>
+      walking.current && setReplay((r) => ({ key: r.key + 1, days: done.to - done.from, hold: true }));
+    walking.current = true;
     const walk = (i: number) => {
       if (i >= order.length) {
         if (last && order.length) {
-          showPick(last);
+          showPick(last, undefined, TOUR_GLIDE_MS);
           easeTo(chartTop, TOUR_GLIDE_MS);
         }
         return endTour(done);
       }
       at("walk", i);
-      // A pick come to anew goes back to before the days as it swaps in, out of sight; the one
-      // already shown went back as the test faded in. Once the page is there, the days slide in.
-      showPick(order[i], hold);
+      // A pick come to anew fades out as the page glides to it, and swaps in, gone back to
+      // before the days, once the page is there (drawing it then rather than on the way, which
+      // would stall the glide); the one already shown went back as the test faded in. A moment
+      // after, the days slide in.
+      showPick(order[i], hold, TOUR_GLIDE_MS);
       easeTo(chartTop, TOUR_GLIDE_MS);
-      later(TOUR_REPLAY_MS, () => {
+      later(TOUR_GLIDE_MS + TOUR_REPLAY_MS, () => {
         setReplay((r) => ({ ...r, hold: false }));
         later(TOUR_HOLD_MS, () => walk(i + 1));
       });
@@ -739,24 +748,44 @@ export default function SandboxTest({
   }
 
   // Glides the page to the pick shown and its chart (a card clicked): slowly, easing in and
-  // out, taking longer the further it goes.
+  // out, taking longer the further it goes. Gives how long it takes.
   function toShown() {
     const el = shownTop.current;
-    if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return glideTo(shownTop);
+    if (!el) return 0;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      glideTo(shownTop);
+      return 0;
+    }
     const far = Math.abs(el.getBoundingClientRect().top - 96);
-    easeTo(shownTop, Math.min(Math.max(700 + far * 0.6, 900), 1600));
+    const ms = Math.min(Math.max(700 + far * 0.6, 900), 1600);
+    easeTo(shownTop, ms);
+    return ms;
   }
 
   // Scrolls the page to `target`'s top (less its scroll margin) over `ms`, easing in and out;
   // where the target is, is measured afresh each frame, so it is met even as the page around it
-  // changes size on the way.
+  // changes size on the way. Its clock starts on its first frame, so a slow one doesn't make it
+  // jump; a new glide takes over from one under way; and scrolling by hand stops it.
   function easeTo(target: React.RefObject<HTMLDivElement | null>, ms: number) {
+    stopEase.current();
     const from = window.scrollY;
-    const t0 = performance.now();
+    let t0 = -1;
+    let frame = 0;
+    const stop = () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("keydown", stop);
+      stopEase.current = () => {};
+    };
+    stopEase.current = stop;
+    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("touchstart", stop, { passive: true });
+    window.addEventListener("keydown", stop);
     const step = (now: number) => {
       const el = target.current;
-      if (!el) return;
+      if (!el) return stop();
+      if (t0 < 0) t0 = now;
       const want = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
       const to = Math.min(
         el.getBoundingClientRect().top + window.scrollY - want,
@@ -765,13 +794,15 @@ export default function SandboxTest({
       const t = Math.min((now - t0) / ms, 1);
       const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
       window.scrollTo(0, from + (to - from) * e);
-      if (t < 1) requestAnimationFrame(step);
+      if (t < 1) frame = requestAnimationFrame(step);
+      else stop();
     };
-    requestAnimationFrame(step);
+    frame = requestAnimationFrame(step);
   }
 
   // The walk's guide fades away and the recap comes up in its place.
   function endTour(done: Recap) {
+    walking.current = false;
     window.clearTimeout(tourTimer.current);
     setTour((t) => (t ? { ...t, leaving: true } : t));
     setReplay((r) => (r.hold ? { ...r, hold: false } : r));
@@ -781,17 +812,21 @@ export default function SandboxTest({
     }, TOUR_OUT_MS);
   }
 
-  // Shows a pick, as choosing it does, from the walk's timers; `then`, as it swaps in.
-  function showPick(symbol: string, then?: () => void) {
+  // Shows a pick, as choosing it does, from the walk's timers; `then`, as it swaps in, after
+  // `wait` (at least the fade out).
+  function showPick(symbol: string, then?: () => void, wait = SWAP_OUT_MS) {
     if (symbol === showing.current) return;
     setSwapDir(1);
     setSwapTo(symbol);
     window.clearTimeout(swapTimer.current);
-    swapTimer.current = window.setTimeout(() => {
-      setSelected(symbol);
-      setSwapTo(null);
-      then?.();
-    }, SWAP_OUT_MS);
+    swapTimer.current = window.setTimeout(
+      () => {
+        setSelected(symbol);
+        setSwapTo(null);
+        then?.();
+      },
+      Math.max(wait, SWAP_OUT_MS),
+    );
   }
 
   // Brings the days in, with the value the day before them to measure the change from: the
@@ -950,12 +985,20 @@ export default function SandboxTest({
   useEffect(() => {
     showing.current = swapTo ?? selected;
   }, [swapTo, selected]);
-  useEffect(() => () => window.clearTimeout(tourTimer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(tourTimer.current);
+      stopEase.current();
+    },
+    [],
+  );
 
-  // Changing the pick shown: its parts fade out and slide away first (SWAP_OUT_MS), then the
-  // new pick's fade and slide in from its side. Choosing again meanwhile just changes where it
-  // is going; the board and the deck mark the new choice at once.
-  function choosePick(symbol: string) {
+  // Changing the pick shown: its parts fade out and slide away first (SWAP_OUT_MS, or `wait`,
+  // when the page is gliding to it: the new pick is drawn once it is there, as drawing it on the
+  // way would stall the glide), then the new pick's fade and slide in from its side. Choosing
+  // again meanwhile just changes where it is going; the board and the deck mark the new choice
+  // at once.
+  function choosePick(symbol: string, wait = SWAP_OUT_MS) {
     if (symbol === (swapTo ?? pick.symbol)) return;
     const at = (s: string) => picks.findIndex((p) => p.symbol === s);
     setSwapDir(at(symbol) < at(pick.symbol) ? -1 : 1);
@@ -967,10 +1010,13 @@ export default function SandboxTest({
     }
     setSwapTo(symbol);
     window.clearTimeout(swapTimer.current);
-    swapTimer.current = window.setTimeout(() => {
-      setSelected(symbol);
-      setSwapTo(null);
-    }, SWAP_OUT_MS);
+    swapTimer.current = window.setTimeout(
+      () => {
+        setSelected(symbol);
+        setSwapTo(null);
+      },
+      Math.max(wait, SWAP_OUT_MS),
+    );
   }
 
   function fail(message: string) {
@@ -1665,19 +1711,18 @@ export default function SandboxTest({
                   name={pick.name}
                   className="text-base font-semibold text-slate-900"
                 />
-                {!foreign && (
-                  <p className="text-sm text-slate-500">
-                    Price{" "}
-                    <span className="text-lg font-semibold tabular-nums text-slate-900">
-                      <Tween value={price} format={moneyText} />
+                {/* Its price, in the currency it trades in (its code beside it). */}
+                <p className="text-sm text-slate-500">
+                  Price{" "}
+                  <span className="text-lg font-semibold tabular-nums text-slate-900">
+                    <Tween value={price} format={foreign ? (x) => plainText(x, pick.currency) : moneyText} />
+                  </span>
+                  {pick.currency && (
+                    <span className="ml-1 rounded bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
+                      {pick.currency}
                     </span>
-                    {pick.currency && (
-                      <span className="ml-1 rounded bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
-                        {pick.currency}
-                      </span>
-                    )}
-                  </p>
-                )}
+                  )}
+                </p>
               </div>
               {/* Its general info, as the Search page's About has it (but with its name hidden):
                 folded to begin with, a line saying it opens. */}
@@ -1797,53 +1842,61 @@ export default function SandboxTest({
           )}
 
           {/* For the pick shown, in another currency than CAD: its price there times the day's
-              rate, and its rate over the same days as its price; then the exchange. */}
-          {foreign && (
-            <div className="mt-3">
-              {/* In another currency: its price there, today's exchange rate, and so its price in
-              CAD; then today's change on its price alone, and with the rate's move too. */}
-              {foreign && (
-                <FxStrip
-                  day={day}
-                  price={price}
-                  currency={pick.currency}
-                  rate={rate}
-                  pricePct={
-                    day > 1 && lastOf(pick.symbol)
-                      ? ((price - lastOf(pick.symbol)) / lastOf(pick.symbol)) * 100
-                      : null
-                  }
-                  cadPct={cadMoveOf(pick.symbol)}
-                />
-              )}
-              {/* In another currency than CAD: its rate to CAD over the same days, folded to
-              begin with. */}
-              {foreign && rateHistory[pick.symbol] && (
-                <FxChart
-                  symbol={pick.symbol}
-                  day={day}
-                  currency={pick.currency}
-                  history={rateHistory[pick.symbol].rates}
-                  rates={rates[pick.symbol] ?? []}
-                  // Where years begin: the history's, then the test's (as the price chart has
-                  // them, moved to the rate's history's length).
-                  yearStarts={[
-                    ...rateHistory[pick.symbol].yearStarts,
-                    ...(yearStarts[pick.symbol] ?? [])
-                      .filter((i) => i >= (history[pick.symbol]?.length ?? 0))
-                      .map(
-                        (i) =>
-                          i - (history[pick.symbol]?.length ?? 0) + rateHistory[pick.symbol].rates.length,
-                      ),
-                  ]}
-                  range={chartRange}
-                  onRange={setChartRange}
-                  scope={chartScope}
-                  onScope={setChartScope}
-                />
-              )}
-            </div>
-          )}
+              rate, and its rate over the same days as its price; then the exchange. Changing the
+              pick, it fades out and in with the pick's other parts, and the space it takes eases
+              open or shut (as it comes or goes, between a pick in CAD and one not). */}
+          <EaseHeight changeKey={pick.symbol} duration={600}>
+            {foreign && (
+              <div
+                key={pick.symbol}
+                className={`pick-swap-in pt-3 ${swapTo ? "pick-swap-out" : ""}`}
+                style={{ "--dir": swapDir } as React.CSSProperties}
+              >
+                {/* In another currency: its price there, today's exchange rate, and so its price in
+                CAD; then today's change on its price alone, and with the rate's move too. */}
+                {foreign && (
+                  <FxStrip
+                    day={day}
+                    price={price}
+                    currency={pick.currency}
+                    rate={rate}
+                    pricePct={
+                      day > 1 && lastOf(pick.symbol)
+                        ? ((price - lastOf(pick.symbol)) / lastOf(pick.symbol)) * 100
+                        : null
+                    }
+                    cadPct={cadMoveOf(pick.symbol)}
+                  />
+                )}
+                {/* In another currency than CAD: its rate to CAD over the same days, folded to
+                begin with. */}
+                {foreign && rateHistory[pick.symbol] && (
+                  <FxChart
+                    symbol={pick.symbol}
+                    day={day}
+                    currency={pick.currency}
+                    history={rateHistory[pick.symbol].rates}
+                    rates={rates[pick.symbol] ?? []}
+                    // Where years begin: the history's, then the test's (as the price chart has
+                    // them, moved to the rate's history's length).
+                    yearStarts={[
+                      ...rateHistory[pick.symbol].yearStarts,
+                      ...(yearStarts[pick.symbol] ?? [])
+                        .filter((i) => i >= (history[pick.symbol]?.length ?? 0))
+                        .map(
+                          (i) =>
+                            i - (history[pick.symbol]?.length ?? 0) + rateHistory[pick.symbol].rates.length,
+                        ),
+                    ]}
+                    range={chartRange}
+                    onRange={setChartRange}
+                    scope={chartScope}
+                    onScope={setChartScope}
+                  />
+                )}
+              </div>
+            )}
+          </EaseHeight>
 
           {/* Exchanging currencies, whenever the player likes, at the day's rates. */}
           {currencies.length > 1 && (
@@ -1866,14 +1919,8 @@ export default function SandboxTest({
               pile={cards.filter((c) => c.shares === 0)}
               selected={swapTo ?? pick.symbol}
               // A card held or drawn, clicked: its pick shown, the page gliding up to it.
-              onSelect={(symbol) => {
-                choosePick(symbol);
-                toShown();
-              }}
-              onView={(symbol) => {
-                choosePick(symbol);
-                toShown();
-              }}
+              onSelect={(symbol) => choosePick(symbol, toShown())}
+              onView={(symbol) => choosePick(symbol, toShown())}
             />
           </div>
         </div>

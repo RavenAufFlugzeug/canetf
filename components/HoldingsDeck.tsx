@@ -393,7 +393,7 @@ export default function HoldingsDeck({
               data-happy={happy || undefined}
               onPointerLeave={() => setHappy(false)}
               disabled={deck.length === 0}
-              aria-label={`Having trouble deciding? Draw at random from the deck (${deck.length} ${deck.length === 1 ? "card" : "cards"})`}
+              aria-label={`Draw at random from the deck (${deck.length} ${deck.length === 1 ? "card" : "cards"})`}
               className="deck-pile group relative block size-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
             >
               {/* A card being put back, tucking in under the others (above them as it comes out
@@ -437,7 +437,6 @@ export default function HoldingsDeck({
               {/* Under the deck, saying what clicking it does. */}
               {deck.length > 0 && (
                 <span className="absolute -inset-x-4 top-full mt-2.5 text-center text-[11px] leading-snug">
-                  <span className="block text-slate-500">Having trouble deciding?</span>
                   <span className="block font-semibold text-slate-900 underline-offset-2 group-hover:underline">
                     Draw at random!
                   </span>
