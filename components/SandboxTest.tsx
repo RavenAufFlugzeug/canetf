@@ -151,6 +151,8 @@ const TOUR_GLIDE_MS = 1100;
 const TOUR_REPLAY_MS = 1250;
 const TOUR_HOLD_MS = 2600;
 const TOUR_OUT_MS = 280;
+// How long the page takes to glide to the holdings after a purchase, before it is dealt in.
+const HAND_GLIDE_MS = 1100;
 // How long passed, for a recap's heading: "A day passes", "A week passes", "3 days pass".
 function passedText(n: number) {
   const { text } = tradingSpan(n);
@@ -444,6 +446,8 @@ export default function SandboxTest({
   // Each holding's chart's new days sliding in again, as the walk comes to it.
   const [replay, setReplay] = useState({ key: 0, days: 0, hold: false });
   const chartTop = useRef<HTMLDivElement>(null);
+  // The holdings, for the page to glide to as shares bought are dealt in.
+  const handTop = useRef<HTMLDivElement>(null);
   const tourTimer = useRef<number | undefined>(undefined);
   // The pick shown or on its way, for the walk's timers (which outlive the render they began in).
   const showing = useRef("");
@@ -1000,10 +1004,17 @@ export default function SandboxTest({
   }
 
   // Closes the confirming card; confirmed, the trade is made as it goes, for good.
+  // With motion, a purchase is shown being dealt into the hand: once the card has gone, the page
+  // glides to the holdings, slowly, and the shares come in once it is there.
   function settle(confirmed: boolean) {
     if (!ask || askLeaving) return;
     const done = ask;
     setAskLeaving(true);
+    const toHand =
+      confirmed && done.side === "Bought" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.setTimeout(() => {
+      if (toHand) easeTo(handTop, HAND_GLIDE_MS);
+    }, RECAP_OUT_MS);
     window.setTimeout(() => {
       if (confirmed) {
         const { symbol, name, side, shares: n } = done;
@@ -1070,7 +1081,7 @@ export default function SandboxTest({
       }
       setAsk(null);
       setAskLeaving(false);
-    }, RECAP_OUT_MS);
+    }, RECAP_OUT_MS + (toHand ? HAND_GLIDE_MS : 0));
   }
 
   // The panel, by stage. It is the same box throughout, easing to each stage's height
@@ -1849,7 +1860,7 @@ export default function SandboxTest({
 
           {/* What is held, as a hand of cards, and the picks not held, as a deck to draw from
               (HoldingsDeck); clicking a card chooses its pick. */}
-          <div className="mt-5">
+          <div ref={handTop} className="mt-5 scroll-mt-40">
             <HoldingsDeck
               cards={cards.filter((c) => c.shares > 0)}
               pile={cards.filter((c) => c.shares === 0)}
