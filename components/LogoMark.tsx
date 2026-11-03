@@ -120,7 +120,7 @@ const PETALS = [0, 72, 144, 216, 288].map((deg) => {
   return [(2.2 * Math.sin(r)).toFixed(3), (-2.2 * Math.cos(r)).toFixed(3)] as const;
 });
 
-function Flower({ x, y, size, spin }: { x: number; y: number; size: number; spin: string }) {
+export function Flower({ x, y, size, spin }: { x: number; y: number; size: number; spin: string }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${size})`}>
       <g className={spin}>

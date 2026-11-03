@@ -593,24 +593,24 @@ const SCOPES = [
 ] as const;
 
 // A deck on the shelf: up to three card backs in its colour (the cat hiding behind a cup of
-// coffee, surprised once the deck is clicked), stacked a little askew, the top one lifting
+// coffee, surprised when the deck is pointed at, happy when it is clicked), stacked a little askew, the top one lifting
 // when pointed at; under it, its name and how many cards it holds. The one open is
 // ringed and tagged "Open".
 function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpen: () => void }) {
   const color = deckColor(deck);
   const layers = Math.min(deck.rules.length, 3);
   const cards = `${deck.rules.length} ${deck.rules.length === 1 ? "card" : "cards"}`;
-  // Clicked, the cat on its cards is surprised until the pointer leaves it.
-  const [surprised, setSurprised] = useState(false);
+  // Clicked, the cat on its cards is happy until the pointer leaves it.
+  const [happy, setHappy] = useState(false);
   return (
     <button
       type="button"
       onClick={() => {
         onOpen();
-        setSurprised(true);
+        setHappy(true);
       }}
-      data-surprised={surprised || undefined}
-      onPointerLeave={() => setSurprised(false)}
+      data-happy={happy || undefined}
+      onPointerLeave={() => setHappy(false)}
       aria-pressed={open}
       aria-label={`${deck.name.trim() || "Untitled strategy"}: ${cards}`}
       className="group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
@@ -623,7 +623,7 @@ function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpe
             style={{ transform: `translate(${depth * 2.5}px, ${depth * 2.5}px) rotate(${depth * 1.5}deg)` }}
           >
             <span
-              className={`absolute inset-0 rounded-xl transition-[transform,box-shadow] duration-300 ease-out ${
+              className={`absolute inset-0 rounded-xl transition-[translate,rotate,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 depth === 0
                   ? "motion-safe:group-hover:-translate-y-1.5 motion-safe:group-hover:-rotate-2"
                   : ""

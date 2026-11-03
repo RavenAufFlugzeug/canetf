@@ -2076,20 +2076,27 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* The cat behind the cup on the Strategies page's decks (components/StrategyCardBack.tsx).
-   She sits with her head up over the rim. Clicked (data-surprised, until the pointer leaves),
-   she is surprised as the Sandbox deck's cat is: three yellow strokes pop out by her ear and
-   her mouth opens. */
+   Pointed at, she is surprised as the Sandbox deck's cat is: three yellow strokes pop out by her
+   ear and her mouth opens. Clicked (data-happy, until the pointer leaves), she is happy instead,
+   as the Sandbox deck's cat is (her mouth a little "ω", two flowers turning by her ear). Either
+   way, the cup tips a little to the left on its foot and the saucer a little to the right, with a
+   spring, and her tail swishes to and fro about where it starts. (Each part turns about a point
+   of the drawing, in its own units.) */
 .strategy-cat-mouth,
-.strategy-cat-gasp {
+.strategy-cat-gasp,
+.strategy-cat-smile {
   transition: opacity 220ms ease-out;
 }
 
 .strategy-cat-gasp,
-.strategy-cat-surprise {
+.strategy-cat-smile,
+.strategy-cat-surprise,
+.strategy-cat-flowers {
   opacity: 0;
 }
 
-.strategy-cat-surprise {
+.strategy-cat-surprise,
+.strategy-cat-flowers {
   transform-box: fill-box;
   transform-origin: 0% 100%;
   transform: scale(0.5);
@@ -2098,17 +2105,54 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
     transform 420ms cubic-bezier(0.3, 1.5, 0.5, 1);
 }
 
-.group[data-surprised] .strategy-cat-surprise {
+.group:hover:not([data-happy]) :is(.strategy-cat-surprise, .strategy-cat-gasp),
+.group[data-happy] :is(.strategy-cat-flowers, .strategy-cat-smile) {
   opacity: 1;
   transform: none;
 }
 
-.group[data-surprised] .strategy-cat-gasp {
-  opacity: 1;
+:is(.group:hover, .group[data-happy]) .strategy-cat-mouth {
+  opacity: 0;
 }
 
-.group[data-surprised] .strategy-cat-mouth {
-  opacity: 0;
+.strategy-cup,
+.strategy-saucer,
+.strategy-tail {
+  transform-box: view-box;
+  transition: transform 500ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+.strategy-cup {
+  transform-origin: 200px 328px;
+}
+
+.strategy-saucer {
+  transform-origin: 200px 318px;
+}
+
+.strategy-tail {
+  transform-origin: 118px 262px;
+}
+
+:is(.group:hover, .group[data-happy]) .strategy-cup {
+  transform: rotate(-9deg);
+}
+
+:is(.group:hover, .group[data-happy]) .strategy-saucer {
+  transform: rotate(4deg); /* the other way to the cup, and less */
+}
+
+:is(.group:hover, .group[data-happy]) .strategy-tail {
+  animation: strategy-tail-swish 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes strategy-tail-swish {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(3deg);
+  }
 }
 
 /* The flowers turning, each about its own middle, the small one the other way and faster. */
@@ -2508,9 +2552,17 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 
   .strategy-cat-surprise,
+  .strategy-cat-flowers,
   .strategy-cat-mouth,
-  .strategy-cat-gasp {
+  .strategy-cat-gasp,
+  .strategy-cat-smile,
+  .strategy-cup,
+  .strategy-saucer {
     transition: none;
+  }
+
+  :is(.group:hover, .group[data-happy]) .strategy-tail {
+    animation: none;
   }
 
   .logo-mark-surprise,
