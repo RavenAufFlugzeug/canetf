@@ -2075,11 +2075,13 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 0;
 }
 
-/* The cat behind the cup on the Strategies page's decks (components/StrategyCardBack.tsx).
+/* The "Tea Party" deck back (components/StrategyCardBack.tsx): the cat behind her cup, on any
+   deck (.deck-pile) when it is the back chosen on the account page (lib/deckBack.ts).
    Pointed at, she is surprised as the Sandbox deck's cat is: three yellow strokes pop out by her
    ear and her mouth opens. Clicked (data-happy, until the pointer leaves), she is happy instead,
-   as the Sandbox deck's cat is (her mouth a little "ω", two flowers turning by her ear). Either
-   way, the cup tips a little to the left on its foot and the saucer a little to the right, with a
+   as the Sandbox deck's cat is (her mouth a little "ω"), and the roses on her hat turn, the small
+   one the other way and faster. Either
+   way, the cup tips a little to the right on its foot (towards her paw) and the saucer a little to the left, with a
    spring, and her tail swishes to and fro about where it starts. (Each part turns about a point
    of the drawing, in its own units.) */
 .strategy-cat-mouth,
@@ -2090,13 +2092,11 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 .strategy-cat-gasp,
 .strategy-cat-smile,
-.strategy-cat-surprise,
-.strategy-cat-flowers {
+.strategy-cat-surprise {
   opacity: 0;
 }
 
-.strategy-cat-surprise,
-.strategy-cat-flowers {
+.strategy-cat-surprise {
   transform-box: fill-box;
   transform-origin: 0% 100%;
   transform: scale(0.5);
@@ -2105,14 +2105,30 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
     transform 420ms cubic-bezier(0.3, 1.5, 0.5, 1);
 }
 
-.group:hover:not([data-happy]) :is(.strategy-cat-surprise, .strategy-cat-gasp),
-.group[data-happy] :is(.strategy-cat-flowers, .strategy-cat-smile) {
+.deck-pile:hover:not([data-happy]) :is(.strategy-cat-surprise, .strategy-cat-gasp),
+.deck-pile[data-happy] .strategy-cat-smile {
   opacity: 1;
   transform: none;
 }
 
-:is(.group:hover, .group[data-happy]) .strategy-cat-mouth {
+:is(.deck-pile:hover, .deck-pile[data-happy]) .strategy-cat-mouth {
   opacity: 0;
+}
+
+/* The roses on her hat, each turning about its own middle while she is happy (in place of the
+   Sandbox cat's flowers). */
+.strategy-rose {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.deck-pile[data-happy] .strategy-rose {
+  animation: logo-mark-spin 6s linear infinite;
+}
+
+.deck-pile[data-happy] .strategy-rose-back {
+  animation-duration: 4s;
+  animation-direction: reverse;
 }
 
 .strategy-cup,
@@ -2134,15 +2150,15 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: 118px 262px;
 }
 
-:is(.group:hover, .group[data-happy]) .strategy-cup {
-  transform: rotate(-9deg);
+:is(.deck-pile:hover, .deck-pile[data-happy]) .strategy-cup {
+  transform: rotate(9deg); /* towards her paw, on the right */
 }
 
-:is(.group:hover, .group[data-happy]) .strategy-saucer {
-  transform: rotate(4deg); /* the other way to the cup, and less */
+:is(.deck-pile:hover, .deck-pile[data-happy]) .strategy-saucer {
+  transform: rotate(-4deg); /* the other way to the cup, and less */
 }
 
-:is(.group:hover, .group[data-happy]) .strategy-tail {
+:is(.deck-pile:hover, .deck-pile[data-happy]) .strategy-tail {
   animation: strategy-tail-swish 1.4s ease-in-out infinite alternate;
 }
 
@@ -2552,7 +2568,6 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 
   .strategy-cat-surprise,
-  .strategy-cat-flowers,
   .strategy-cat-mouth,
   .strategy-cat-gasp,
   .strategy-cat-smile,
@@ -2561,7 +2576,11 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
     transition: none;
   }
 
-  :is(.group:hover, .group[data-happy]) .strategy-tail {
+  :is(.deck-pile:hover, .deck-pile[data-happy]) .strategy-tail {
+    animation: none;
+  }
+
+  .deck-pile[data-happy] .strategy-rose {
     animation: none;
   }
 

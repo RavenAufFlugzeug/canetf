@@ -2,14 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { isPaletteName, paletteColor, PalettePicker, type PaletteName } from "@/components/EtfBreakdown";
-import { Fish } from "@/components/HoldingsDeck";
+import { Fish } from "@/components/ClassicCardBack";
 import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
-import StrategyCardBack from "@/components/StrategyCardBack";
+import DeckBack from "@/components/DeckBack";
 import { BuyMark, SellMark } from "@/components/TestMarks";
 
 // The Strategies page's builder (app/strategy/page.tsx), in the Sandbox's cards. Each strategy
-// is a deck: on the shelf at the top, the decks kept, face down (StrategyCardBack) in their
+// is a deck: on the shelf at the top, the decks kept, face down (DeckBack, in the design chosen on the account page) in their
 // colour (one of the Search charts' four), each with its name and how many cards it holds;
 // clicking one opens it. A strategy says what it
 // applies to (every firm in a sector, every ETF, or one firm or ETF), and each of its rules is
@@ -382,7 +382,7 @@ export default function StrategyBuilder() {
           <button
             type="button"
             onClick={() => addDeck(newDeck())}
-            className="group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
+            className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
           >
             <span
               className="grid place-items-center rounded-xl border-2 border-dashed border-slate-300 text-slate-400 transition group-hover:border-slate-500 group-hover:text-slate-700 group-focus-visible:border-slate-900"
@@ -613,7 +613,7 @@ function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpe
       onPointerLeave={() => setHappy(false)}
       aria-pressed={open}
       aria-label={`${deck.name.trim() || "Untitled strategy"}: ${cards}`}
-      className="group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
+      className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
     >
       <span className="relative block" style={{ width: DECK_W, height: DECK_H }}>
         {Array.from({ length: layers }, (_, k) => layers - 1 - k).map((depth) => (
@@ -633,7 +633,7 @@ function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpe
                   : ""
               }`}
             >
-              <StrategyCardBack color={color} />
+              <DeckBack color={color} />
             </span>
           </span>
         ))}

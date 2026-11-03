@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DeckBackPicker from "@/components/DeckBackPicker";
 import { getAppDb } from "@/lib/appDb";
 import { questions, type Answers } from "@/lib/questions";
 import { requireUser } from "@/lib/session";
@@ -28,9 +29,7 @@ export default async function AccountPage() {
         <div className="rounded-2xl bg-white p-8 shadow">
           <h1 className="text-2xl font-bold text-slate-900">Your account</h1>
           <p className="mt-2 text-slate-600">{user.username}</p>
-          <p className="text-sm text-slate-500">
-            Member since {dateFormat.format(new Date(user.createdAt))}
-          </p>
+          <p className="text-sm text-slate-500">Member since {dateFormat.format(new Date(user.createdAt))}</p>
 
           <Link
             href="/account/password"
@@ -38,6 +37,14 @@ export default async function AccountPage() {
           >
             Change password
           </Link>
+        </div>
+
+        <div className="rounded-2xl bg-white p-8 shadow">
+          <h2 className="text-xl font-bold text-slate-900">Deck back</h2>
+          <p className="mt-1 text-slate-600">
+            The design on the back of every deck and card, in the Sandbox and in Strategies.
+          </p>
+          <DeckBackPicker />
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow">
