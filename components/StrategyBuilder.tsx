@@ -592,18 +592,25 @@ const SCOPES = [
   { value: "single", label: "One firm or ETF" },
 ] as const;
 
-// A deck on the shelf: up to three card backs in its colour (the cat by her knocked-over mug,
-// which she pokes when the deck is pointed at), stacked a little askew, the top one lifting
+// A deck on the shelf: up to three card backs in its colour (the cat hiding behind a cup of
+// coffee, surprised once the deck is clicked), stacked a little askew, the top one lifting
 // when pointed at; under it, its name and how many cards it holds. The one open is
 // ringed and tagged "Open".
 function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpen: () => void }) {
   const color = deckColor(deck);
   const layers = Math.min(deck.rules.length, 3);
   const cards = `${deck.rules.length} ${deck.rules.length === 1 ? "card" : "cards"}`;
+  // Clicked, the cat on its cards is surprised until the pointer leaves it.
+  const [surprised, setSurprised] = useState(false);
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => {
+        onOpen();
+        setSurprised(true);
+      }}
+      data-surprised={surprised || undefined}
+      onPointerLeave={() => setSurprised(false)}
       aria-pressed={open}
       aria-label={`${deck.name.trim() || "Untitled strategy"}: ${cards}`}
       className="group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"

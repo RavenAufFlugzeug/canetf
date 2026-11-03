@@ -83,10 +83,10 @@ const ABOVE_RIM = "18,0 82,0 82,44 50,58 18,44";
 // tufts of fur stick out from each cheek, beside the eyes, a little fluff rises between the
 // ears, and every corner, ear tips included, is softened (drawn with a rounded edge of its
 // own colour).
-const HEAD =
+export const HEAD =
   "M35 26 37 12 47 26Q48 24.3 49 26 50 24 51 26 52 24.3 53 26L63 12 65 26V33L67.6 35.2 65 36.8 67 39.4 65 40.6V47Q65 52 60 52H40Q35 52 35 47V40.6L33 39.4 35 36.8 32.4 35.2 35 33Z";
 // The inside of each ear, a lighter shade of her fur.
-const INNER_EARS = "M38.4 17.5 43.6 24.5H37.6ZM61.6 17.5 56.4 24.5H62.4Z";
+export const INNER_EARS = "M38.4 17.5 43.6 24.5H37.6ZM61.6 17.5 56.4 24.5H62.4Z";
 
 // The angry mark that appears by her head when she is clicked a second time, like the
 // anger emoji: four short curved strokes set round a point, a quarter turn apart and a
@@ -110,7 +110,7 @@ const ANGRY = [0, 90, 180, 270]
   .join("");
 
 // Her surprise: three short strokes fanning out evenly round her right ear.
-const SURPRISE = "M63.6 13.2 65.6 8.2M67 16.2 71.4 13.2M68.2 20.6 73.6 20.6";
+export const SURPRISE = "M63.6 13.2 65.6 8.2M67 16.2 71.4 13.2M68.2 20.6 73.6 20.6";
 
 // A simple flower for her happiness: five round petals about a round middle, drawn about
 // (0, 0), petals 1.9 across, outlined in white.
