@@ -14,13 +14,19 @@ const PALETTES = {
   red: { label: "Red", deep: { l: 0.56, c: 0.21, h: 25 }, light: { l: 0.89, c: 0.09, h: 40 } },
   green: { label: "Green", deep: { l: 0.56, c: 0.16, h: 152 }, light: { l: 0.92, c: 0.13, h: 128 } },
   teal: { label: "Teal", deep: { l: 0.58, c: 0.12, h: 176 }, light: { l: 0.92, c: 0.09, h: 166 } },
-  blue: { label: "Blue", deep: { l: 0.34, c: 0.18, h: 262 }, light: { l: 0.76, c: 0.11, h: 248 } },
+  // Its deep shade is the finance sector's blue (lib/naics.ts).
+  blue: { label: "Blue", deep: { l: 0.44, c: 0.15, h: 258 }, light: { l: 0.76, c: 0.11, h: 248 } },
 } satisfies Record<string, { label: string; deep: Oklch; light: Oklch }>;
 export type PaletteName = keyof typeof PALETTES;
 const DEFAULT_PALETTE: PaletteName = "blue";
 
 const oklch = ({ l, c, h }: Oklch, alpha = 1) =>
   `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)} / ${alpha})`;
+// A family's main (deepest) shade, as its diamond shows it: for anything else coloured to match
+// the charts (the Strategies page's decks).
+export const paletteColor = (palette: PaletteName) => oklch(PALETTES[palette].deep);
+export const isPaletteName = (v: unknown): v is PaletteName => typeof v === "string" && v in PALETTES;
+
 // The colour for tile i of n, and the text colour that reads on it.
 export const shade = (palette: PaletteName, i: number, n: number) => {
   const { deep, light } = PALETTES[palette];
@@ -74,10 +80,18 @@ export const useChartPalette = () =>
 
 // The colour family picker for the treemap: flat diamonds in each family's
 // main shade. The chosen one is full size with a soft glow of its own colour; the rest
-// sit back, faded.
-export function PalettePicker({ current, onPick }: { current: PaletteName; onPick: (name: PaletteName) => void }) {
+// sit back, faded (all of them, when none is chosen).
+export function PalettePicker({
+  current,
+  onPick,
+  label = "Chart colours",
+}: {
+  current: PaletteName | null;
+  onPick: (name: PaletteName) => void;
+  label?: string;
+}) {
   return (
-    <div role="radiogroup" aria-label="Chart colours" className="flex items-center gap-3.5 py-1">
+    <div role="radiogroup" aria-label={label} className="flex items-center gap-3.5 py-1">
       {(Object.keys(PALETTES) as PaletteName[]).map((name) => {
         const { label, deep } = PALETTES[name];
         const selected = name === current;

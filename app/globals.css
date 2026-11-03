@@ -1981,6 +1981,28 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   rotate: -12deg;
 }
 
+/* The Strategies mark (components/StrategyMark.tsx): its two pieces tip apart a little, each
+   on its own base, the knight to the left and the king to the right, as the account's pawn
+   tips (as far, with the same spring), and right themselves when let go. */
+.strategy-mark-knight,
+.strategy-mark-king {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: rotate 550ms cubic-bezier(0.3, 1.45, 0.5, 1);
+}
+
+.strategy-mark:hover .strategy-mark-knight,
+.group:hover .strategy-mark-knight,
+.group:focus-visible .strategy-mark-knight {
+  rotate: 12deg; /* drawn facing right, then turned to face left: so this tips it left */
+}
+
+.strategy-mark:hover .strategy-mark-king,
+.group:hover .strategy-mark-king,
+.group:focus-visible .strategy-mark-king {
+  rotate: 12deg;
+}
+
 /* LitterBox's logo, the box (components/LogoMark.tsx). Its cat sits hidden in the box.
    Pointed at (or the logo's link is), she peeks: as the lid lifts, only her ears and the
    top of her head come up over the rim, her eyes still below. Clicked (data-peek, set by
@@ -1994,7 +2016,8 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 .logo-mark:hover .logo-mark-cat,
 .group:hover .logo-mark .logo-mark-cat,
-.group:focus-visible .logo-mark .logo-mark-cat {
+.group:focus-visible .logo-mark .logo-mark-cat,
+.group[data-pointed] .logo-mark .logo-mark-cat {
   transform: translateY(22px); /* ears and the top of her head, eyes still below */
 }
 
@@ -2256,7 +2279,6 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   animation: none;
   z-index: 100;
 }
-
 ::view-transition-old(site-header) {
   display: none;
 }
@@ -2427,6 +2449,19 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .account-mark:hover,
   .group:hover .account-mark,
   .group:focus-visible .account-mark {
+    rotate: none;
+    transition: none;
+  }
+
+  /* Both pieces stay upright. */
+  .strategy-mark-knight,
+  .strategy-mark:hover .strategy-mark-knight,
+  .group:hover .strategy-mark-knight,
+  .group:focus-visible .strategy-mark-knight,
+  .strategy-mark-king,
+  .strategy-mark:hover .strategy-mark-king,
+  .group:hover .strategy-mark-king,
+  .group:focus-visible .strategy-mark-king {
     rotate: none;
     transition: none;
   }

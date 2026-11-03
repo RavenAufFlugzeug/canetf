@@ -39,7 +39,7 @@ export default function PickButton({
     >
       {picking ? <DiamondLoader className="size-3.5" /> : <ShuffleMark />}
       {/* Its words cross-fade when they change (a new number, or a set picked). */}
-      <FadeText inline text={current ? "Get a new test group" : "Get Test Group"} />
+      <FadeText inline text={current ? "Regenerate universe" : "Generate universe"} />
     </button>
   );
 }

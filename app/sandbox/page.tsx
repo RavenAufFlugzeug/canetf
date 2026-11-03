@@ -214,25 +214,22 @@ export default async function SandboxPage({
                 </Step>
 
                 <Step n={4} title="Investment universe" delay={120} id="sandbox-picks">
-                  {/* Before a set is picked: the button to get one (with, when none could be, why, in a
-                      box). Once picked, the set itself shows below (no button: Reset, by the
-                      test's Start, clears it). */}
-                  {!set && (
-                    <div
-                      className={`rise-in mt-3 flex flex-wrap items-center gap-4 ${
-                        seeded ? "justify-between rounded-xl bg-slate-50 p-4" : ""
-                      }`}
-                    >
-                      {/* Only when no set could be picked: why, cross-fading in (FadeText). */}
-                      {seeded && (
-                        <FadeText
-                          className="min-w-0 flex-1 text-sm text-slate-600"
-                          text={`There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`}
-                        />
-                      )}
-                      <PickButton current={set ? setKey : undefined} {...choices} />
-                    </div>
-                  )}
+                  {/* The button to generate a set (with, when none could be, why, in a box); once
+                      one is shown below, the same button generates another in its place. */}
+                  <div
+                    className={`rise-in mt-3 flex flex-wrap items-center gap-4 ${
+                      seeded && !set ? "justify-between rounded-xl bg-slate-50 p-4" : ""
+                    }`}
+                  >
+                    {/* Only when no set could be picked: why, cross-fading in (FadeText). */}
+                    {seeded && !set && (
+                      <FadeText
+                        className="min-w-0 flex-1 text-sm text-slate-600"
+                        text={`There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`}
+                      />
+                    )}
+                    <PickButton current={set ? setKey : undefined} {...choices} />
+                  </div>
                 </Step>
               </SetupArea>
 

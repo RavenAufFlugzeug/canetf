@@ -38,13 +38,14 @@ const randomIndex = (n: number) => Math.floor(Math.random() * n);
 // in two corners.
 const BAND = "#111214";
 
-function CardBack({ color }: { color: string }) {
+export function CardBack({ color }: { color: string }) {
   const id = `card-back-${useId().replace(/:/g, "")}`;
   return (
     <span className="absolute inset-0 rounded-xl bg-white p-[5px] shadow-md ring-1 ring-black/15">
       <span
-        className="relative block size-full rounded-lg border-[4px]"
-        style={{ background: color, borderColor: BAND }}
+        // (Its colour eases to a new one, as the Strategies page's decks are recoloured.)
+        className="relative block size-full rounded-lg border-[4px] transition-[background-color] duration-500 ease-[ease]"
+        style={{ backgroundColor: color, borderColor: BAND }}
       >
         {/* The emblem: the logo, the cat's head out of her box (.logo-mark-out). */}
         <span className="absolute inset-0 grid place-items-center">
@@ -68,18 +69,18 @@ function CardBack({ color }: { color: string }) {
 // a round eye.
 const FISH = "M21 7 16 12C13 17.8 7 17.8 3 12C7 6.2 13 6.2 16 12L21 17";
 
-function Fish({ color, className }: { color: string; className: string }) {
+export function Fish({ color, className }: { color: string; className: string }) {
   return (
     <svg aria-hidden viewBox="1 4.6 22 14.8" className={className}>
       <path
         d={FISH}
         fill="none"
-        style={{ stroke: color }}
+        style={{ stroke: color, transition: "stroke 500ms ease" }}
         strokeWidth="2.3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="8.3" cy="11.1" r="1.35" style={{ fill: color }} />
+      <circle cx="8.3" cy="11.1" r="1.35" style={{ fill: color, transition: "fill 500ms ease" }} />
     </svg>
   );
 }

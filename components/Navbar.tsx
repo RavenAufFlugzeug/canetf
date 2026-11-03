@@ -7,13 +7,14 @@ import NavLogo from "@/components/NavLogo";
 import NavShell from "@/components/NavShell";
 import SandboxMark from "@/components/SandboxMark";
 import SearchMark from "@/components/SearchMark";
+import StrategyMark from "@/components/StrategyMark";
 import WatchMark from "@/components/WatchMark";
 import { getCurrentUser } from "@/lib/session";
 
 // Every link's icon gets the same box, so they line up at one size. Each mark's viewBox
-// frames its main shape (the glass, the cube, the book, the pawn, the door, the key) with
-// the same small margin, so those come out the same size; extras such as Search's star and
-// the Watch List's pen are left to reach past the box.
+// frames its main shape (the glass, the cube, the knight and king, the book, the pawn, the
+// door, the key) with the same small margin, so those come out the same size; extras such as
+// Search's star and the Watch List's pen are left to reach past the box.
 const ICON = "size-[22px]";
 
 // A link (or the log out button) in the navbar: its icon, then its label.
@@ -54,6 +55,12 @@ export default async function Navbar() {
         <Link href="/sandbox" className={ITEM}>
           <SandboxMark className={`${ICON} motion-safe:group-hover:scale-110`} />
           <NavLabel>Sandbox</NavLabel>
+        </Link>
+
+        <Link href="/strategy" className={ITEM}>
+          {/* The knight, a little bigger than the pawn, with the king behind it, wider and taller. */}
+          <StrategyMark className="h-[22px] w-[31px] motion-safe:group-hover:scale-110" />
+          <NavLabel>Strategies</NavLabel>
         </Link>
 
         <Link href="/watchlist" className={ITEM}>
