@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Fish } from "@/components/ClassicCardBack";
-import DeckBack from "@/components/DeckBack";
+import DeckBack, { Suit } from "@/components/DeckBack";
 import KindMark from "@/components/KindMark";
 
 // One pick as a card: the pick's name (or alias), what its card calls it, short (its alias or
@@ -34,7 +33,7 @@ const signedMoney = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${money.f
 const randomIndex = (n: number) => Math.floor(Math.random() * n);
 
 // A corner of a card's face, as a playing card's: the number of shares held (its "rank") over
-// a fish in its sector's colour (its "suit").
+// its "suit" in its sector's colour: a fish or a four-leaf clover, as the chosen deck back has.
 function Corner({ card, flip }: { card: DeckCard; flip?: boolean }) {
   return (
     <span
@@ -43,7 +42,7 @@ function Corner({ card, flip }: { card: DeckCard; flip?: boolean }) {
       <span className="text-base font-bold tabular-nums text-slate-900">
         {card.shares.toLocaleString("en-CA")}
       </span>
-      <Fish color={card.color} className="mt-0.5 h-3 w-[18px]" />
+      <Suit color={card.color} />
     </span>
   );
 }

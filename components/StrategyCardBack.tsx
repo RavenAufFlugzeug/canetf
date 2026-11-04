@@ -1,9 +1,7 @@
 import { useId } from "react";
 import { SURPRISE } from "@/components/LogoMark";
 
-// The back of the Strategies page's cards (its decks), framed as the Sandbox's card backs are
-// (a white border, a near-black band round a field in the deck's colour (as the Classic back's), and a white
-// four-leaf clover in two corners), with a cup of coffee on its saucer in the middle, drawn in white brush strokes: a
+// The Teegesellschaft card back: white, with a cup of coffee on its saucer in the middle, drawn in white brush strokes: a
 // thick rim round the coffee (a latte, with a heart poured on it in milk), the
 // bowl's sides thickening to its foot, a handle curling back into it on the right, and a
 // saucer swept round under it, thin at the back and thick at the front; round the bowl, a ring
@@ -44,7 +42,7 @@ const PAW = "M271 182C271 154 331 154 331 182a10 8.5 0 0 1 -20 0a10 8.5 0 0 1 -2
 const LEFT_EAR = "M35 29 37 12 47 26 47 29Z";
 // Its two outer sides, outlined (its foot runs into her head, so it has no outline).
 const LEFT_EAR_EDGE = "M35 27 37 12 47 26";
-const STRAW = "oklch(0.97 0.025 90)";
+const STRAW = "oklch(0.88 0.05 78)";
 const ROSE = "oklch(0.8 0.09 305)";
 const ROSE_SHADE = "oklch(0.58 0.15 305)";
 const ROSE_DEEP = "oklch(0.6 0.15 305)";
@@ -114,18 +112,119 @@ const HEART =
 const SMALL_HEART =
   "M200 187.3C200 186.2 205.3 185 212.7 185.3C225.1 185.7 224.3 189.8 200 193.7C175.7 189.8 174.9 185.7 187.3 185.3C194.7 185 200 186.2 200 187.3Z";
 
+// The table: its top, a diamond seen from its front corner (its corners rounded), and its cloth's left side (the right
+// side is it mirrored), hanging from the top's front-left edge, its hem in soft waves, lowest at the
+// front corner.
+const TABLE_TOP =
+  "M169 236Q200 222 231 236L419 323Q450 337 419 351L231 438Q200 452 169 438L-19 351Q-50 337 -19 323Z";
+const TABLE_LEFT =
+  "M-50 368Q-50 337-22 350L186 446Q200 452 200 466V686C179 676 181 654 160 644C139 634 139 662 118 652C97 642 97 616 76 606C55 596 55 624 34 614C13 604 13 578 -8 568C-29 558 -29 570 -50 560Z";
+
+// The card's background, a garden under a pastel sky: the sky light blue fading to pink at the
+// horizon, sparkles and twinkling stars in it, fluffy clouds outlined in pastel along the
+// horizon, and rolling green hills, darker as they come nearer. It fills the inside of the outline
+// (cropped to its shape, never stretched). Pointed at, there is a breeze (app/globals.css,
+// "tea-"): the clouds drift with it, and the stars twinkle.
+const SPARKLES = [
+  [14, 30],
+  [40, 12],
+  [76, 18],
+  [92, 44],
+  [52, 36],
+  [6, 66],
+  [28, 8],
+  [66, 28],
+  [34, 50],
+  [86, 8],
+  [96, 60],
+  [22, 58],
+];
+// Twinkles: small four-pointed stars, each where it is and how big.
+const TWINKLE = "M0-1C.1-.2.2-.1 1 0 .2.1.1.2 0 1-.1.2-.2.1-1 0-.2-.1-.1-.2 0-1Z";
+const TWINKLES = [
+  [22, 18, 2.6],
+  [70, 12, 2],
+  [88, 36, 2.8],
+  [8, 48, 2],
+  [60, 46, 1.8],
+  [46, 24, 1.6],
+];
+const CLOUD = "M-4 76c0-5 5-8 9-6 1-5 8-7 11-3 3-3 9-1 9 3 3 0 5 3 4 6Z";
+function Garden({ id }: { id: string }) {
+  return (
+    <span aria-hidden className="absolute inset-[3px] overflow-hidden rounded-[6px]">
+      <svg viewBox="0 0 100 130" preserveAspectRatio="xMidYMid slice" className="block size-full">
+        <defs>
+          <linearGradient id={`${id}-sky`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="oklch(0.83 0.075 230)" />
+            <stop offset="0.38" stopColor="oklch(0.9 0.045 255)" />
+            <stop offset="0.55" stopColor="oklch(0.92 0.05 330)" />
+            <stop offset="0.62" stopColor="oklch(0.93 0.06 15)" />
+          </linearGradient>
+        </defs>
+        <rect width="100" height="130" fill={`url(#${id}-sky)`} />
+        {SPARKLES.map(([x, y]) => (
+          <circle key={`${x}-${y}`} cx={x} cy={y} r="0.55" fill="white" />
+        ))}
+        {TWINKLES.map(([x, y, size], i) => (
+          <g key={`${x}-${y}`} transform={`translate(${x} ${y}) scale(${size})`}>
+            <path
+              d={TWINKLE}
+              fill="white"
+              className="tea-twinkle"
+              style={{ animationDelay: `${-i * 0.3}s` }}
+            />
+          </g>
+        ))}
+        <g
+          fill="white"
+          stroke="oklch(0.84 0.07 10)"
+          strokeWidth="0.6"
+          strokeLinejoin="round"
+          className="tea-cloud"
+        >
+          <path d={CLOUD} />
+          <path d={CLOUD} transform="translate(100 -5) scale(-1 1)" />
+        </g>
+        <path d="M0 77C20 71 40 75 55 73 72 71 88 69 100 72V130H0Z" fill="oklch(0.87 0.08 145)" />
+        <path d="M0 102C18 96 34 100 50 103 70 107 86 98 100 100V130H0Z" fill="oklch(0.76 0.1 165)" />
+        <path d="M0 117C14 111 28 115 40 121 52 127 60 125 62 130H0Z" fill="oklch(0.52 0.08 210)" />
+      </svg>
+    </span>
+  );
+}
+
 export default function StrategyCardBack({ color }: { color: string }) {
   const id = `coffee-${useId().replace(/:/g, "")}`;
   // The saucer's clover: the deck's colour, a little darker, easing as it changes.
   const pattern = `color-mix(in oklch, ${color} 78%, black)`;
   return (
     <span className="absolute inset-0 rounded-xl bg-white p-[5px] shadow-md ring-1 ring-black/15">
-      <span
-        className="relative block size-full rounded-lg border-[4px] transition-[background-color] duration-500 ease-[ease]"
-        style={{ backgroundColor: color, borderColor: "#111214" }}
-      >
+      {/* Its field: a garden under a pastel sky (see Garden), outlined in black. */}
+      <span className="relative block size-full">
+        <Garden id={id} />
+        <span aria-hidden className="absolute inset-0 rounded-lg border-[4px] border-[#111214]" />
+        <Clover color="white" className="absolute left-[8px] top-[8px] size-4" />
+        <Clover color="white" className="absolute bottom-[8px] right-[8px] size-4 rotate-180" />
         <span className="absolute inset-0 grid place-items-center">
-          <svg aria-hidden viewBox="40 145 320 240" className="w-[47.2%] translate-y-[26%] overflow-visible">
+          <svg aria-hidden viewBox="40 145 320 240" className="w-[47.2%] translate-y-[-14%] overflow-visible">
+            {/* The table they are on, in the deck's colour: its top seen from a corner, and a cloth
+                hanging down its two front sides, its hem in soft waves, lowest at the front corner;
+                the sides a little darker, all parted by white lines. */}
+            <g
+              stroke="white"
+              strokeWidth="14"
+              strokeLinejoin="round"
+              className="transition-[fill] duration-500 ease-[ease]"
+            >
+              <path d={TABLE_LEFT} fill={`color-mix(in oklch, ${color} 85%, black)`} />
+              <path
+                d={TABLE_LEFT}
+                transform="translate(400 0) scale(-1 1)"
+                fill={`color-mix(in oklch, ${color} 70%, black)`}
+              />
+              <path d={TABLE_TOP} fill={color} />
+            </g>
             {/* Drawn wide, then narrowed and stretched up about its centre, so it stands taller. */}
             <g transform="translate(200 263) scale(0.86 1.12) translate(-200 -263)">
               <g className="strategy-saucer">
@@ -200,7 +299,7 @@ export default function StrategyCardBack({ color }: { color: string }) {
                       rx="8.6"
                       ry="2.2"
                       transform="rotate(8 58 18.4)"
-                      fill="oklch(0.92 0.035 88)"
+                      fill="oklch(0.82 0.06 72)"
                     />
                     <g transform="translate(61.5 14)">
                       {LOOPS.map(([a, l]) => (
@@ -364,19 +463,16 @@ export default function StrategyCardBack({ color }: { color: string }) {
             </g>
           </svg>
         </span>
-        {/* A fish in two corners, as on the Sandbox's card backs (the bottom one upside down). */}
-        {/* A four-leaf clover in two corners, where the Classic back has fish. */}
-        <CornerClover className="absolute left-1 top-1 size-4" />
-        <CornerClover className="absolute bottom-1 right-1 size-4 rotate-180" />
       </span>
     </span>
   );
 }
 
-// A four-leaf clover, where the Classic back has fish: four solid white heart-shaped leaves (the
-// saucer's clover leaf), their tips turned in to the middle, a little apart, so the card's colour
-// shows between them as a cross.
-function CornerClover({ className }: { className: string }) {
+// A four-leaf clover, where the Classic back has fish (and, on the card faces, the Teegesellschaft
+// back's suit): four solid heart-shaped leaves (the saucer's clover leaf) in the given colour,
+// their tips turned in to the middle, a little apart, so what is behind shows between them as a
+// cross.
+export function Clover({ color, className }: { color: string; className: string }) {
   return (
     <svg aria-hidden viewBox="-8.6 -8.6 17.2 17.2" className={className}>
       <g transform="scale(8)">
@@ -385,7 +481,8 @@ function CornerClover({ className }: { className: string }) {
             key={turn}
             d={LEAF}
             transform={`rotate(${turn}) translate(0 -0.09) scale(0.98)`}
-            fill="white"
+            fill={color}
+            className="transition-[fill] duration-500 ease-[ease]"
           />
         ))}
       </g>

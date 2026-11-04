@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 // remembered in this browser (localStorage), as Search's chart colours are.
 export const DECK_BACKS = [
   { value: "classic", label: "Classic" },
-  { value: "tea-party", label: "Tea Party" },
+  { value: "tea-party", label: "Teegesellschaft" },
 ] as const;
 
 export type DeckBackName = (typeof DECK_BACKS)[number]["value"];

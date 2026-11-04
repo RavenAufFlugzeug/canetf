@@ -2075,7 +2075,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 0;
 }
 
-/* The "Tea Party" deck back (components/StrategyCardBack.tsx): the cat behind her cup, on any
+/* The "Teegesellschaft" deck back (components/StrategyCardBack.tsx): the cat behind her cup, on any
    deck (.deck-pile) when it is the back chosen on the account page (lib/deckBack.ts).
    Pointed at, she is surprised as the Sandbox deck's cat is: three yellow strokes pop out by her
    ear and her mouth opens. Clicked (data-happy, until the pointer leaves), she is happy instead,
@@ -2168,6 +2168,34 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
   to {
     transform: rotate(3deg);
+  }
+}
+
+/* The Teegesellschaft back's garden, pointed at: a breeze. The clouds drift with it and the stars
+   twinkle. In the garden's units (a px is one of them). */
+.tea-twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.deck-pile:hover .tea-cloud {
+  animation: tea-drift 3s ease-in-out infinite alternate;
+}
+
+.deck-pile:hover .tea-twinkle {
+  animation: tea-twinkle 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes tea-drift {
+  to {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes tea-twinkle {
+  to {
+    transform: scale(0.45) rotate(45deg);
+    opacity: 0.6;
   }
 }
 
@@ -2581,6 +2609,10 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 
   .deck-pile[data-happy] .strategy-rose {
+    animation: none;
+  }
+
+  .deck-pile:hover :is(.tea-cloud, .tea-twinkle) {
     animation: none;
   }
 

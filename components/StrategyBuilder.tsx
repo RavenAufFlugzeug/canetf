@@ -2,10 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { isPaletteName, paletteColor, PalettePicker, type PaletteName } from "@/components/EtfBreakdown";
-import { Fish } from "@/components/ClassicCardBack";
 import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
-import DeckBack from "@/components/DeckBack";
+import DeckBack, { Suit } from "@/components/DeckBack";
 import { BuyMark, SellMark } from "@/components/TestMarks";
 
 // The Strategies page's builder (app/strategy/page.tsx), in the Sandbox's cards. Each strategy
@@ -732,7 +731,7 @@ function Hand({
 }
 
 // A rule's card, face up, as the Sandbox's cards are: white, edged in its deck's colour, the
-// shares it trades in two corners (its "rank") over a fish (its "suit"); in its middle the
+// shares it trades in two corners (its "rank") over its suit (a fish or clover, as the chosen back has); in its middle the
 // mark of what it does, whether it buys or sells, its name, and how many conditions it has (or that it
 // is unfinished). Being edited, it stands proud, ringed and tagged "Editing".
 function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: string; on: boolean }) {
@@ -742,7 +741,7 @@ function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: st
       className={`absolute flex flex-col items-center leading-none ${flip ? "bottom-1.5 right-1.5 rotate-180" : "left-1.5 top-1.5"}`}
     >
       <span className="text-base font-bold tabular-nums text-slate-900">{rank}</span>
-      <Fish color={color} className="mt-0.5 h-3 w-[18px]" />
+      <Suit color={color} />
     </span>
   );
   const count = rule.conditions.length;
