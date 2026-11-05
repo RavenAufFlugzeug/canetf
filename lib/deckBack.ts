@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from "react";
 
 // The deck back chosen on the account page, used by every deck and card back on the site:
-// "classic" (the cat in her box) or "tea-party" (the cat behind her cup of coffee). It is
+// "classic" (the cat in her box), "tea-party" (the cat behind her cup of coffee) or "magic" (the
+// cat peeking out of a magician's hat). It is
 // remembered in this browser (localStorage), as Search's chart colours are.
 export const DECK_BACKS = [
   { value: "classic", label: "Classic" },
   { value: "tea-party", label: "Teegesellschaft" },
+  { value: "magic", label: "Magic" },
 ] as const;
 
 export type DeckBackName = (typeof DECK_BACKS)[number]["value"];

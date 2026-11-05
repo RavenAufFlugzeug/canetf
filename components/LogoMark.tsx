@@ -174,16 +174,19 @@ const BACK_FLAP: Flap = {
   fill: CARDBOARD.backFlap,
 };
 
+// With `headOnly`, just the cat's head (and her moods), without her box: the Magic deck back.
 export default function LogoMark({
   id,
   lid = 0,
   className = "",
   style,
+  headOnly = false,
 }: {
   id: string;
   lid?: number;
   className?: string;
   style?: React.CSSProperties;
+  headOnly?: boolean;
 }) {
   return (
     <svg
@@ -198,24 +201,28 @@ export default function LogoMark({
           <polygon points={ABOVE_RIM} />
         </clipPath>
       </defs>
-      {/* The seams: each face is edged in the background colour. */}
-      <g style={{ stroke: SEAM }} strokeWidth="3">
-        <polygon points={INSIDE} style={{ fill: CARDBOARD.inside }} />
-      </g>
-      <g style={{ stroke: SEAM }} strokeWidth="3">
-        {/* The back flap, then the front faces, so as it folds down behind the box the faces
-            stand in front of it; both are behind the cat. */}
-        <path
-          d={flapPath(BACK_FLAP, backAngle(lid))}
-          style={{
-            fill: showsUnderside(BACK_FLAP, backAngle(lid)) ? CARDBOARD.backFlapUnderside : BACK_FLAP.fill,
-          }}
-        />
-        <polygon points={FACES[0]} style={{ fill: CARDBOARD.left }} />
-        <polygon points={FACES[1]} style={{ fill: CARDBOARD.right }} />
-      </g>
+      {!headOnly && (
+        <>
+          {/* The seams: each face is edged in the background colour. */}
+          <g style={{ stroke: SEAM }} strokeWidth="3">
+            <polygon points={INSIDE} style={{ fill: CARDBOARD.inside }} />
+          </g>
+          <g style={{ stroke: SEAM }} strokeWidth="3">
+            {/* The back flap, then the front faces, so as it folds down behind the box the faces
+                stand in front of it; both are behind the cat. */}
+            <path
+              d={flapPath(BACK_FLAP, backAngle(lid))}
+              style={{
+                fill: showsUnderside(BACK_FLAP, backAngle(lid)) ? CARDBOARD.backFlapUnderside : BACK_FLAP.fill,
+              }}
+            />
+            <polygon points={FACES[0]} style={{ fill: CARDBOARD.left }} />
+            <polygon points={FACES[1]} style={{ fill: CARDBOARD.right }} />
+          </g>
+        </>
+      )}
       {/* The cat, between the flaps and only above the box's rim, so she disappears into it. */}
-      <g clipPath={`url(#${id})`}>
+      <g clipPath={headOnly ? undefined : `url(#${id})`}>
         <g className="logo-mark-cat">
           {/* A thin rim of the background around her head, keeping it clear of the box. */}
           <path d={HEAD} style={{ stroke: PAPER }} strokeWidth="5.5" strokeLinejoin="round" />
@@ -269,7 +276,9 @@ export default function LogoMark({
       </g>
       {/* The front flap, over the cat: closed or lifted, the lid is still on top of her; open,
           it hangs down over the front, below her. */}
-      <path d={flapPath(FRONT_FLAP, lid)} style={{ fill: FRONT_FLAP.fill, stroke: SEAM }} strokeWidth="3" />
+      {!headOnly && (
+        <path d={flapPath(FRONT_FLAP, lid)} style={{ fill: FRONT_FLAP.fill, stroke: SEAM }} strokeWidth="3" />
+      )}
       {/* The angry mark, in red, seen only once she is cross. */}
       <path
         d={ANGRY}

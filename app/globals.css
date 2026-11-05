@@ -2199,6 +2199,217 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
+/* The "Magic" deck back (components/MagicCardBack.tsx), on any deck (.deck-pile) when it is the
+   back chosen on the account page (lib/deckBack.ts). Its cat's moods are Classic's
+   (.logo-mark-out above). Its pen just floats, slowly and smoothly, whatever is going on.
+   Pointed at: the cat lifts her head out of her book so her mouth shows, and she and the book
+   float gently up and down together, the book opening and closing a little as it rises and
+   falls; the moon swings up as
+   for a day gone by in the Sandbox, then rocks and glows as
+   its stars twinkle; the sky's stars twinkle; and the book's pages turn, one after another.
+   Clicked (data-happy): the book glows and sparkles rise out of its pages. In the card's px. */
+.magic-twinkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.deck-pile:hover .magic-twinkle {
+  animation: magic-twinkle 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes magic-twinkle {
+  to {
+    transform: scale(0.45) rotate(45deg);
+    opacity: 0.6;
+  }
+}
+
+/* The cat lifting her head out of her book while pointed at, so her mouth shows. */
+.magic-cat {
+  transition: transform 450ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+/* Her resting mouth, behind the book, never shows (her surprised and happy ones do). */
+.magic-cat .logo-mark-mouth {
+  opacity: 0;
+}
+
+.deck-pile:hover .magic-cat {
+  transform: translateY(-3.5px);
+}
+
+/* The cat and her book, floating up and down together while pointed at. */
+.deck-pile:hover .magic-float {
+  animation: magic-float 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes magic-float {
+  from {
+    transform: translateY(1px);
+  }
+  to {
+    transform: translateY(-2.5px);
+  }
+}
+
+/* Its two halves, opening and closing a little in time with the float: seen from the front, each
+   narrows and widens from its edge at the spine, which stays put, so the covers never come away
+   from the spine. */
+.magic-half {
+  transform-box: fill-box;
+}
+
+.magic-half-left {
+  transform-origin: 100% 50%;
+}
+
+.magic-half-right {
+  transform-origin: 0% 50%;
+}
+
+.deck-pile:hover .magic-half {
+  animation: magic-open 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes magic-open {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0.86);
+  }
+}
+
+/* The moon (its spots turn with it, .magic-moon-body). */
+.magic-moon {
+  transition: filter 400ms ease-out;
+}
+
+.deck-pile:hover .magic-moon {
+  filter: drop-shadow(0 0 4px oklch(0.93 0.1 95 / 0.85));
+}
+
+.magic-moon-body,
+.magic-moon-star {
+  transform-origin: center;
+}
+
+.deck-pile:hover .magic-moon-body {
+  animation:
+    test-mark-moonrise 900ms cubic-bezier(0.3, 1.4, 0.5, 1) both,
+    magic-moon-rock 2.4s ease-in-out 900ms infinite alternate;
+}
+
+@keyframes magic-moon-rock {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-14deg);
+  }
+}
+
+.deck-pile:hover .magic-moon-star {
+  animation: test-mark-twinkle 1600ms ease-in-out 300ms infinite both;
+}
+
+/* The book: its pages turn about the spine (x 0 in the drawing), hidden while still, and fade
+   out as they pass over the middle, where her face is. */
+.magic-page {
+  transform-box: view-box;
+  transform-origin: 0px 0px;
+  opacity: 0;
+}
+
+.deck-pile:hover .magic-page {
+  animation: magic-page-turn 1.8s ease-in-out infinite;
+}
+
+@keyframes magic-page-turn {
+  0% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  18% {
+    opacity: 0;
+    transform: scaleX(0.7);
+  }
+  82% {
+    opacity: 0;
+    transform: scaleX(-0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(-1);
+  }
+}
+
+.magic-book {
+  transition: filter 400ms ease-out;
+}
+
+.deck-pile[data-happy] .magic-book {
+  filter: drop-shadow(0 2px 4px oklch(0.93 0.1 95 / 0.9));
+}
+
+.magic-rising {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+.deck-pile[data-happy] .magic-rising {
+  animation: magic-rise 1.1s ease-out infinite backwards;
+}
+
+@keyframes magic-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.3);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.5) rotate(45deg);
+  }
+}
+
+/* The pen: floating, slowly, rising a little and leaning back and forth about its middle. */
+.magic-quill {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: magic-quill-float 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes magic-quill-float {
+  from {
+    transform: translateY(1px) rotate(2deg);
+  }
+  to {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magic-cat {
+    transition: none;
+  }
+
+  .magic-quill,
+  .deck-pile:hover :is(.magic-float, .magic-half, .magic-twinkle, .magic-moon-body, .magic-moon-star, .magic-page),
+  .deck-pile[data-happy] .magic-rising {
+    animation: none;
+  }
+
+  /* While she is happy, the sparkles over the book just show, still. */
+  .deck-pile[data-happy] .magic-rising {
+    opacity: 1;
+  }
+}
+
 /* The flowers turning, each about its own middle, the small one the other way and faster. */
 .logo-mark-spin,
 .logo-mark-spin-back {

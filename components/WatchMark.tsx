@@ -13,13 +13,14 @@
 // unique on the page.
 
 // The pen's left half and quill, from the tip: down the left edge, in and out of the
-// notch, down the quill to the nib, then back up the vein to the tip.
-const LEFT =
+// notch, down the quill to the nib, then back up the vein to the tip. (The Magic deck back's
+// pen is this one too.)
+export const LEFT =
   "M88.1 2.3C75.6 5.4 64.7 11.7 58.4 19.5C52.2 27.3 46 35.1 43.2 43.2L46.6 45.2 42.5 48.9C41.7 55.4 42.5 63.2 43.6 67.8L40 80 48.2 67.5Q63.1 31 88.1 2.3Z";
 
 // The pen's right half, from the foot of its vane: up the vein to the tip, then down the
 // right edge, in and out between the barbs, and back to the vein.
-const RIGHT =
+export const RIGHT =
   "M51.9 58.9Q66.1 27.6 88.1 2.3C89.6 11.7 87.3 20.3 81.8 28.1L75.6 29.6 77.9 39 70.1 41.3 70.9 49.9 63.1 51.5 60 58.5Z";
 
 // The book, before it is tilted: its cover, and the edge of its pages along its bottom,
