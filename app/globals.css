@@ -2738,7 +2738,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 /* The pen, while pointed at: floating, slowly, rising a little and leaning back and forth about
    its middle. Otherwise still. */
-/* The fish (in front of the book, at its foot): swimming gently while pointed at; once clicked (while still pointed at), glowing
+/* The fish (in front of the book, at its foot): swimming gently while pointed at, turning a little; once clicked (while still pointed at), glowing
    warm gold (from the glow's own colours, clear, so it never darkens on its way) with motes of
    light rising off it. */
 .magic-fish {

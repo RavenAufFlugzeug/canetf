@@ -164,30 +164,29 @@ const GOLD = "oklch(0.8 0.15 75)";
 // how far aside it drifts, in the book's drawing.
 const MOTE = "oklch(0.93 0.14 95)";
 // A fish floating in front of the book, low on its right, after the user's drawing, facing left:
-// its mouth open, a line behind its head and a keyhole for an eye; a plump body (after the user's
-// example), a big rounded fin along its back, a fin on its side and a two-lobed tail; pale blue,
-// its head deeper, the fin on its back lighter, all outlined in black.
+// its mouth open, a line behind its head and a keyhole for an eye; a long fin along its back, one
+// under its belly, one on its side and a crescent tail; pale blue, its head deeper, its fins
+// deeper still, all outlined in black.
 // (Each by day, then by night, a little darker.)
 // (Changing slowly, easing in and out, as day and night change.)
 const FISH_FADE = "fill 1.6s ease-in-out";
 const FISH_SKIN = ["oklch(0.87 0.06 235)", "oklch(0.74 0.07 238)"];
-const FISH_FIN_LIGHT = ["oklch(0.93 0.035 230)", "oklch(0.83 0.045 234)"];
+const FISH_FIN = ["oklch(0.56 0.13 252)", "oklch(0.46 0.12 255)"];
 // Its head, in front of the line behind it, a deeper blue (cut to its body), its eye white.
 const FISH_HEAD_SKIN = ["oklch(0.66 0.11 245)", "oklch(0.55 0.11 248)"];
 const FISH_HEAD = "M-13-20C-11.5-11-13-1-18.5 9H-44V-20Z";
+// Its body and tail, one shape (so its outline runs on smoothly into its tail), after the user's
+// drawing: narrowing to a slim waist, then a big crescent tail, its top lobe swept up and back,
+// its bottom one down, a curved notch between them.
 const FISH_BODY =
-  "M-36-13.2C-32-16-27-18.2-22-18.3-19-18.5-16-18.5-13-18.4-2-18.6 12-14 20-6 23-3 25-0.5 27 1L27 5C22 9 12 13 0 13-8 13-14 11-18.5 8.2-25 7-32 3-39.5-4.3L-29.5-5.8Z";
-// The fin along its back, and its tail (two rounded lobes with a notch between them), each drawn
-// behind its body with the colour it takes.
-const FISH_FINS: [string, string[]][] = [
-  ["M-10-18.4C-9-24-2-26 4-25.4 10-24.8 15-20 17-11Z", FISH_FIN_LIGHT],
-  [
-    "M25 1C29-2 33-6 38-8.6 40.4-9.6 42-8 41.2-5.8 39.6-2 37 0.6 35.6 3 37 5.4 39.6 8 41.2 11.8 42 14 40.4 15.6 38 14.6 33 12 29 8 25 5Z",
-    FISH_SKIN,
-  ],
+  "M-36-13.2C-32-16-27-18.2-22-18.3-19-18.5-16-18.5-13-18.4-3-16.5 10-10.5 23 0.5 28 1.5 35-2 41-3.8 46-5 50-4 51.5-3.2 46-1 41 3.5 40 8 40 12 41.5 17 43.3 20.2 41 20.4 36 17 31 11 29 9.4 27 8.8 25 8.7 20 9.4 14 11 5 11.2-4 11.2-12 10-18.5 8.2-25 7-32 3-39.5-4.3L-29.5-5.8Z";
+// Its fins, drawn behind its body: a long slanted one along its back, a small one under its belly.
+const FISH_FINS = [
+  "M-9-17C-7-21.5-2-22.4 5-22 10-21.4 13.6-18.4 15-15.6 16.6-12.6 17-9.6 15.8-6.5Z",
+  "M-12 9.4C-8 12.6-4 15.2-0.6 16.4 1.4 17 2.8 15.8 3 13.6 3.1 12.6 3 11.6 2.6 11Z",
 ];
-// A fin on its side, inside its body behind its head: rounded at the back, notched at the front.
-const FISH_SIDE_FIN = "M-8-2.5H1C3.5-2.5 4.5-1 4.5 1.5 4.5 4 3.5 5.5 1 5.5H-8L-4.4 1.5Z";
+// A fin on its side, inside its body behind its head: a triangle pointing down and back.
+const FISH_SIDE_FIN = "M-7.7-5.4H4.8L-1 6-8.4-2Z";
 const FISH_GILL = "M-13-18C-11.5-11-13-1-18.5 8";
 const FISH_EYE =
   "M-22-15.6C-20.3-15.6-19-14.3-19-12.6-19-11.6-19.5-10.8-20.2-10.2L-19.6-8C-19.4-6.8-20.4-5.8-21.6-5.8-22.8-5.8-23.8-6.8-23.6-8L-23.4-10.4C-24.4-11-25-11.7-25-12.6-25-14.3-23.7-15.6-22-15.6Z";
@@ -746,7 +745,7 @@ export default function MagicCardBack({ color }: { color: string }) {
           <span
             data-glow={fishGlow ? "" : undefined}
             className="magic-fish absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: "calc(50% + 20px)", top: "calc(50% + 51px)", width: 31.4, height: 20.6 }}
+            style={{ left: "calc(50% + 14px)", top: "calc(50% + 42px)", width: 40, height: 26.2 }}
           >
             <svg viewBox="-64 -52 128 84" className="block size-full overflow-visible">
               <g className="magic-fish-swim">
@@ -767,14 +766,14 @@ export default function MagicCardBack({ color }: { color: string }) {
                   strokeLinejoin="round"
                   strokeLinecap="round"
                 >
-                  {FISH_FINS.map(([d, fill]) => (
+                  {FISH_FINS.map((d) => (
                     <path
                       key={d}
                       d={d}
                       stroke={BAND}
                       strokeWidth="6.2"
                       paintOrder="stroke"
-                      style={{ fill: fill[nightTime ? 1 : 0], transition: FISH_FADE }}
+                      style={{ fill: FISH_FIN[nightTime ? 1 : 0], transition: FISH_FADE }}
                     />
                   ))}
                   <path
@@ -797,7 +796,7 @@ export default function MagicCardBack({ color }: { color: string }) {
                     d={FISH_SIDE_FIN}
                     stroke={BAND}
                     strokeWidth="2.6"
-                    style={{ fill: FISH_SKIN[nightTime ? 1 : 0], transition: FISH_FADE }}
+                    style={{ fill: FISH_FIN[nightTime ? 1 : 0], transition: FISH_FADE }}
                   />
                   <path
                     d={FISH_EYE}
