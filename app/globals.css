@@ -2199,7 +2199,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
-/* The "Magic" deck back (components/MagicCardBack.tsx), on any deck (.deck-pile) when it is the
+/* The "Hexerei" deck back (components/MagicCardBack.tsx), on any deck (.deck-pile) when it is the
    back chosen on the account page (lib/deckBack.ts). Its cat's moods are Classic's
    (.logo-mark-out above).
    All the time: the cat and her book float gently up and down together, the book opening and

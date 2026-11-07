@@ -3,7 +3,7 @@ import LogoMark from "@/components/LogoMark";
 import { LEFT as PEN_LEFT } from "@/components/WatchMark";
 import { paletteColor, type PaletteName } from "@/components/EtfBreakdown";
 
-// The "Magic" deck back: a white border, then a near-black band round a night sky, always a deep
+// The "Hexerei" deck back: a white border, then a near-black band round a night sky, always a deep
 // red whatever the deck's colour (dark at the top, a little lighter low down), scattered with
 // stars, a few of them twinkling; a white sparkle in two corners and, near the top right one, the Sandbox's moon for
 // a day gone by, filled in. In the middle, the cat's head as on the Classic back (the logo's,

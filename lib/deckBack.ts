@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
 export const DECK_BACKS = [
   { value: "classic", label: "Classic" },
   { value: "tea-party", label: "Teegesellschaft" },
-  { value: "magic", label: "Magic" },
+  { value: "magic", label: "Hexerei" },
 ] as const;
 
 export type DeckBackName = (typeof DECK_BACKS)[number]["value"];
