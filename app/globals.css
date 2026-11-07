@@ -2202,18 +2202,19 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 /* The "Magic" deck back (components/MagicCardBack.tsx), on any deck (.deck-pile) when it is the
    back chosen on the account page (lib/deckBack.ts). Its cat's moods are Classic's
    (.logo-mark-out above).
-   Pointed at: the pen floats, slowly; the cat lifts her head out of her book so her mouth
-   shows, and she and the book float gently up and down together, the book opening and closing a little as it rises and
-   falls; the moon swings up as
-   for a day gone by in the Sandbox, then rocks and glows as
-   its stars twinkle; the sky's stars twinkle; and the book's pages turn, one after another.
-   Clicked (data-happy): the book glows and sparkles rise out of its pages. In the card's px. */
+   All the time: the cat and her book float gently up and down together, the book opening and
+   closing a little as it rises and falls, its pages turning one after another; the pen, the
+   hat, the bird, the flowers and the fish move; the moon rocks (or the sun turns), each
+   glowing, and the stars twinkle.
+   Pointed at: the cat lifts her head out of her book so her mouth shows (resting otherwise);
+   the book glows; the moon swings up as for a day gone by in the Sandbox, then rocks.
+   Clicked (data-happy): sparkles rise out of the book's pages. In the card's px. */
 .magic-twinkle {
   transform-box: fill-box;
   transform-origin: center;
 }
 
-.deck-pile:hover .magic-twinkle {
+.magic-twinkle {
   animation: magic-twinkle 0.9s ease-in-out infinite alternate;
 }
 
@@ -2235,7 +2236,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: 53.8px -0.2px;
 }
 
-.deck-pile:hover .magic-hat {
+.magic-hat {
   animation: magic-hat-rock 2.4s ease-in-out infinite alternate;
 }
 
@@ -2254,7 +2255,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: 50% 100%;
 }
 
-.deck-pile:hover .magic-bird {
+.magic-bird {
   animation: magic-bird-bob 1.8s ease-in-out infinite alternate;
 }
 
@@ -2272,7 +2273,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: center;
 }
 
-.deck-pile:hover .magic-pansy {
+.magic-pansy {
   animation: magic-pansy-sway 1.4s ease-in-out infinite alternate;
 }
 
@@ -2314,7 +2315,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* The cat and her book, floating up and down together while pointed at. */
-.deck-pile:hover .magic-float {
+.magic-float {
   animation: magic-float 2.4s ease-in-out infinite alternate;
 }
 
@@ -2348,7 +2349,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: 0px 0px;
 }
 
-.deck-pile:hover .magic-half {
+.magic-half {
   animation: magic-open 2.4s ease-in-out infinite alternate;
 }
 
@@ -2362,17 +2363,19 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* The moon (its spots turn with it, .magic-moon-body). */
+/* (Glowing all the time.) */
 .magic-moon {
-  transition: filter 400ms ease-out;
-}
-
-.deck-pile:hover .magic-moon {
   filter: drop-shadow(0 0 4px oklch(0.93 0.1 95 / 0.85));
 }
 
 .magic-moon-body,
 .magic-moon-star {
   transform-origin: center;
+}
+
+/* (Rocking all the time; rising again, then rocking, while pointed at.) */
+.magic-moon-body {
+  animation: magic-moon-rock 2.4s ease-in-out infinite alternate;
 }
 
 .deck-pile:hover .magic-moon-body {
@@ -2390,7 +2393,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
-.deck-pile:hover .magic-moon-star {
+.magic-moon-star {
   animation: test-mark-twinkle 1600ms ease-in-out 300ms infinite both;
 }
 
@@ -2399,12 +2402,8 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
    gently swelling and settling. (Its glow at rest is the same two shadows as pointed at, in the
    same colours, so it only ever brightens: from a different list, or from "transparent", which
    is clear black, it would darken on its way.) */
+/* (Glowing all the time.) */
 .magic-sun {
-  filter: drop-shadow(0 0 2px oklch(0.98 0.1 100 / 0.7)) drop-shadow(0 0 4px oklch(0.93 0.15 92 / 0.4));
-  transition: filter 500ms ease-out;
-}
-
-.deck-pile:hover .magic-sun {
   filter: drop-shadow(0 0 3px oklch(0.98 0.1 100 / 1)) drop-shadow(0 0 8px oklch(0.93 0.15 92 / 0.8));
 }
 
@@ -2426,11 +2425,11 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
-.deck-pile:hover .magic-sun-rays {
+.magic-sun-rays {
   animation: magic-sun-turn 8s linear 900ms infinite;
 }
 
-.deck-pile:hover .magic-sun-disc {
+.magic-sun-disc {
   animation: magic-sun-pulse 1.6s ease-in-out 900ms infinite alternate;
 }
 
@@ -2458,15 +2457,15 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 0;
 }
 
-.deck-pile:hover .magic-page {
+.magic-page {
   opacity: 1;
 }
 
-.deck-pile:hover .magic-page-fill {
+.magic-page-fill {
   animation: magic-page-fill 6s linear 0.4s infinite;
 }
 
-.deck-pile:hover .magic-page-edge {
+.magic-page-edge {
   animation: magic-page-edge 6s linear 0.4s infinite;
 }
 
@@ -2738,15 +2737,15 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 /* The pen, while pointed at: floating, slowly, rising a little and leaning back and forth about
    its middle. Otherwise still. */
-/* The fish (in front of the book, at its foot): swimming gently while pointed at, turning a little; once clicked (while still pointed at), glowing
-   warm gold (from the glow's own colours, clear, so it never darkens on its way) with motes of
-   light rising off it. */
+/* The fish (in front of the book, at its foot): swimming gently, turning a little; once clicked,
+   glowing warm gold (from the glow's own colours, clear, so it never darkens on its way) with
+   motes of light rising off it, until clicked again. */
 .magic-fish {
   filter: drop-shadow(0 0 0 oklch(0.97 0.09 95 / 0)) drop-shadow(0 0 0 oklch(0.9 0.13 85 / 0));
   transition: filter 1s ease-in-out;
 }
 
-.deck-pile:hover .magic-fish[data-glow] {
+.magic-fish[data-glow] {
   filter: drop-shadow(0 0 2.5px oklch(0.97 0.09 95 / 1)) drop-shadow(0 0 8px oklch(0.9 0.13 85 / 0.85));
 }
 
@@ -2755,7 +2754,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: center;
 }
 
-.deck-pile:hover .magic-fish-swim {
+.magic-fish-swim {
   animation: magic-fish-swim 3.6s ease-in-out infinite alternate;
 }
 
@@ -2775,7 +2774,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 0;
 }
 
-.deck-pile:hover .magic-fish[data-glow] .magic-fish-mote {
+.magic-fish[data-glow] .magic-fish-mote {
   animation: magic-fish-mote 2.4s ease-out infinite backwards;
 }
 
@@ -2799,7 +2798,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   transform-origin: center;
 }
 
-.deck-pile:hover .magic-quill {
+.magic-quill {
   animation: magic-quill-float 4.5s ease-in-out infinite alternate;
 }
 
@@ -2850,7 +2849,8 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
   :is(.deck-pile:hover, .deck-pile[data-happy]) :is(.magic-mote, .magic-light),
   .magic-fish[data-glow] .magic-fish-mote,
-  .deck-pile:hover :is(.magic-hat, .magic-bird, .magic-fish-swim, .magic-pansy, .magic-sun-body, .magic-sun-rays, .magic-sun-disc, .magic-quill, .magic-float, .magic-half, .magic-twinkle, .magic-moon-body, .magic-moon-star, .magic-page-fill, .magic-page-edge),
+  :is(.magic-hat, .magic-bird, .magic-fish-swim, .magic-pansy, .magic-sun-rays, .magic-sun-disc, .magic-quill, .magic-float, .magic-half, .magic-twinkle, .magic-moon-body, .magic-moon-star, .magic-page-fill, .magic-page-edge),
+  .deck-pile:hover :is(.magic-sun-body, .magic-moon-body),
   .deck-pile[data-happy] .magic-rising {
     animation: none;
   }

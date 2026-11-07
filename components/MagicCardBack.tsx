@@ -14,14 +14,14 @@ import { paletteColor, type PaletteName } from "@/components/EtfBreakdown";
 // colour outlined in white, a dark vein between them.
 //
 // On a deck (.deck-pile), she is surprised when it is pointed at and happy once it is clicked,
-// as on Classic (.logo-mark-out). Her book hides all of her face but her eyes; pointed at, she
-// lifts her head a little out of it, so her mouth shows (.magic-cat), and she and her book
-// float gently up and down together (.magic-float), the book opening and closing a little as
-// it does (.magic-half); the moon swings up, then rocks and glows as its
-// stars twinkle, and so do the sky's; and the book's pages turn, one after another. Clicked
-// (data-happy, until the pointer leaves), the book glows and sparkles rise out of its pages
-// (.magic-* in globals.css). The sky
-// is drawn in its own units: 100 wide, 130 tall, about a px each on the account page's cards;
+// as on Classic (.logo-mark-out). All the time, she and her book float gently up and down
+// together (.magic-float), the book opening and closing a little as it does (.magic-half) and
+// its pages turning one after another; the pen, hat, bird, flowers and fish move, the moon
+// rocks and the stars twinkle. Her book hides all of her face but her eyes; pointed at, she
+// lifts her head a little out of it, so her mouth shows (.magic-cat), the book glows and the
+// moon swings up again. Clicked (data-happy, until the pointer leaves), sparkles rise out of
+// its pages (.magic-* in globals.css). The sky is drawn in its own units: 100 wide, 130 tall,
+// about a px each on the account page's cards;
 // the book and quill in px from the card's middle.
 const BAND = "#111214";
 const MOON = "oklch(0.93 0.1 95)";
@@ -493,8 +493,7 @@ export default function MagicCardBack({ color }: { color: string }) {
   };
   const toDay = pick((now) => (now === "day" ? "dawn" : "day"));
   const toNight = pick((now) => (now === "night-red" ? "night-teal" : "night-red"));
-  // Whether the fish is glowing (clicked on and off; like the sun and moon, not opening the deck). It
-  // shows only while the card is pointed at (.magic-fish in globals.css).
+  // Whether the fish is glowing (clicked on and off; like the sun and moon, not opening the deck).
   const [fishGlow, setFishGlow] = useState(false);
   const toggleFish = (event: MouseEvent) => {
     event.stopPropagation();
