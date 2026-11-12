@@ -10,6 +10,7 @@ import FoldButton, { FOLD_BUTTON } from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
 import { KINDS } from "@/lib/kinds";
 import { NAICS_GROUPS, markOn, naicsOf, type NaicsGroup } from "@/lib/naics";
+import { riskSummary } from "@/lib/risk";
 import { kindOf } from "@/lib/sandbox";
 
 // The map reads left to right: the chosen ETF, then what it holds, then what those hold,
@@ -153,6 +154,8 @@ function detailRows(node: EtfTreeNode): [string, string][] {
     ["Category", d.category],
     ["Location", [d.hqCity, d.hqCountry].filter(Boolean).join(", ") || null],
     ["Exchange", listing ? `${listing.exchange}, ${listing.country}` : null],
+    // A fund's risk rating (lib/risk.ts): its level and how much it swings a year.
+    ["Risk", d.risk ? riskSummary(d.risk) : null],
     [
       "Holds",
       node.kind === "fund" && listed

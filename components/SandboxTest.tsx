@@ -27,6 +27,7 @@ import StartMark from "@/components/StartMark";
 import {
   BuyMark,
   DayMark,
+  DividendMark,
   ExitMark,
   FinishMark,
   MonthMark,
@@ -36,7 +37,7 @@ import {
   WarnMark,
   WeekMark,
 } from "@/components/TestMarks";
-import TradeLog from "@/components/TradeLog";
+import TradeLog, { type LoggedTrade } from "@/components/TradeLog";
 import Tween from "@/components/Tween";
 import { currencyName, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
@@ -109,6 +110,13 @@ type Ask = { symbol: string; name: string; side: Side; shares: number };
 // What is held of a pick: how many shares, and what they cost in Canadian dollars (for their
 // average price; a sale takes its shares out at that average).
 type Holding = { shares: number; cost: number };
+// A cash dividend received: on Day `day` (its ex-dividend date), for the `shares` of `symbol`
+// held at the close of the day before, `perShare` each in the pick's currency (paid into the
+// cash in that currency); `rate`, that currency's CAD rate that day (1 for CAD).
+type Payout = { symbol: string; day: number; shares: number; perShare: number; rate: number };
+// A payout's cash, in the pick's currency (to the cent) and in CAD at its day's rate.
+const payoutAmount = (x: Payout) => cents(x.shares * x.perShare);
+const payoutCad = (x: Payout) => cents(x.shares * x.perShare * x.rate);
 // What happened over the days just passed, summed up once they have come in: from Day `from` to
 // Day `to`, the account's value on each of those days (at the shares held throughout), how
 // each pick moved, and how each position did; with each pick's new closes and which of
@@ -133,7 +141,9 @@ type Recap = {
     pct: number;
     gain: number;
   }[];
-  days: Record<string, { closes: number[]; rates: number[]; yearStarts: number[] }>;
+  days: Record<string, { closes: number[]; rates: number[]; yearStarts: number[]; dividends: number[] }>;
+  // The cash dividends the shares held earned over the days (each on its ex-dividend date).
+  payouts: (Payout & { name: string; currency: string })[];
 };
 
 // How long a recap takes to fade away (.recap-out in globals.css).
@@ -385,7 +395,7 @@ export default function SandboxTest({
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   // A note on what was done with the cash (an exchange made to pay for shares, a sale kept in
   // its currency), keyed so each comes in anew; it goes by itself after a while.
-  const [moneyNote, setMoneyNote] = useState<{ key: number; text: string } | null>(null);
+  const [moneyNote, setMoneyNote] = useState<{ key: number; text: string; dividend?: boolean } | null>(null);
   useEffect(() => {
     if (!moneyNote) return;
     const gone = window.setTimeout(() => setMoneyNote(null), 7000);
@@ -419,6 +429,10 @@ export default function SandboxTest({
   // What the account was worth on the day moved on from (Day 0: the start), for the change since.
   const [before, setBefore] = useState({ day: 0, value: amount });
   const [trades, setTrades] = useState<Trade[]>([]);
+  // The cash dividends received, and everything for the trade record in the order it happened
+  // (trades and dividends together).
+  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [ledger, setLedger] = useState<LoggedTrade[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // The start button's ripple (where it was clicked, keyed so each click starts a new one),
@@ -643,6 +657,29 @@ export default function SandboxTest({
         return;
       }
       const steps = next - day;
+      const loadedRates = Object.fromEntries(picks.map((p) => [p.symbol, loaded[p.symbol].rates]));
+      // The dividends earned: each share held (the holdings stay as they are over the days
+      // passed) gets each dividend whose ex-dividend date falls on one of them.
+      const paid: Recap["payouts"] = picks.flatMap((p) => {
+        const n = heldOf(p.symbol).shares;
+        return n
+          ? loaded[p.symbol].dividends.flatMap((perShare, j) =>
+              perShare > 0
+                ? [
+                    {
+                      symbol: p.symbol,
+                      name: nameOf(p.symbol),
+                      currency: p.currency ?? "CAD",
+                      day: day + 1 + j,
+                      shares: n,
+                      perShare,
+                      rate: loaded[p.symbol].rates[j],
+                    },
+                  ]
+                : [],
+            )
+          : [];
+      });
       const values = Array.from({ length: steps + 1 }, (_, k) =>
         cents(
           // The cash, each currency at that day's rate, then the shares.
@@ -663,7 +700,11 @@ export default function SandboxTest({
                     ? cadOf(p.symbol)
                     : loaded[p.symbol].closes[k - 1] * loaded[p.symbol].rates[k - 1]),
               0,
-            ),
+            ) +
+            // The dividends received by then, in cash in their currencies at that day's rates.
+            paid
+              .filter((x) => k > 0 && x.day - day <= k)
+              .reduce((sum, x) => sum + payoutAmount(x) * fxOn(x.currency, k - 1, loadedRates), 0),
         ),
       );
       // A share's worth in CAD at the end of the days.
@@ -687,6 +728,7 @@ export default function SandboxTest({
             gain: cents(heldOf(p.symbol).shares * (endOf(p.symbol) - cadOf(p.symbol))),
           })),
         days: loaded,
+        payouts: paid,
       }, trades.at(-1)?.symbol);
     });
   }
@@ -835,6 +877,36 @@ export default function SandboxTest({
   // chart sliding on and the figures counting.
   function bringIn(done: Recap) {
     setBefore({ day: done.from, value: done.values[0] });
+    if (done.payouts.length) {
+      // Paid into the cash in each pick's currency (kept there, as a sale's is).
+      setWallet((w) => {
+        const next = { ...w };
+        for (const x of done.payouts) next[x.currency] = cents((next[x.currency] ?? 0) + payoutAmount(x));
+        return next;
+      });
+      const received = done.payouts.map(({ symbol, day, shares, perShare, rate }) => ({
+        symbol,
+        day,
+        shares,
+        perShare,
+        rate,
+      }));
+      setPayouts((all) => [...all, ...received]);
+      // Said so, with the coin dropping in: one payment by name, several in total.
+      const total = done.payouts.reduce((sum, x) => sum + payoutCad(x), 0);
+      const one = done.payouts.length === 1 ? done.payouts[0] : null;
+      setMoneyNote({
+        key: Date.now(),
+        dividend: true,
+        text: one
+          ? `Dividend received: +${nativeText(payoutAmount(one), one.currency)} from ${one.name} (${one.perShare.toLocaleString("en-CA", { minimumFractionDigits: one.perShare < 1 ? 4 : 2, maximumFractionDigits: one.perShare < 1 ? 4 : 2 })} × ${one.shares.toLocaleString("en-CA")} ${sharesWord(one.shares)}), into your ${one.currency} cash.`
+          : `${done.payouts.length} dividends received: +${money.format(total)} in all, into your cash.`,
+      });
+      setLedger((all) => [
+        ...all,
+        ...received.map((x) => ({ symbol: x.symbol, day: x.day, side: "Dividend" as const, shares: x.shares, price: x.perShare, rate: x.rate })),
+      ]);
+    }
     setPrices((all) =>
       Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].closes]])),
     );
@@ -974,6 +1046,8 @@ export default function SandboxTest({
       setWorking("Bought");
       setBefore({ day: 0, value: amount });
       setTrades([]);
+      setPayouts([]);
+      setLedger([]);
       setError(null);
       setRecap(null);
       window.clearTimeout(tourTimer.current);
@@ -1126,6 +1200,7 @@ export default function SandboxTest({
               : { shares: held.shares - n, cost: held.shares === n ? 0 : held.cost - n * average },
         }));
         setTrades((t) => [...t, { symbol, name, day, side, shares: n, price: at, rate: fx }]);
+        setLedger((l) => [...l, { symbol, day, side, shares: n, price: at, rate: fx }]);
       }
       setAsk(null);
       setAskLeaving(false);
@@ -1192,11 +1267,14 @@ export default function SandboxTest({
         const firstCad = first * firstRate;
         const lastCad = cadOf(p.symbol);
         const traded = trades.filter((t) => t.symbol === p.symbol);
+        // The dividends its shares earned, in CAD at each one's day's rate.
+        const dividends = payouts.filter((x) => x.symbol === p.symbol).reduce((sum, x) => sum + payoutCad(x), 0);
         const made =
           traded.reduce(
             (sum, t) => sum + (t.side === "Sold" ? 1 : -1) * cents(t.shares * t.price * t.rate),
             0,
           ) +
+          dividends +
           heldOf(p.symbol).shares * lastCad;
         return {
           ...p,
@@ -1224,6 +1302,11 @@ export default function SandboxTest({
           const cur = currencyOf(t.symbol);
           walletThen[cur] = (walletThen[cur] ?? 0) - sign * cents(t.shares * t.price);
           owned[t.symbol] = (owned[t.symbol] ?? 0) + sign * t.shares;
+        }
+        for (const x of payouts) {
+          if (x.day > k + 1) continue;
+          const cur = currencyOf(x.symbol);
+          walletThen[cur] = (walletThen[cur] ?? 0) + payoutAmount(x);
         }
         for (const e of exchanges) {
           if (e.day > k + 1) continue;
@@ -1374,7 +1457,10 @@ export default function SandboxTest({
               </span>
             )}
           </div>
-          <dl {...enterSlow(0)} className="rise-in mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+          <dl
+            {...enterSlow(0)}
+            className={`rise-in mt-4 grid grid-cols-2 gap-4 text-sm ${payouts.length ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
+          >
             <Stat label="Started with" value={money.format(amount)} />
             <Stat label={`Worth on Day ${days}`} value={<Tween value={value} format={moneyText} />} />
             <Stat
@@ -1382,6 +1468,18 @@ export default function SandboxTest({
               value={<span className={tone(sinceStart)}>{pctText(sinceStart)}</span>}
               note={signed(value - amount, money.format(Math.abs(value - amount)))}
             />
+            {/* The cash dividends the shares earned while held (part of the return). */}
+            {payouts.length > 0 && (
+              <Stat
+                label="Dividends received"
+                value={
+                  <span className="text-green-700">
+                    +{money.format(payouts.reduce((sum, x) => sum + payoutCad(x), 0))}
+                  </span>
+                }
+                note={`${payouts.length} ${payouts.length === 1 ? "payment" : "payments"}, in your cash`}
+              />
+            )}
           </dl>
           {/* What the account was worth each day: gains above the starting line, losses below. */}
           <div {...enterSlow(1)} className="rise-in mt-5 rounded-lg border border-slate-200 bg-white p-4">
@@ -1818,26 +1916,33 @@ export default function SandboxTest({
             <p
               key={moneyNote.key}
               role="status"
-              className="notice-in mt-3 flex items-start gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-md"
+              className={`notice-in mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-xs shadow-md ${
+                moneyNote.dividend ? "bg-green-50 text-green-900 ring-1 ring-green-600/25" : "bg-slate-900 text-white"
+              }`}
             >
-              <svg
-                aria-hidden
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mt-px size-4 shrink-0"
-              >
-                <path d="M3.5 7.5h12M12.5 4.5l3 3-3 3M16.5 12.5h-12M7.5 9.5l-3 3 3 3" />
-              </svg>
+              {moneyNote.dividend ? (
+                // A coin dropping into place, turning over as it lands.
+                <DividendMark className="coin-drop mt-px size-4 text-green-700" />
+              ) : (
+                <svg
+                  aria-hidden
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mt-px size-4 shrink-0"
+                >
+                  <path d="M3.5 7.5h12M12.5 4.5l3 3-3 3M16.5 12.5h-12M7.5 9.5l-3 3 3 3" />
+                </svg>
+              )}
               <span className="min-w-0 flex-1">{moneyNote.text}</span>
               <button
                 type="button"
                 onClick={() => setMoneyNote(null)}
                 aria-label="Dismiss"
-                className="shrink-0 rounded px-1 text-white/70 hover:text-white"
+                className={`shrink-0 rounded px-1 ${moneyNote.dividend ? "text-green-800/60 hover:text-green-900" : "text-white/70 hover:text-white"}`}
               >
                 ×
               </button>
@@ -1971,7 +2076,7 @@ export default function SandboxTest({
         {/* Every trade so far, to read by holding and by day (TradeLog). */}
         <div {...enter(5)} className="rise-in mt-5">
           <TradeLog
-            trades={trades}
+            trades={ledger}
             looks={Object.fromEntries(
               picks.map((p) => [
                 p.symbol,
@@ -2517,7 +2622,9 @@ function TourGuide({
 // to where they ended as the little chart draws itself. Pointing along the little chart shows
 // each day's value. Continue (or a click outside it, or Escape) closes it.
 function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
-  const { from, to, values, positions } = recap;
+  const { from, to, values, positions, payouts } = recap;
+  // The dividends received over the days, in CAD (each at its day's rate).
+  const dividendTotal = payouts.reduce((sum, x) => sum + payoutCad(x), 0);
   const button = useRef<HTMLButtonElement>(null);
   const chart = useRef<HTMLDivElement>(null);
   // Whether the figures have moved on to where the days ended (just after it opens), and the
@@ -2724,7 +2831,50 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
             </div>
           </div>
 
-          <div {...row(3)} className="rise-in mt-4 flex gap-2">
+          {/* The cash dividends the shares held earned over the days: each payment (a share held
+              at the close before its ex-dividend date gets it), paid into the cash in the
+              share's currency, and in the account value above. */}
+          {payouts.length > 0 && (
+            <div {...row(3)}>
+              <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+                <p className="flex items-center justify-between text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <DividendMark className="coin-drop size-3.5 text-green-700" />
+                    Dividends received
+                  </span>
+                  <span className="dividend-pop font-semibold tabular-nums text-green-700" style={{ animationDelay: "350ms" }}>
+                    +<Tween value={after ? dividendTotal : 0} format={moneyText} />
+                  </span>
+                </p>
+                <ul className="mt-1 space-y-1 tabular-nums">
+                  {payouts.map((x, i) => (
+                    <li
+                      key={`${x.symbol}-${x.day}`}
+                      className="rise-in flex items-center justify-between gap-3"
+                      style={{ animationDelay: `${400 + Math.min(i, 8) * 60}ms` }}
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium text-slate-900">{x.name}</span> · Day {x.day} ·{" "}
+                        {x.perShare.toLocaleString("en-CA", {
+                          minimumFractionDigits: x.perShare < 1 ? 4 : 2,
+                          maximumFractionDigits: x.perShare < 1 ? 4 : 2,
+                        })}
+                        {x.currency !== "CAD" ? ` ${x.currency}` : ""} × {x.shares.toLocaleString("en-CA")}
+                      </span>
+                      <span
+                        className="dividend-pop shrink-0 font-semibold text-green-700"
+                        style={{ animationDelay: `${520 + Math.min(i, 8) * 60}ms` }}
+                      >
+                        +{money.format(payoutCad(x))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <div {...row(4)} className="rise-in mt-4 flex gap-2">
             <button
               ref={button}
               type="button"

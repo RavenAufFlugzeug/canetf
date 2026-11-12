@@ -4,6 +4,7 @@ import {
   getCadRates,
   getCadRatesSince,
   getCompany,
+  getDividends,
   getEtfBreakdown,
   getIntradayBars,
   getIntradayDays,
@@ -219,21 +220,37 @@ export async function getSandboxEtfHoldingChart(
 // worth on each of those days (`rates`: all 1 for CAD; the cash is in CAD, so a trade's cost
 // and a holding's worth follow the exchange rate too), and which of those days (by number)
 // begin a new year; or null if any listing is missing any of them. Asked for as the test moves on (a day, a week or a month at a time), so the
-// days to come stay out of the page.
+// days to come stay out of the page. With them, `dividends`: the cash dividend per share (in
+// the listing's currency) whose ex-dividend date falls on each day, else 0. A share held at
+// the close of the day before gets it. (Amounts only, never dates, so the test stays blind.)
 export async function getSandboxSetPrices(
   entries: unknown,
   firstDay: unknown,
   lastDay: unknown,
-): Promise<Record<string, { closes: number[]; rates: number[]; yearStarts: number[] }> | null> {
+): Promise<Record<
+  string,
+  { closes: number[]; rates: number[]; yearStarts: number[]; dividends: number[] }
+> | null> {
   const list = entriesOf(entries);
   const isDay = (d: unknown): d is number =>
     typeof d === "number" && Number.isInteger(d) && d >= 1 && d <= LONGEST;
   if (!list || !isDay(firstDay) || !isDay(lastDay) || firstDay > lastDay) return null;
-  const out: Record<string, { closes: number[]; rates: number[]; yearStarts: number[] }> = {};
+  const out: Record<string, { closes: number[]; rates: number[]; yearStarts: number[]; dividends: number[] }> =
+    {};
   for (const { symbol, from } of list) {
     const run = await getPriceWindow(symbol, from, lastDay);
     if (run.length !== lastDay) return null;
     const days = run.slice(firstDay - 1);
+    // Each dividend goes to the first of these days on or after its ex-dividend date (one
+    // falling on a day the exchange was shut is paid on the next it opened), and only those
+    // after the day before these days.
+    const before = firstDay > 1 ? run[firstDay - 2].t : null;
+    const dividends = days.map(() => 0);
+    for (const d of await getDividends(symbol, before ?? days[0].t, days[days.length - 1].t)) {
+      if (before && d.date <= before) continue;
+      const at = days.findIndex((p) => p.t >= d.date);
+      if (at >= 0) dividends[at] += d.amount;
+    }
     const rates = await getCadRates(
       symbol,
       days.map((p) => p.t),
@@ -241,6 +258,7 @@ export async function getSandboxSetPrices(
     if (!rates) return null;
     out[symbol] = {
       closes: days.map((p) => p.close),
+      dividends,
       rates,
       yearStarts: yearStarts(run)
         .map((i) => i + 1)

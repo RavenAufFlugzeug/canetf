@@ -8,6 +8,7 @@ import KeyStats from "@/components/KeyStats";
 import KindBadge from "@/components/KindBadge";
 import MapDetail from "@/components/MapDetail";
 import PriceChart from "@/components/PriceChart";
+import RiskRating, { RiskChip } from "@/components/RiskRating";
 import {
   getCompany,
   getCompanyProfile,
@@ -16,6 +17,7 @@ import {
   getEtfTree,
   getKeyStats,
   getPriceHistory,
+  getRisk,
 } from "@/lib/db";
 
 export default async function MapPage({
@@ -39,6 +41,7 @@ export default async function MapPage({
   const profile = picked ? await getCompanyProfile(picked.symbol) : null;
   // A fund (it has a composition, or a provider) gets the fund's About; a company its own.
   const fund = Boolean(breakdown || profile?.fundFamily);
+  const risk = picked && fund ? await getRisk(picked.symbol) : null;
 
   return (
     <main className="flex-1 bg-slate-50">
@@ -96,6 +99,12 @@ export default async function MapPage({
                   {etf.name ?? etf.symbol}
                   <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
                 </p>
+                {/* Its risk rating, opening the Search page's explanation of it. */}
+                {tree.details?.risk && (
+                  <span className="ml-auto shrink-0">
+                    <RiskChip symbol={etf.symbol} risk={tree.details.risk} />
+                  </span>
+                )}
               </div>
               <div className="rise-in mt-2" style={{ animationDelay: "80ms" }}>
                 <HoldingsMap tree={tree} detail={picked?.symbol ?? null} />
@@ -122,12 +131,13 @@ export default async function MapPage({
                   <div className="rise-in" style={{ animationDelay: "80ms" }}>
                     <PriceChart history={history} currency={picked.currency} exchange={exchange} />
                   </div>
-                  {stats && <KeyStats stats={stats} currency={picked.currency} />}
+                  {stats && <KeyStats stats={stats} currency={picked.currency} symbol={picked.symbol} />}
                   {/* What it is, as the Search page says it: a fund's country, provider (which
                       opens the company behind it) and category; a company's sector, base (by its
                       flag), size, website and what it does. */}
                   {profile && fund && <FundAbout profile={profile} />}
                   {profile && !fund && <CompanyAbout name={picked.name ?? picked.symbol} profile={profile} />}
+                  {risk && <RiskRating risk={risk} symbol={picked.symbol} />}
                   {breakdown && (
                     <div className="rise-in" style={{ animationDelay: "400ms" }}>
                       <EtfBreakdown breakdown={breakdown} />

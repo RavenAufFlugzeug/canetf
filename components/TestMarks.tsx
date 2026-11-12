@@ -50,6 +50,18 @@ export function SellMark(props: Props) {
   );
 }
 
+// A dividend: a coin, its rim and a dollar sign, which gives a little spin when pointed at.
+export function DividendMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <g className="test-mark-coin">
+        <circle cx="10" cy="10" r="6.5" />
+        <path d="M11.8 7.6c-.4-.6-1-.9-1.8-.9-1 0-1.8.5-1.8 1.3 0 1.8 3.7 1 3.7 2.9 0 .8-.8 1.4-1.9 1.4-.9 0-1.6-.4-2-1M10 5.6v1.1M10 13.3v1.1" strokeWidth="1.4" />
+      </g>
+    </Mark>
+  );
+}
+
 export function MoonMark(props: Props) {
   return (
     <Mark {...props}>

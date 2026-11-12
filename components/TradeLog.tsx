@@ -3,17 +3,25 @@
 import { useEffect, useId, useRef, useState } from "react";
 import FoldButton from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
-import { BuyMark, SellMark } from "@/components/TestMarks";
+import { BuyMark, DividendMark, SellMark } from "@/components/TestMarks";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
 
+// A trade, or a cash dividend received ("Dividend": `shares` held going into its ex-dividend
+// date, `price` the dividend per share), as the record lists them.
 export type LoggedTrade = {
   symbol: string;
   day: number;
-  side: "Bought" | "Sold";
+  side: "Bought" | "Sold" | "Dividend";
   shares: number;
   price: number; // per share, in the currency the pick trades in
   rate: number; // how many CAD one unit of that currency was worth that day (1 for CAD)
 };
+// A dividend per share, finer than a cent when small ("0.0910").
+function perShareText(t: LoggedTrade, currency: string | null) {
+  const digits = t.price < 1 ? 4 : 2;
+  const n = t.price.toLocaleString("en-CA", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return !currency || currency === "CAD" ? `$${n}` : `${n} ${currency}`;
+}
 // A trade's price per share in its own currency; in another than CAD, with that day's rate
 // ("182.40 USD · 1 USD = $1.3986").
 function priceText(t: LoggedTrade, currency: string | null) {
@@ -37,15 +45,26 @@ export type PickLook = { kind: string; color: string; ink: string; currency?: st
 const money = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 const sharesText = (n: number) => `${n.toLocaleString("en-CA")} ${n === 1 ? "share" : "shares"}`;
 const tradesText = (n: number) => `${n} ${n === 1 ? "trade" : "trades"}`;
+// How many trades and dividends: "3 trades", "3 trades · 2 dividends", "1 dividend".
+const entriesText = (list: LoggedTrade[]) => {
+  const paid = list.filter((t) => t.side === "Dividend").length;
+  const traded = list.length - paid;
+  const dividends = paid ? `${paid} ${paid === 1 ? "dividend" : "dividends"}` : "";
+  return traded || !paid ? `${tradesText(traded)}${dividends ? ` · ${dividends}` : ""}` : dividends;
+};
 // Money in green, money out red.
 const tone = (x: number) => (x > 0 ? "text-green-700" : x < 0 ? "text-red-600" : "text-slate-900");
 const netText = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${money.format(Math.abs(x))}`;
 
-// What a run of trades came to: bought, sold, and the cash it made or spent.
+// What a run of trades came to: bought, sold, the dividends received, and the cash it made or
+// spent (dividends are cash in, as sales are).
 function totals(trades: LoggedTrade[]) {
-  const bought = trades.filter((t) => t.side === "Bought").reduce((sum, t) => sum + cadOf(t), 0);
-  const sold = trades.filter((t) => t.side === "Sold").reduce((sum, t) => sum + cadOf(t), 0);
-  return { bought, sold, net: sold - bought };
+  const sum = (side: LoggedTrade["side"]) =>
+    trades.filter((t) => t.side === side).reduce((total, t) => total + cadOf(t), 0);
+  const bought = sum("Bought");
+  const sold = sum("Sold");
+  const dividends = sum("Dividend");
+  return { bought, sold, dividends, net: sold + dividends - bought };
 }
 
 // A pick's badge: its kind's mark on its sector's colour.
@@ -140,7 +159,7 @@ export default function TradeLog({
             Trade record
           </p>
           <p key={what} className="text-fade-in mt-0.5 truncate text-xs text-slate-500">
-            {what} · {tradesText(shown.length)}
+            {what} · {entriesText(shown)}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -153,6 +172,12 @@ export default function TradeLog({
               <dt className="text-slate-500">Sold</dt>
               <dd className="font-semibold text-slate-900">{money.format(sum.sold)}</dd>
             </div>
+            {sum.dividends > 0 && (
+              <div>
+                <dt className="text-slate-500">Dividends</dt>
+                <dd className="font-semibold text-green-700">{money.format(sum.dividends)}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-slate-500" title="In CAD, each trade at its day's rate">Cash moved (CAD)</dt>
               <dd className={`font-semibold ${tone(sum.net)}`}>{netText(sum.net)}</dd>
@@ -431,13 +456,14 @@ function Board({
             <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 backdrop-blur">
               <span>Day {d}</span>
               <span className="normal-case tracking-normal tabular-nums">
-                {tradesText(rows.length)} · <span className={tone(net)}>{netText(net)}</span>
+                {entriesText(rows.map(({ t }) => t))} · <span className={tone(net)}>{netText(net)}</span>
               </span>
             </div>
             <ol>
               {rows.map(({ t, i }) => {
                 const fresh = i >= known;
                 const buy = t.side === "Bought";
+                const dividend = t.side === "Dividend";
                 return (
                   <li
                     key={i}
@@ -459,13 +485,23 @@ function Board({
                           className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-bold ${
                             buy
                               ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-900 ring-1 ring-slate-300"
+                              : dividend
+                                ? "bg-green-50 text-green-800 ring-1 ring-green-600/30"
+                                : "bg-slate-100 text-slate-900 ring-1 ring-slate-300"
                           }`}
                         >
-                          {buy ? <BuyMark className="size-3" /> : <SellMark className="size-3" />}
-                          {buy ? "BUY" : "SELL"}
+                          {buy ? (
+                            <BuyMark className="size-3" />
+                          ) : dividend ? (
+                            <DividendMark className="size-3" />
+                          ) : (
+                            <SellMark className="size-3" />
+                          )}
+                          {buy ? "BUY" : dividend ? "DIVIDEND" : "SELL"}
                         </span>
-                        {sharesText(t.shares)} at {priceText(t, looks[t.symbol]?.currency ?? null)}
+                        {dividend
+                          ? `${perShareText(t, looks[t.symbol]?.currency ?? null)} × ${sharesText(t.shares)} held`
+                          : `${sharesText(t.shares)} at ${priceText(t, looks[t.symbol]?.currency ?? null)}`}
                       </span>
                     </span>
                     {/* The cash it moved, in the share's currency (a sale's stays in it); for one

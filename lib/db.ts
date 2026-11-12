@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { DatabaseSync as Database } from "node:sqlite";
 import { connection } from "next/server";
+import { computeRisk, RISK_YEARS, type Risk } from "@/lib/risk";
 
 // Loaded from Node itself rather than imported: when this file changes, the dev server's
 // hot reload can't load an imported node:sqlite again ("require is not defined"), and
@@ -614,6 +615,41 @@ export async function getPriceWindow(symbol: string, from: string, days: number)
   return points ?? [];
 }
 
+// A cash dividend: its ex-dividend date (shares held at the close of the trading day before it
+// get it) and the amount per share, in the listing's main currency unit.
+export type Dividend = { date: string; amount: number };
+
+function readDividends(db: DatabaseSync, symbol: string, from: string, to: string): Dividend[] {
+  if (!hasTable(db, "dividends")) return [];
+  const scale = priceScale(db, symbol);
+  const rows = db
+    .prepare("SELECT date, amount FROM dividends WHERE symbol = ? AND date >= ? AND date <= ? ORDER BY date")
+    .all(symbol, from, to) as Dividend[];
+  return rows.map((r) => ({ date: r.date, amount: r.amount / scale }));
+}
+
+// `symbol`'s cash dividends with ex-dividend dates from `from` to `to` (inclusive), oldest first.
+export async function getDividends(symbol: string, from: string, to: string): Promise<Dividend[]> {
+  return (await withDb((db) => readDividends(db, symbol, from, to))) ?? [];
+}
+
+// `symbol`'s last close of each calendar year (the latest, for the year still going), in main
+// units: for a year's dividend yield.
+export async function getYearEndCloses(symbol: string): Promise<{ year: string; close: number }[]> {
+  const rows = await withDb((db) => {
+    const scale = priceScale(db, symbol);
+    // (SQLite takes the bare `close` from the row with the MAX(date).)
+    const found = db
+      .prepare(
+        `SELECT substr(date, 1, 4) AS year, MAX(date) AS date, close FROM prices
+         WHERE symbol = ? AND close > 0 GROUP BY year ORDER BY year`,
+      )
+      .all(symbol) as { year: string; close: number }[];
+    return found.map((r) => ({ year: r.year, close: r.close / scale }));
+  });
+  return rows ?? [];
+}
+
 export type KeyStats = {
   prevClose: number | null;
   open: number | null;
@@ -623,6 +659,11 @@ export type KeyStats = {
   week52High: number | null;
   volume: number | null;
   avgVolume: number | null;
+  // Cash dividends over the 12 months to the latest close (per share, its currency; null when
+  // none were paid), that as a share of the latest close, and the latest one.
+  dividendTtm: number | null;
+  dividendYield: number | null;
+  lastDividend: Dividend | null;
 };
 
 type DailyBar = {
@@ -640,9 +681,9 @@ export async function getKeyStats(symbol: string): Promise<KeyStats | null> {
     // The latest trading day's bar, then the one before it (whose close is the previous close).
     const [today, previous] = db
       .prepare(
-        "SELECT open, high, low, close, volume FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 2",
+        "SELECT date, open, high, low, close, volume FROM prices WHERE symbol = ? ORDER BY date DESC LIMIT 2",
       )
-      .all(symbol) as DailyBar[];
+      .all(symbol) as (DailyBar & { date: string })[];
     // SELECT *: a database the pipeline hasn't migrated yet may lack avg_volume.
     const quote = (db
       .prepare("SELECT * FROM quotes WHERE symbol = ? ORDER BY fetched_at DESC LIMIT 1")
@@ -653,7 +694,23 @@ export async function getKeyStats(symbol: string): Promise<KeyStats | null> {
 
     const scale = priceScale(db, symbol);
     const unit = (v: number | null | undefined) => (v === null || v === undefined ? null : v / scale);
+    // The dividends of the 12 months to the latest close (already in main units).
+    let ttm: Dividend[] = [];
+    let lastDividend: Dividend | null = null;
+    if (today?.date) {
+      const yearBefore = new Date(`${today.date}T00:00:00Z`);
+      yearBefore.setUTCFullYear(yearBefore.getUTCFullYear() - 1);
+      ttm = readDividends(db, symbol, yearBefore.toISOString().slice(0, 10), today.date).filter(
+        (d) => d.date > yearBefore.toISOString().slice(0, 10),
+      );
+      lastDividend = readDividends(db, symbol, "0000-00-00", today.date).at(-1) ?? null;
+    }
+    const dividendTtm = ttm.length ? ttm.reduce((sum, d) => sum + d.amount, 0) : null;
+    const close = unit(today?.close);
     return {
+      dividendTtm,
+      dividendYield: dividendTtm !== null && close ? dividendTtm / close : null,
+      lastDividend: lastDividend ? { ...lastDividend } : null,
       prevClose: unit(previous?.close),
       open: unit(today?.open),
       dayLow: unit(today?.low),
@@ -664,6 +721,25 @@ export async function getKeyStats(symbol: string): Promise<KeyStats | null> {
       avgVolume: quote.avg_volume ?? null,
     };
   });
+}
+
+// The daily closes a risk rating needs: the last RISK_YEARS years and a little more (the
+// month before the first return, and the unfinished month left out). Ratios only, so no
+// minor-unit scaling.
+function readRiskPrices(db: DatabaseSync) {
+  const query = db.prepare(
+    `SELECT date, close FROM prices
+     WHERE symbol = ? AND close > 0
+       AND date >= date((SELECT MAX(date) FROM prices WHERE symbol = ?), '-${RISK_YEARS * 12 + 3} months')
+     ORDER BY date`,
+  );
+  return (symbol: string) => computeRisk(query.all(symbol, symbol) as { date: string; close: number }[]);
+}
+
+// A fund's risk rating from its price history (lib/risk.ts), or null when it has no prices.
+export async function getRisk(symbol: string): Promise<Risk | null> {
+  const risk = await withDb((db) => readRiskPrices(db)(symbol));
+  return risk?.months ? risk : null;
 }
 
 export type EtfBreakdown = {
@@ -742,6 +818,9 @@ export type NodeDetails = {
   fundFamily: string | null;
   category: string | null;
   exchange: string | null;
+  // For a fund: its risk rating from its price history (lib/risk.ts); null or left out for a
+  // company (and in the Sandbox, whose map has none).
+  risk?: Risk | null;
 };
 
 // Why an ETF holding isn't in the database (holding_symbols.reason in search/StockUtils.py).
@@ -812,6 +891,7 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
               ${col("fund_family", "fundFamily")}, ${col("category", "category")}, ${col("exchange", "exchange")}
        FROM companies WHERE symbol = ?`,
     );
+    const riskOf = readRiskPrices(db);
     const find = (ticker: string) => {
       const direct = company.get(ticker) as { symbol: string; name: string | null } | undefined;
       if (direct) return direct;
@@ -839,12 +919,17 @@ export async function getEtfTree(symbol: string): Promise<EtfTreeNode | null> {
         stored: Boolean(found),
         missing: found ? null : missingReason(ticker),
         // Copied into a plain object: node:sqlite rows can't be passed to a client component.
-        details: found ? { ...(detailsOf.get(found.symbol) as NodeDetails) } : null,
+        details: found ? { ...(detailsOf.get(found.symbol) as NodeDetails), risk: null } : null,
         weight,
         children: [],
       };
+      // A fund (it has a composition, or a provider) gets its risk rating.
+      const breakdown = found ? readBreakdown(db, found.symbol) : null;
+      if (found && node.details && (breakdown || node.details.fundFamily)) {
+        // Without the monthly series: the map shows only the level and figure.
+        node.details.risk = { ...riskOf(found.symbol), closes: [], returns: [], days: [] };
+      }
       if (!found || path.includes(found.symbol) || path.length >= MAX_TREE_DEPTH) return node;
-      const breakdown = readBreakdown(db, found.symbol);
       if (!breakdown) return node;
 
       node.kind = "fund";
