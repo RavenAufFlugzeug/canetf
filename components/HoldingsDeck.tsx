@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import DeckBack, { Suit } from "@/components/DeckBack";
 import KindMark from "@/components/KindMark";
-import { LABEL, FOCUS_RING } from "@/lib/ui";
+import { LABEL, FOCUS_RING, TAG, CARD_SLOT } from "@/lib/ui";
 
 // One pick as a card: the pick's name (or alias), what its card calls it, short (its alias or
 // its kind: "Tech"), its number among its kind, its kind (for its mark), its sector's colour
@@ -62,7 +62,7 @@ function CardFace({ card }: { card: DeckCard }) {
       <Corner card={card} flip />
       <span className="flex size-full flex-col items-center justify-center gap-1 px-6 text-center">
         <span
-          className="kind-badge grid size-8 place-items-center rounded-lg ring-1 ring-black/5"
+          className="kind-badge grid size-8 place-items-center rounded-full ring-1 ring-black/5"
           style={{ background: card.color, ["--badge" as string]: card.color }}
         >
           <KindMark kind={card.kind} className="size-5" color={card.mark} />
@@ -77,7 +77,7 @@ function CardFace({ card }: { card: DeckCard }) {
         </span>
         {held ? (
           <span
-            className={`inline-block rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold leading-snug tabular-nums ${
+            className={`inline-block rounded-sm bg-slate-100 px-1.5 text-[10px] font-semibold leading-snug tabular-nums ${
               card.gain > 0 ? "text-green-700" : card.gain < 0 ? "text-red-600" : "text-slate-500"
             }`}
           >
@@ -110,7 +110,7 @@ function Card({ card, flip, chosen }: { card: DeckCard; flip: string; chosen: bo
       {/* The pick being traded, tagged on its top edge as its row is in the investment universe. */}
       <span
         aria-hidden
-        className={`pointer-events-none absolute -top-2 left-1/2 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] [backface-visibility:hidden] ${
+        className={`pointer-events-none absolute -top-2 left-1/2 ${TAG} shadow transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] [backface-visibility:hidden] ${
           chosen
             ? "opacity-100 [transform:translateX(-50%)_translateZ(1px)_scale(1)]"
             : "opacity-0 [transform:translateX(-50%)_translateZ(1px)_scale(0.6)]"
@@ -260,7 +260,7 @@ export default function HoldingsDeck({
         >
           {n === 0 && (
             <div
-              className="text-fade-in absolute left-0 top-3 grid place-items-center rounded-xl border-2 border-dashed border-slate-300 p-3 text-center text-[11px] leading-snug text-slate-400"
+              className={`text-fade-in absolute left-0 top-3 p-3 text-[11px] leading-snug ${CARD_SLOT}`}
               style={{ width: CARD_W, height: CARD_H }}
             >
               No shares yet. Buy some, and they&apos;re dealt here.
@@ -328,7 +328,7 @@ export default function HoldingsDeck({
             draws. */}
         <div className="absolute right-0 top-3" style={{ width: CARD_W, height: CARD_H }}>
           {deck.length === 0 && !returned ? (
-            <div className="text-fade-in grid size-full place-items-center rounded-xl border-2 border-dashed border-slate-300 p-3 text-center text-[11px] leading-snug text-slate-400">
+            <div className={`text-fade-in size-full p-3 text-[11px] leading-snug ${CARD_SLOT}`}>
               Every pick is in your hand.
             </div>
           ) : (

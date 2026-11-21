@@ -8,6 +8,7 @@ import BadgeInfo from "@/components/BadgeInfo";
 import KindBadge from "@/components/KindBadge";
 import { listingOf } from "@/lib/exchanges";
 import { countryFlag } from "@/lib/fx";
+import { REMOVE_BUTTON } from "@/lib/ui";
 
 const ROW_LEAVE_MS = 350; // matches .picker-collapse in globals.css
 
@@ -138,7 +139,7 @@ export default function WatchlistTable({
                           src={src}
                           alt={country ?? ""}
                           title={`${fund ? "Listed in" : "Based in"} ${country}`}
-                          className="h-3.5 w-auto shrink-0 rounded-[2px] ring-1 ring-black/10"
+                          className="h-3.5 w-auto shrink-0 rounded-xs ring-1 ring-black/10"
                         />
                       ) : null;
                     })()}
@@ -153,7 +154,7 @@ export default function WatchlistTable({
                       industry={c.industry}
                       fundFamily={c.fundFamily}
                       category={c.category}
-                      className="size-6 rounded-md"
+                      className="size-6"
                       markClassName="size-3.5"
                     />
                     {c.sector ??
@@ -183,7 +184,7 @@ export default function WatchlistTable({
                     disabled={folded}
                     onClick={() => onRemove(c.symbol)}
                     aria-label={`Remove ${c.symbol} from watch list`}
-                    className="rounded-md px-2 py-1 text-slate-500 transition-colors duration-500 ease-out hover:bg-red-50 hover:text-red-600"
+                    className={REMOVE_BUTTON}
                   >
                     Remove
                   </button>

@@ -4,7 +4,7 @@ import CountUp from "@/components/CountUp";
 import KindBadge from "@/components/KindBadge";
 import type { CompanyProfile } from "@/lib/db";
 import { naicsOf } from "@/lib/naics";
-import { FOCUS_RING } from "@/lib/ui";
+import { SECTION_TITLE, LINK } from "@/lib/ui";
 
 // A balance sheet's date as written under its figures: "Jun 30, 2026".
 const day = (iso: string) =>
@@ -23,7 +23,7 @@ function BalanceBar({ assets, liabilities }: { assets: number; liabilities: numb
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   return (
     <span className="flex w-full flex-col gap-1.5">
-      <span className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+      <span className="flex h-2.5 w-full overflow-hidden rounded-xs bg-slate-100">
         <span
           title={`Liabilities: ${pct(owed)} of assets`}
           className="bar-grow h-full bg-slate-700 transition-[filter] hover:brightness-125"
@@ -39,14 +39,14 @@ function BalanceBar({ assets, liabilities }: { assets: number; liabilities: numb
       </span>
       <span className="flex justify-between text-xs font-normal text-slate-500">
         <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="size-2 rounded-full bg-slate-700" />
+          <span aria-hidden className="size-2 rounded-xs bg-slate-700" />
           Liabilities {pct(owed)}
         </span>
         {liabilities > assets ? (
           <span>Liabilities exceed assets</span>
         ) : (
           <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="size-2 rounded-full bg-slate-300" />
+            <span aria-hidden className="size-2 rounded-xs bg-slate-300" />
             Equity {pct(1 - owed)}
           </span>
         )}
@@ -133,7 +133,7 @@ export default function CompanyAbout({
           <KindBadge
             sector={profile.sector}
             industry={profile.industry}
-            className="size-5 rounded-md"
+            className="size-5"
             markClassName="size-3"
           />
           {naics.name}
@@ -188,7 +188,7 @@ export default function CompanyAbout({
         href={profile.website}
         target="_blank"
         rel="noopener noreferrer"
-        className={`group/link inline-flex items-center gap-2 rounded underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 ${FOCUS_RING}`}
+        className={`group/link inline-flex items-center gap-2 ${LINK}`}
       >
         <svg
           aria-hidden
@@ -237,7 +237,7 @@ export default function CompanyAbout({
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-6">
-      <h3 className="rise-in text-lg font-semibold text-slate-900" style={{ animationDelay: `${delay}ms` }}>
+      <h3 className={`rise-in ${SECTION_TITLE}`} style={{ animationDelay: `${delay}ms` }}>
         About {name}
       </h3>
       {rows.length > 0 && (
@@ -259,7 +259,7 @@ export default function CompanyAbout({
                   <span
                     tabIndex={0}
                     aria-describedby={tip}
-                    className="cursor-help rounded whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
+                    className="cursor-help rounded-sm whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
                   >
                     {label}
                   </span>

@@ -5,7 +5,7 @@ import FoldButton from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
 import { BuyMark, SellMark } from "@/components/TestMarks";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
-import { LABEL, FOCUS_RING } from "@/lib/ui";
+import { LABEL, FOCUS_RING, EMPTY_STATE } from "@/lib/ui";
 import { useSlidingPill } from "@/lib/useSlidingPill";
 
 export type LoggedTrade = {
@@ -54,7 +54,7 @@ function totals(trades: LoggedTrade[]) {
 function Badge({ look, className }: { look?: PickLook; className: string }) {
   return (
     <span
-      className={`kind-badge grid shrink-0 place-items-center ${className}`}
+      className={`kind-badge grid shrink-0 place-items-center rounded-full ${className}`}
       style={{
         background: look?.color ?? "#e2e8f0",
         color: look?.ink ?? "#0f172a",
@@ -213,8 +213,8 @@ export default function TradeLog({
           {/* The board. Keyed by what is shown, so a change fades the new list in. */}
           <div className="trade-board mt-2 max-h-72 overflow-y-auto px-2 pb-2">
             {trades.length === 0 ? (
-              <div className="m-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
-                No trades yet. Each order you place shows up here, day by day.
+              <div className={`m-2 ${EMPTY_STATE}`}>
+                No trades yet.
               </div>
             ) : (
               <Board
@@ -254,7 +254,7 @@ function RoundArrow({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`group grid size-7 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 ${FOCUS_RING}`}
+      className={`group grid size-7 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 ${FOCUS_RING}`}
     >
       <svg
         aria-hidden
@@ -366,10 +366,10 @@ function Strip({
               item.badge ? "pl-1" : "pl-2.5"
             } ${on ? "text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
           >
-            {item.badge && <Badge look={item.badge} className="size-5 rounded-full" />}
+            {item.badge && <Badge look={item.badge} className="size-5" />}
             <span className="truncate">{item.label}</span>
             <span
-              className={`rounded-full px-1.5 text-[10px] tabular-nums transition-colors duration-300 ${
+              className={`rounded-sm px-1.5 text-[10px] tabular-nums transition-colors duration-300 ${
                 on ? "bg-slate-100 text-slate-500" : "bg-slate-200/70 text-slate-400"
               }`}
             >
@@ -452,7 +452,7 @@ function Board({
                   >
                     <Badge
                       look={looks[t.symbol]}
-                      className="size-8 rounded-lg shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.3,1.6,0.5,1)] group-hover:scale-110"
+                      className="size-8 shadow-sm"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-slate-900">
@@ -460,7 +460,7 @@ function Board({
                       </span>
                       <span className="flex items-center gap-1.5 text-xs tabular-nums text-slate-500">
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-bold ${
+                          className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-px text-[10px] font-bold ${
                             buy
                               ? "bg-slate-900 text-white"
                               : "bg-slate-100 text-slate-900 ring-1 ring-slate-300"

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/Icons";
-import { button } from "@/lib/ui";
+import { button, SECTION_TITLE } from "@/lib/ui";
 
 const CLOSE_MS = 500; // matches .detail-fold in globals.css
 
@@ -43,7 +43,7 @@ export default function MapDetail({ name, symbol, badge, closeHref, children }: 
             <div className="rise-in flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 {badge}
-                <p className="text-lg font-semibold text-slate-900">
+                <p className={SECTION_TITLE}>
                   {/* Name, then the ticker on its own line, so a long name never splits them. */}
                   {name}
                   <span className="block text-base font-normal text-slate-500">{symbol}</span>
@@ -52,7 +52,7 @@ export default function MapDetail({ name, symbol, badge, closeHref, children }: 
               <button
                 type="button"
                 onClick={close}
-                className={`group shrink-0 gap-1.5 ${button("secondary", "sm")}`}
+                className={`group shrink-0 gap-1.5 ${button("secondary", "xs")}`}
               >
                 <CloseIcon className="size-3 transition-transform duration-300 ease-out motion-safe:group-hover:rotate-90" />
                 Close

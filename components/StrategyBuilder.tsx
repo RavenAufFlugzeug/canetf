@@ -6,7 +6,7 @@ import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
 import DeckBack, { Suit } from "@/components/DeckBack";
 import { BuyMark, SellMark } from "@/components/TestMarks";
-import { button, field, LABEL as UI_LABEL, PANEL_TITLE, CARD_COMPACT, FOCUS_RING } from "@/lib/ui";
+import { button, field, LABEL as UI_LABEL, PANEL_TITLE, REMOVE_ARMED, REMOVE_BUTTON, CARD_COMPACT, FOCUS_RING, TAG, TAG_SHAPE, CARD_SLOT } from "@/lib/ui";
 
 // The Strategies page's builder (app/strategy/page.tsx), in the Sandbox's cards. Each strategy
 // is a deck: on the shelf at the top, the decks kept, face down (DeckBack, in the design chosen on the account page) in their
@@ -65,77 +65,67 @@ const SECTORS = [
 // What a condition can look at, in two groups: the market (the price and how it has moved),
 // and the position (what is held of it). Each with its name in the menu, how it reads in a
 // sentence, how its value is written, and a line saying what it is.
-type MetricInfo = { group: string; label: string; phrase: string; unit: "$" | "%" | "shares"; hint: string };
+type MetricInfo = { group: string; label: string; phrase: string; unit: "$" | "%" | "shares" };
 const METRICS: Record<Metric, MetricInfo> = {
   price: {
     group: "Price and trend",
     label: "Price",
     phrase: "the price",
     unit: "$",
-    hint: "The last closing price, in the currency it trades in.",
   },
   dayChange: {
     group: "Price and trend",
     label: "Day's change",
     phrase: "the day's change",
     unit: "%",
-    hint: "How far the price moved on the day; a fall is negative.",
   },
   weekChange: {
     group: "Price and trend",
     label: "Change over 5 days",
     phrase: "the change over the past 5 days",
     unit: "%",
-    hint: "How far the price moved over the last 5 trading days, about a week.",
   },
   monthChange: {
     group: "Price and trend",
     label: "Change over 1 month",
     phrase: "the change over the past month",
     unit: "%",
-    hint: "How far the price moved over the last 21 trading days, about a month.",
   },
   vsAvg50: {
     group: "Price and trend",
     label: "Price vs 50-day average",
     phrase: "the price against its 50-day average",
     unit: "%",
-    hint: "How far the price is above (+) or below (−) its average over 50 days: the short-term trend.",
   },
   vsAvg200: {
     group: "Price and trend",
     label: "Price vs 200-day average",
     phrase: "the price against its 200-day average",
     unit: "%",
-    hint: "How far the price is above (+) or below (−) its average over 200 days: the long-term trend. Above 0% is often read as an uptrend.",
   },
   fromHigh: {
     group: "Price and trend",
     label: "Distance from 52-week high",
     phrase: "the price against its 52-week high",
     unit: "%",
-    hint: "How far the price is below its highest close of the past year: 0% at the high, −20% a fifth below it.",
   },
   fromLow: {
     group: "Price and trend",
     label: "Distance from 52-week low",
     phrase: "the price against its 52-week low",
     unit: "%",
-    hint: "How far the price is above its lowest close of the past year: 0% at the low.",
   },
   gain: {
     group: "Your position",
     label: "Gain on shares held",
     phrase: "the gain on the shares held",
     unit: "%",
-    hint: "Your return on the shares you hold, against what you paid: for taking profits or cutting losses.",
   },
   held: {
     group: "Your position",
     label: "Shares held",
     phrase: "the number of shares held",
     unit: "shares",
-    hint: "How many shares you already own: to cap how much a rule buys.",
   },
 };
 const GROUPS = [...new Set(Object.values(METRICS).map((m) => m.group))];
@@ -255,7 +245,7 @@ const ruleName = (r: Rule, i: number) => r.name.trim() || `Card ${i + 1}`;
 // The site's fields and labels (lib/ui.ts).
 const FIELD = field("sm");
 const LABEL = UI_LABEL;
-const LIGHT_BUTTON = `gap-1.5 ${button("secondary", "sm")}`;
+const LIGHT_BUTTON = `gap-1.5 ${button("secondary", "xs")}`;
 
 export default function StrategyBuilder() {
   const [saved, setSaved] = useState<Saved>(starting);
@@ -359,38 +349,21 @@ export default function StrategyBuilder() {
   if (!deck || !rule) return null;
   const color = deckColor(deck);
   const texts = deck.rules.map((r) => ruleText(r, deck));
-  const ready = texts.filter(Boolean).length;
 
   return (
     <div className="space-y-6">
       {/* The shelf: every deck kept, and room for a new one. */}
       <section className={`rise-in ${CARD_COMPACT}`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <p className={`${PANEL_TITLE}`}>
-            Your decks · {saved.decks.length}
-          </p>
-          <button type="button" onClick={() => addDeck(techExample())} className={LIGHT_BUTTON}>
-            <PlusMark />
-            Add the tech example
-          </button>
-        </div>
+        <p className={`${PANEL_TITLE}`}>
+          Your decks · {saved.decks.length}
+        </p>
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-5">
           {saved.decks.map((d) => (
             <DeckPile key={d.id} deck={d} open={d.id === deck.id} onOpen={() => openDeck(d.id)} />
           ))}
-          <button
-            type="button"
-            onClick={() => addDeck(newDeck())}
-            className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
-          >
-            <span
-              className="grid place-items-center rounded-xl border-2 border-dashed border-slate-300 text-slate-400 transition group-hover:border-slate-500 group-hover:text-slate-700 group-focus-visible:border-slate-900"
-              style={{ width: DECK_W, height: DECK_H }}
-            >
-              <PlusMark className="size-5" />
-            </span>
-            <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-900">New deck</span>
-          </button>
+          {/* Room for another: a blank deck, or the tech example. */}
+          <NewDeckTile label="New deck" onClick={() => addDeck(newDeck())} />
+          <NewDeckTile label="Tech example" onClick={() => addDeck(techExample())} />
         </div>
       </section>
 
@@ -402,35 +375,40 @@ export default function StrategyBuilder() {
         <div className="space-y-4">
           {/* Its name, and what it applies to. */}
           <div className={CARD_COMPACT}>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <label className={`flex min-w-48 flex-1 flex-col gap-1.5 ${LABEL}`}>
-                Strategy name
-                <input
-                  value={deck.name}
-                  onChange={(e) => set({ name: e.target.value })}
-                  placeholder="e.g. Tech dip buyer"
-                  className={`${FIELD} normal-case tracking-normal`}
-                />
-              </label>
+            {/* Its name and its colour side by side; deleting it in the corner, as removing a
+                card is in the card's editor. */}
+            <div className="flex items-start gap-4">
+              <div className="flex min-w-0 flex-1 flex-wrap items-end gap-x-6 gap-y-4">
+                <label className={`flex min-w-48 flex-1 flex-col gap-1.5 ${LABEL}`}>
+                  Strategy name
+                  <input
+                    value={deck.name}
+                    onChange={(e) => set({ name: e.target.value })}
+                    placeholder="e.g. Tech dip buyer"
+                    className={`${FIELD} normal-case tracking-normal`}
+                  />
+                </label>
+                {/* Its colour: one of the families the Search page's charts are coloured in,
+                    chosen the same way (with its diamonds), level with the name's field. */}
+                <div className="flex flex-col gap-1.5">
+                  <p className={LABEL}>Deck colour</p>
+                  <div className="flex h-[34px] items-center">
+                    <PalettePicker
+                      label="Deck colour"
+                      current={deckPalette(deck)}
+                      onPick={(palette) => set({ palette })}
+                    />
+                  </div>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => (deleting ? removeDeck() : setDeleting(true))}
                 onBlur={() => setDeleting(false)}
-                className={`${LIGHT_BUTTON} ${deleting ? "border-slate-900" : ""}`}
+                className={`-mt-1 shrink-0 ${REMOVE_BUTTON} ${deleting ? REMOVE_ARMED : ""}`}
               >
                 {deleting ? "Click again to delete" : "Delete deck"}
               </button>
-            </div>
-
-            {/* Its colour: one of the families the Search page's charts are coloured in, chosen
-                the same way (with its diamonds). */}
-            <p className={`mt-5 ${LABEL}`}>Deck colour</p>
-            <div className="mt-1">
-              <PalettePicker
-                label="Deck colour"
-                current={deckPalette(deck)}
-                onPick={(palette) => set({ palette })}
-              />
             </div>
 
             <p className={`mt-5 ${LABEL}`}>Applies to</p>
@@ -443,7 +421,7 @@ export default function StrategyBuilder() {
               />
             </div>
             {/* The sector, or the one firm or ETF; for all ETFs, nothing more to choose. */}
-            <div key={deck.scope} className="text-fade-in mt-3">
+            <div key={deck.scope} className={deck.scope === "etfs" ? undefined : "text-fade-in mt-3"}>
               {deck.scope === "sector" && (
                 <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                   Every firm in
@@ -456,15 +434,7 @@ export default function StrategyBuilder() {
                       <option key={s}>{s}</option>
                     ))}
                   </select>
-                  <span className="basis-full text-slate-500">
-                    Each firm is checked against the cards on its own.
-                  </span>
                 </label>
-              )}
-              {deck.scope === "etfs" && (
-                <p className="text-sm text-slate-600">
-                  Every ETF, each checked against the cards on its own.
-                </p>
               )}
               {deck.scope === "single" && (
                 <div className="max-w-xl">
@@ -484,7 +454,6 @@ export default function StrategyBuilder() {
                     </p>
                   )}
                   <SearchBox
-                    lead={deck.symbol ? "Choose another by" : "Choose a firm or ETF by"}
                     placeholders={{ symbol: "e.g. NVDA or XEQT.TO", name: "e.g. Shopify" }}
                     onChoose={async (symbol) => set({ symbol })}
                   />
@@ -493,45 +462,44 @@ export default function StrategyBuilder() {
             </div>
           </div>
 
-          {/* Its cards, one per rule: click one to edit it. */}
+          {/* Its cards, one per rule, and under them, the one being edited: one panel, as one
+              chooses what the other edits. */}
           <div className={CARD_COMPACT}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className={`${PANEL_TITLE}`}>
-                Cards · {deck.rules.length}
-              </p>
-              <p className="text-xs text-slate-500">Click a card to edit it.</p>
-            </div>
+            <p className={PANEL_TITLE}>Cards · {deck.rules.length}</p>
             <Hand rules={deck.rules} editing={rule.id} color={color} onEdit={edit} onAdd={addCard} />
-          </div>
 
-          {/* The card being edited, sliding in from its side as another is chosen. */}
-          <div key={rule.id} className="pick-swap-in" style={{ "--dir": dir } as React.CSSProperties}>
-            <RuleEditor
-              n={at + 1}
-              rule={rule}
-              removable={deck.rules.length > 1}
-              onRemove={() => removeCard(rule.id)}
-              onRule={(change) => setRule(rule.id, (r) => ({ ...r, ...change }))}
-              onCondition={(id, change) =>
-                setRule(rule.id, (r) => ({
-                  ...r,
-                  conditions: r.conditions.map((c) => (c.id === id ? { ...c, ...change } : c)),
-                }))
-              }
-              onAddCondition={() =>
-                setRule(rule.id, (r) => ({ ...r, conditions: [...r.conditions, newCondition()] }))
-              }
-              onRemoveCondition={(id) =>
-                setRule(rule.id, (r) => ({ ...r, conditions: r.conditions.filter((c) => c.id !== id) }))
-              }
-            />
+            {/* The card being edited, sliding in from its side as another is chosen. */}
+            <div
+              key={rule.id}
+              className="pick-swap-in mt-6 border-t border-slate-100 pt-6"
+              style={{ "--dir": dir } as React.CSSProperties}
+            >
+              <RuleEditor
+                n={at + 1}
+                rule={rule}
+                removable={deck.rules.length > 1}
+                onRemove={() => removeCard(rule.id)}
+                onRule={(change) => setRule(rule.id, (r) => ({ ...r, ...change }))}
+                onCondition={(id, change) =>
+                  setRule(rule.id, (r) => ({
+                    ...r,
+                    conditions: r.conditions.map((c) => (c.id === id ? { ...c, ...change } : c)),
+                  }))
+                }
+                onAddCondition={() =>
+                  setRule(rule.id, (r) => ({ ...r, conditions: [...r.conditions, newCondition()] }))
+                }
+                onRemoveCondition={(id) =>
+                  setRule(rule.id, (r) => ({ ...r, conditions: r.conditions.filter((c) => c.id !== id) }))
+                }
+              />
+            </div>
           </div>
         </div>
 
         {/* The deck in plain words, kept in view beside it; a card's words choose it too. */}
         <aside className={`${CARD_COMPACT} lg:sticky lg:top-28`}>
-          <p className={`${PANEL_TITLE}`}>In plain words</p>
-          <p className="mt-2 text-base font-semibold text-slate-900">
+          <p className="text-base font-semibold text-slate-900">
             {deck.name.trim() || "Untitled strategy"}
           </p>
           <p key={scopeText(deck)} className="text-fade-in mt-1 text-sm text-slate-600">
@@ -552,7 +520,7 @@ export default function StrategyBuilder() {
                     }`}
                   >
                     <span
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold transition-colors ${
+                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
                         on ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900"
                       }`}
                     >
@@ -575,9 +543,6 @@ export default function StrategyBuilder() {
               );
             })}
           </ol>
-          <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            {`${ready} of ${deck.rules.length} ${deck.rules.length === 1 ? "card" : "cards"} complete. Every condition on a card must hold for it to act. Your decks are kept in this browser.`}
-          </p>
         </aside>
       </div>
     </div>
@@ -643,7 +608,7 @@ function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpe
         ))}
         <span
           aria-hidden
-          className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+          className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
             open ? "scale-100 opacity-100" : "scale-75 opacity-0"
           }`}
         >
@@ -723,7 +688,7 @@ function Hand({
       <button
         type="button"
         onClick={onAdd}
-        className={`absolute left-0 top-3 grid place-items-center rounded-xl border-2 border-dashed border-slate-300 text-center text-slate-400 transition-[transform,border-color,color] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] hover:border-slate-500 hover:text-slate-700 ${FOCUS_RING}`}
+        className={`absolute left-0 top-3 ${CARD_SLOT} transition-[transform,border-color,color] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] hover:border-slate-500 hover:text-slate-700 ${FOCUS_RING}`}
         style={{ width: CARD_W, height: CARD_H, transform: `translateX(${slot}px)` }}
       >
         <span className="flex flex-col items-center gap-1.5 text-xs font-semibold">
@@ -772,7 +737,7 @@ function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: st
             {rule.side === "buy" ? <BuyMark className="size-4" /> : <SellMark className="size-4" />}
           </span>
           <span
-            className={`rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide ${
+            className={`${TAG_SHAPE} ${
               rule.side === "buy" ? "bg-slate-900 text-white" : "border border-slate-900 text-slate-900"
             }`}
           >
@@ -791,7 +756,7 @@ function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: st
       {/* Being edited: tagged on its top edge, as the Sandbox's card being traded is. */}
       <span
         aria-hidden
-        className={`pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+        className={`pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
           on ? "scale-100 opacity-100" : "scale-75 opacity-0"
         }`}
       >
@@ -824,10 +789,10 @@ function RuleEditor({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className={CARD_COMPACT}>
+    <section aria-labelledby={id}>
       <div className="flex items-center justify-between gap-4">
         <h2 id={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-slate-900">
-          <span className="shrink-0 rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <span className={TAG}>
             Editing card {n}
           </span>
           <input
@@ -842,7 +807,7 @@ function RuleEditor({
           <button
             type="button"
             onClick={onRemove}
-            className="shrink-0 text-xs font-semibold text-slate-500 hover:text-slate-900"
+            className={`shrink-0 ${REMOVE_BUTTON}`}
           >
             Remove card
           </button>
@@ -901,23 +866,20 @@ function RuleEditor({
                     placeholder="0"
                     className={`${FIELD} w-24 tabular-nums`}
                   />
-                  {info.unit !== "$" && <span className="text-sm text-slate-500">{info.unit}</span>}
+                  {/* Always as wide as "shares", so each row's Remove lines up with the others'. */}
+                  <span className="w-12 text-sm text-slate-500">{info.unit !== "$" ? info.unit : ""}</span>
                 </span>
                 {rule.conditions.length > 1 && (
                   <button
                     type="button"
                     onClick={() => onRemoveCondition(c.id)}
                     aria-label="Remove condition"
-                    className="rounded px-1.5 text-lg leading-none text-slate-400 hover:text-slate-900"
+                    className={REMOVE_BUTTON}
                   >
-                    ×
+                    Remove
                   </button>
                 )}
               </div>
-              {/* What the measure is. */}
-              <p key={c.metric} className="text-fade-in mt-1 text-xs text-slate-500 sm:ml-11">
-                {info.hint}
-              </p>
             </div>
           );
         })}
@@ -948,6 +910,25 @@ function RuleEditor({
         <span className="text-sm text-slate-600">shares</span>
       </div>
     </section>
+  );
+}
+
+// A dashed space the size of a deck, for adding one, its words under it as a deck's name is.
+function NewDeckTile({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
+    >
+      <span
+        className={`${CARD_SLOT} transition group-hover:border-slate-500 group-hover:text-slate-700 group-focus-visible:border-slate-900`}
+        style={{ width: DECK_W, height: DECK_H }}
+      >
+        <PlusMark className="size-5" />
+      </span>
+      <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-900">{label}</span>
+    </button>
   );
 }
 

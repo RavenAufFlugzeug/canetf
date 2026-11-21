@@ -19,7 +19,7 @@ const ICON = "size-[22px]";
 
 // A link (or the log out button) in the navbar: its icon, then its label.
 const ITEM =
-  "group flex items-center rounded outline-none hover:text-black focus-visible:text-black focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-4";
+  "group flex items-center rounded-sm outline-none hover:text-black focus-visible:text-black focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-4";
 
 // A link's label beside its icon. Showing at the top of the page; once the page is
 // scrolled it folds away, opening again while its link is pointed at or tabbed to
@@ -75,7 +75,8 @@ export default async function Navbar() {
               <NavLabel>{shortName(user)}</NavLabel>
             </Link>
 
-            <form action={logout} className="flex">
+            {/* It leaves the page: asked about first during a Sandbox test (LeaveGuard). */}
+            <form action={logout} className="flex" data-leaves-page>
               <button type="submit" className={ITEM}>
                 <DoorMark className={ICON} />
                 <NavLabel>Log out</NavLabel>

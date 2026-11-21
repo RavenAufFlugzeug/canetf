@@ -39,7 +39,7 @@ export default function PickOverview({ cards, starts }: { cards: PickCard[]; sta
               {cards.slice(0, 5).map((c) => (
                 <span
                   key={c.symbol}
-                  className="grid size-6 place-items-center rounded-md ring-2 ring-white"
+                  className="grid size-6 place-items-center rounded-full ring-2 ring-white"
                   style={{ background: c.color, color: c.mark }}
                 >
                   <KindMark kind={c.kind} className="size-3.5" />
@@ -120,7 +120,7 @@ export default function PickOverview({ cards, starts }: { cards: PickCard[]; sta
                                 <path d="M4.5 2.5 8 6 4.5 9.5" />
                               </svg>
                               <span
-                                className="kind-badge grid size-7 shrink-0 place-items-center rounded-md shadow-sm"
+                                className="kind-badge grid size-7 shrink-0 place-items-center rounded-full shadow-sm"
                                 style={{ background: c.color, color: c.mark, ["--badge" as string]: c.color }}
                               >
                                 <KindMark kind={c.kind} className="size-3.5" />
@@ -131,7 +131,7 @@ export default function PickOverview({ cards, starts }: { cards: PickCard[]; sta
                                   src={flag}
                                   alt={c.country ?? ""}
                                   title={`${c.kind === "ETF" ? "Listed in" : "Based in"} ${c.country}`}
-                                  className="h-3 w-auto shrink-0 rounded-[2px] ring-1 ring-black/10"
+                                  className="h-3 w-auto shrink-0 rounded-xs ring-1 ring-black/10"
                                 />
                               )}
                               <span className="min-w-0">

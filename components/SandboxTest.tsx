@@ -20,7 +20,7 @@ import {
   dayText as figureDay,
 } from "@/components/PickCards";
 import { AliasName, useAliases } from "@/components/SandboxAliases";
-import { useStage } from "@/components/SandboxStage";
+import { markTestUnderway, useStage } from "@/components/SandboxStage";
 import SandboxChart, { type Range as ChartRange } from "@/components/SandboxChart";
 import { EaseHeight, useSandboxSwap } from "@/components/SandboxSwap";
 import StartMark from "@/components/StartMark";
@@ -44,7 +44,7 @@ import { POPUP_OUT_MS } from "@/lib/popup";
 import Popup from "@/components/Popup";
 import { newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
-import { button as buttonLook, field, LABEL, PANEL_TITLE, FOCUS_RING } from "@/lib/ui";
+import { button as buttonLook, field, LABEL, PANEL_TITLE, FOCUS_RING, SECTION_TITLE } from "@/lib/ui";
 
 // The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
 // not their names) all trading through the same stretch of time. Starting with `amount`
@@ -480,6 +480,12 @@ export default function SandboxTest({
   const nameOf = (symbol: string) =>
     aliases[symbol] ?? picks.find((p) => p.symbol === symbol)?.name ?? symbol;
   const day = prices[picks[0].symbol]?.length ?? 0;
+  // Being traded right now, for leaving the page to ask first (LeaveGuard); no longer once it
+  // is finished or left, or this test goes.
+  useEffect(() => {
+    markTestUnderway(status === "trading");
+    return () => markTestUnderway(false);
+  }, [status]);
   // A pick's price today, to the cent, as shown (what its shares are bought and sold at), and
   // the day before's.
   const priceOf = (symbol: string) => cents(prices[symbol]?.[day - 1] ?? 0);
@@ -1334,7 +1340,7 @@ export default function SandboxTest({
                         <span
                           key={grade}
                           title={`${g.label}: ${g.note}`}
-                          className={`flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-[0.6rem] px-1 py-2 transition-colors duration-200 ${
+                          className={`flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 transition-colors duration-200 ${
                             mine
                               ? `${lookOf(grade).fill} shadow-sm`
                               : grade === "S+"
@@ -1459,7 +1465,7 @@ export default function SandboxTest({
                               <path d="M4.5 2.5 8 6 4.5 9.5" />
                             </svg>
                             <span
-                              className="kind-badge grid size-7 shrink-0 place-items-center rounded-md shadow-sm"
+                              className="kind-badge grid size-7 shrink-0 place-items-center rounded-full shadow-sm"
                               style={{ background: r.color, color: r.mark, ["--badge" as string]: r.color }}
                             >
                               <KindMark kind={r.kind} className="size-3.5" />
@@ -1474,7 +1480,7 @@ export default function SandboxTest({
                                   </span>
                                 </span>
                               ) : (
-                                <span className="block h-4 w-32 animate-pulse rounded bg-slate-100" />
+                                <span className="block h-4 w-32 animate-pulse rounded-sm bg-slate-100" />
                               )}
                             </span>
                           </span>
@@ -1614,7 +1620,7 @@ export default function SandboxTest({
       >
         <div {...enter(0)}>
           <div className="flex items-baseline justify-between gap-4">
-            <p className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <p className={`flex items-center gap-2 ${SECTION_TITLE}`}>
               {/* A calendar page, its date turning over as the days go by. */}
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-slate-900 shadow-sm ring-1 ring-slate-200">
                 <svg
@@ -1644,9 +1650,9 @@ export default function SandboxTest({
             </p>
           </div>
           {/* How far through the test, filling up day by day. */}
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+          <div className="mt-2 h-1.5 overflow-hidden rounded-xs bg-slate-200">
             <div
-              className="h-full rounded-full bg-slate-900 transition-[width] duration-[600ms] ease-out"
+              className="h-full rounded-xs bg-slate-900 transition-[width] duration-[600ms] ease-out"
               style={{ width: `${(day / days) * 100}%` }}
             />
           </div>
@@ -1721,7 +1727,7 @@ export default function SandboxTest({
                     <Tween value={price} format={priceText} />
                   </span>
                   {pick.currency && (
-                    <span className="ml-1 rounded bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
+                    <span className="ml-1 rounded-sm bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
                       {pick.currency}
                     </span>
                   )}
@@ -1837,7 +1843,7 @@ export default function SandboxTest({
                 type="button"
                 onClick={() => setMoneyNote(null)}
                 aria-label="Dismiss"
-                className="shrink-0 rounded px-1 text-white/70 hover:text-white"
+                className="shrink-0 rounded-sm px-1 text-white/70 hover:text-white"
               >
                 ×
               </button>
@@ -2172,7 +2178,7 @@ function PickInfo({
     <div className="mt-2 rounded-lg bg-white px-3 py-2.5 shadow-sm">
       <div className="flex items-center gap-3">
         <span
-          className="kind-badge grid size-8 shrink-0 place-items-center rounded-lg shadow-sm"
+          className="kind-badge grid size-8 shrink-0 place-items-center rounded-full shadow-sm"
           style={{ background: pick.color, color: pick.mark, ["--badge" as string]: pick.color }}
         >
           <KindMark kind={pick.kind} className="size-4" />
@@ -2246,9 +2252,9 @@ function PickInfo({
                 {funded !== null && (
                   <div className="mt-2.5">
                     <p className="text-xs text-slate-500">Funded by</p>
-                    <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div className="mt-1 flex h-2 overflow-hidden rounded-xs bg-slate-200">
                       <div
-                        className="h-full rounded-full bg-slate-700 transition-[width] duration-700 ease-out"
+                        className="h-full rounded-xs bg-slate-700 transition-[width] duration-700 ease-out"
                         style={{ width: open ? `${funded}%` : "0%" }}
                       />
                     </div>
@@ -2342,7 +2348,7 @@ function QuitCard({
           <p className={`${LABEL}`}>
             Day {day} · leaving early
           </p>
-          <p className="text-lg font-semibold text-slate-900">Leave the test?</p>
+          <p className={SECTION_TITLE}>Leave the test?</p>
         </div>
       </div>
       <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
@@ -2481,7 +2487,7 @@ function TourGuide({
           {positions.map((_, i) => (
             <span
               key={i}
-              className={`h-1 rounded-full transition-all duration-500 ease-out ${
+              className={`h-1 rounded-xs transition-all duration-500 ease-out ${
                 i === at ? "w-4 bg-slate-900" : i < at ? "w-1.5 bg-slate-400" : "w-1.5 bg-slate-200"
               }`}
             />
@@ -2642,7 +2648,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
                 }}
               />
               <span
-                className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
+                className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-sm bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
                   spot === null ? "opacity-0" : "opacity-100"
                 }`}
                 style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
@@ -2921,7 +2927,7 @@ function ExchangePanel({
                 setText("");
                 setSwaps((n) => n + 1);
               }}
-              className={`mb-0.5 grid size-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900 active:scale-90 ${FOCUS_RING}`}
+              className={`mb-0.5 grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900 active:scale-90 ${FOCUS_RING}`}
             >
               <svg
                 aria-hidden
@@ -3090,7 +3096,7 @@ function FinishCard({
             <p className={`${LABEL}`}>
               Day {days} · the test is over
             </p>
-            <p className="text-lg font-semibold text-slate-900">Congratulations!</p>
+            <p className={SECTION_TITLE}>Congratulations!</p>
           </div>
         </div>
 
@@ -3204,7 +3210,7 @@ function OrderTicket({
         title={`${adding ? "Add" : "Remove"} ${Math.abs(by)}`}
         disabled={!live || (!adding && size === 0)}
         onClick={() => onStep({ by })}
-        className={`group/nudge flex h-8 min-w-12 items-center justify-center gap-1 rounded-full px-2.5 text-xs font-semibold tabular-nums shadow-sm transition duration-200 ease-out motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-90 warn-cursor disabled:opacity-35 disabled:shadow-none disabled:hover:translate-y-0 ${
+        className={`group/nudge flex h-8 min-w-12 items-center justify-center gap-1 rounded-lg px-2.5 text-xs font-semibold tabular-nums shadow-sm transition duration-200 ease-out motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-90 warn-cursor disabled:opacity-35 disabled:shadow-none disabled:hover:translate-y-0 ${
           adding
             ? "bg-slate-900 text-white hover:bg-slate-700"
             : "border border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900"
@@ -3252,7 +3258,7 @@ function OrderTicket({
           aria-label={`Switch to ${buying ? "buying" : "selling"}`}
           className={`group/switch absolute inset-0 z-10 grid cursor-pointer place-items-center rounded-xl bg-white/45 backdrop-blur-[1.5px] transition-colors duration-300 hover:bg-white/25 ${FOCUS_RING}`}
         >
-          <span className="switch-in flex items-center gap-2 rounded-full bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-white shadow-lg shadow-slate-900/20 transition-transform duration-300 ease-[cubic-bezier(0.3,1.5,0.5,1)] group-hover/switch:scale-105">
+          <span className="switch-in flex items-center gap-2 rounded-lg bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-white shadow-lg shadow-slate-900/20 transition-transform duration-300 ease-[cubic-bezier(0.3,1.5,0.5,1)] group-hover/switch:scale-105">
             {/* Two arrows chasing each other round: pointed at, they turn half a circle. */}
             <svg
               aria-hidden
@@ -3274,7 +3280,7 @@ function OrderTicket({
       <div className={`flex items-center justify-between gap-2 transition-opacity duration-300 ${dim}`}>
         <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
           <span
-            className={`grid size-6 place-items-center rounded-full ${
+            className={`grid size-6 place-items-center rounded-md ${
               buying ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-900"
             }`}
           >
@@ -3287,7 +3293,7 @@ function OrderTicket({
             type="button"
             disabled={!live || most === 0 || size === most}
             onClick={() => onStep({ to: most })}
-            className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600 transition hover:bg-slate-200 hover:text-slate-900 active:scale-95 warn-cursor disabled:opacity-40"
+            className="rounded-sm bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600 transition hover:bg-slate-200 hover:text-slate-900 active:scale-95 warn-cursor disabled:opacity-40"
           >
             {buying ? "Max" : "All"} · {most.toLocaleString("en-CA")}
           </button>
@@ -3296,7 +3302,7 @@ function OrderTicket({
             aria-label={`Clear the ${buying ? "buy" : "sell"} order`}
             disabled={!live || !text}
             onClick={() => onStep({ to: 0 })}
-            className={`grid size-6 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 ${
+            className={`grid size-6 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 ${
               text ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
@@ -3487,7 +3493,7 @@ function ConfirmTrade({
           <p className={`${LABEL}`}>
             Day {day} · review your order
           </p>
-          <p className="text-lg font-semibold text-slate-900">
+          <p className={SECTION_TITLE}>
             {buying ? "Buy" : "Sell"} {ask.shares.toLocaleString("en-CA")} {sharesWord(ask.shares)}?
           </p>
           <p className="text-xs text-slate-500">{ask.name}</p>
@@ -3588,7 +3594,7 @@ function ConfirmTrade({
 
       {/* The money, split between cash and shares: sliding from now to after the trade. */}
       <div {...row(4)} className="rise-in mt-3">
-        <div className="flex h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
+        <div className="flex h-2 overflow-hidden rounded-xs bg-slate-200" aria-hidden>
           <span
             className="h-full bg-slate-400 transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{ width: `${cashShare}%` }}
@@ -3597,11 +3603,11 @@ function ConfirmTrade({
         </div>
         <p className="mt-1 flex justify-between text-xs tabular-nums text-slate-500">
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-slate-400" />
+            <span className="size-2 rounded-xs bg-slate-400" />
             Cash <Tween value={cashShare} format={(x) => `${Math.round(x)}%`} />
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-slate-900" />
+            <span className="size-2 rounded-xs bg-slate-900" />
             In shares <Tween value={100 - cashShare} format={(x) => `${Math.round(x)}%`} />
           </span>
         </p>

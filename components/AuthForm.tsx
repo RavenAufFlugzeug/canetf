@@ -3,7 +3,7 @@
 import { useActionState, useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { login, signup } from "@/app/actions/auth";
 import DiamondLoader from "@/components/DiamondLoader";
-import { button, field as fieldLook, CARD, FOCUS_RING } from "@/lib/ui";
+import { button, field as fieldLook, CARD, PAGE_TITLE, LINK_TEXT } from "@/lib/ui";
 
 type Mode = "login" | "signup";
 
@@ -71,14 +71,9 @@ export default function AuthForm({ mode: initial, next }: Props) {
           key={`form-${mode}`}
           className={switched ? (isLogin ? "auth-swap-from-left" : "auth-swap-from-right") : undefined}
         >
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className={PAGE_TITLE}>
             {isLogin ? "Welcome back" : "Create your account"}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {isLogin
-              ? "Log in to your watch list and investor profile."
-              : "Save a watch list of companies and ETFs, and build your investor profile."}
-          </p>
           <Fields mode={mode} next={next} />
         </div>
 
@@ -90,7 +85,7 @@ export default function AuthForm({ mode: initial, next }: Props) {
           <button
             type="button"
             onClick={() => choose(isLogin ? "signup" : "login")}
-            className={`rounded font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 ${FOCUS_RING}`}
+            className={LINK_TEXT}
           >
             {isLogin ? "Create an account" : "Log in"}
           </button>
@@ -109,7 +104,7 @@ function Fields({ mode, next }: { mode: Mode; next?: string }) {
   const [showPassword, setShowPassword] = useState(false);
   const isLogin = mode === "login";
 
-  const field = `mt-1 w-full ${fieldLook()}`;
+  const field = `mt-1 w-full ${fieldLook("lg")}`;
   const label =
     "block text-sm font-medium text-slate-600 transition-colors group-focus-within/field:text-slate-900";
 

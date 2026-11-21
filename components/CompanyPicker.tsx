@@ -241,7 +241,7 @@ export default function CompanyPicker({
           }}
           onKeyDown={onKeyDown}
           autoFocus={autoFocus}
-          className={`w-full ${field()} placeholder:normal-case ${byName ? "" : "uppercase"}`}
+          className={`w-full ${field("lg")} placeholder:normal-case ${byName ? "" : "uppercase"}`}
         />
         {navigating && (
           <DiamondLoader label="Loading" className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-slate-500" />
@@ -307,7 +307,7 @@ export default function CompanyPicker({
                           {byName ? row.match.symbol : (row.match.name ?? "")}
                         </span>
                         {isAdded && (
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          <span className="shrink-0 rounded-sm bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                             Added
                           </span>
                         )}

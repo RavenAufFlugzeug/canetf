@@ -6,7 +6,7 @@ import { button } from "@/lib/ui";
 // this button, or the section's title), its word simply changing; pointed at, the arrows
 // spread (or close in) a touch, drawn past the icon's edge rather than cut off there.
 // It is the site's small secondary button (lib/ui.ts).
-export const FOLD_BUTTON = `group gap-1.5 ${button("secondary", "sm")}`;
+export const FOLD_BUTTON = `group gap-1.5 ${button("secondary", "xs")}`;
 // Each arrow flips about its own middle (transform), and moves on hover (translate), both eased.
 const ARROW = "[transform-box:fill-box] origin-center transition-[transform,translate] duration-300 ease-out";
 

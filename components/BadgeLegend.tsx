@@ -6,7 +6,7 @@ import KindMark from "@/components/KindMark";
 import { KINDS, badgeLook } from "@/lib/kinds";
 import { NAICS_GROUPS, naicsOf } from "@/lib/naics";
 import { kindOf } from "@/lib/sandbox";
-import { PANEL_TITLE, FOCUS_RING } from "@/lib/ui";
+import { PANEL_TITLE, SECTION_TITLE, LINK_TEXT } from "@/lib/ui";
 import { ChevronDownIcon } from "@/components/Icons";
 
 // The pop-up under a legend tile when it is pointed at (or focused), as the Sandbox's pick
@@ -97,7 +97,7 @@ export default function BadgeLegend({
     <section className={`rise-in ${className}`} style={{ animationDelay: `${delay}ms` }}>
       {!popup && (
         <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-slate-900">What the icon means</h3>
+          <h3 className={SECTION_TITLE}>What the icon means</h3>
           <FoldButton open={open} controls={id} onClick={toggle} className="ml-auto text-xs" />
         </div>
       )}
@@ -117,7 +117,7 @@ export default function BadgeLegend({
             type="button"
             onClick={toggle}
             aria-controls={id}
-            className={`legend-row group mt-3 inline-flex items-center gap-2 rounded-md text-sm font-medium text-slate-900 underline decoration-slate-300 underline-offset-4 transition hover:decoration-slate-900 ${FOCUS_RING}`}
+            className={`legend-row group mt-3 inline-flex items-center gap-2 text-sm ${LINK_TEXT}`}
             style={{ "--d": open ? "0ms" : "260ms" } as React.CSSProperties}
           >
             <span className="flex -space-x-1" aria-hidden>
@@ -125,7 +125,7 @@ export default function BadgeLegend({
               {NAICS_GROUPS.slice(0, 3).map((g) => (
                 <span
                   key={g.code}
-                  className="size-3 rounded-sm ring-2 ring-white"
+                  className="size-3 rounded-full ring-2 ring-white"
                   style={{ background: g.color }}
                 />
               ))}
@@ -164,7 +164,7 @@ export default function BadgeLegend({
                 >
                   <span
                     aria-hidden
-                    className={`naics-swatch size-3.5 shrink-0 rounded ${mine ? "legend-pop" : ""}`}
+                    className={`naics-swatch size-3.5 shrink-0 rounded-full ${mine ? "legend-pop" : ""}`}
                     style={{ background: g.color, ["--swatch" as string]: g.color }}
                   />
                   <span className="tabular-nums font-medium text-slate-900">{g.code.replace("-", "–")}</span>
@@ -201,8 +201,8 @@ export default function BadgeLegend({
                   style={d(NAICS_GROUPS.length + i)}
                 >
                   <span
-                    className={`kind-badge grid size-7 shrink-0 place-items-center rounded-lg ${
-                      mine ? "legend-pop" : "bg-slate-100 text-slate-700"
+                    className={`kind-badge grid size-7 shrink-0 place-items-center rounded-full ${
+                      mine ? "" : "bg-slate-100 text-slate-700"
                     } ${mine && look.ring ? "ring-[1.5px] ring-inset ring-slate-900" : ""}`}
                     style={
                       mine

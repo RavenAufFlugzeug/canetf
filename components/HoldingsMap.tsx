@@ -191,7 +191,7 @@ function LegendBox({
 }) {
   return (
     <span
-      className={`flex h-5 shrink-0 items-center gap-1 rounded-[5px] px-0.5 ${
+      className={`flex h-5 shrink-0 items-center gap-1 rounded-sm px-0.5 ${
         dark
           ? "border border-black bg-slate-950"
           : outline
@@ -200,10 +200,10 @@ function LegendBox({
       }`}
       style={outline ? { borderColor: outline } : undefined}
     >
-      <span className="grid size-3.5 place-items-center rounded-[3px]" style={{ background: badge }}>
+      <span className="grid size-3.5 place-items-center rounded-full" style={{ background: badge }}>
         {mark}
       </span>
-      <span className={`mr-0.5 h-1 w-3 rounded-full ${dark ? "bg-white/40" : "bg-slate-300"}`} />
+      <span className={`mr-0.5 h-1 w-3 rounded-xs ${dark ? "bg-white/40" : "bg-slate-300"}`} />
     </span>
   );
 }
@@ -224,7 +224,7 @@ function SectorSwatch({ color }: { color: string }) {
   return (
     <span
       aria-hidden
-      className="legend-swatch size-3.5 shrink-0 rounded border border-black/10"
+      className="legend-swatch size-3.5 shrink-0 rounded-full border border-black/10"
       style={{ backgroundColor: color }}
     />
   );
@@ -544,7 +544,7 @@ export default function HoldingsMap({
                 <img
                   src="/flags/4x3/ca.svg"
                   alt=""
-                  className="h-3 w-auto rounded-[2px] ring-1 ring-black/15"
+                  className="h-3 w-auto rounded-xs ring-1 ring-black/15"
                 />
                 Country
               </span>
@@ -560,13 +560,13 @@ export default function HoldingsMap({
             )}
             {LEGEND.map(({ kind, text }) => (
               <span key={kind} className="flex items-center gap-1.5">
-                <span className={`h-3 w-5 rounded-sm ${BOX[kind]}`} />
+                <span className={`h-3 w-5 rounded-xs ${BOX[kind]}`} />
                 {text}
               </span>
             ))}
             {all.some(({ node }) => node.missing) && (
               <span className="flex items-center gap-1.5">
-                <span className={`h-3 w-5 rounded-sm ${MISSING_BOX}`} />
+                <span className={`h-3 w-5 rounded-xs ${MISSING_BOX}`} />
                 No data
               </span>
             )}
@@ -708,7 +708,7 @@ export default function HoldingsMap({
                         {/* As the map shows it: a fund's mark on black, a credit rating's on slate;
                             a company's on white here, its colour being its sector's (above). */}
                         <span
-                          className={`legend-swatch grid size-4 shrink-0 place-items-center rounded ${
+                          className={`legend-swatch grid size-4 shrink-0 place-items-center rounded-full ${
                             k.kind === "ETF"
                               ? "bg-slate-950 text-white ring-1 ring-black"
                               : k.kind === "Rating"
@@ -890,7 +890,7 @@ export default function HoldingsMap({
                   // On a badge: a company's in its NAICS group's colour; a fund's faint on its
                   // black box; a rating's slate.
                   <span
-                    className="-ml-1 grid size-5 shrink-0 place-items-center rounded-[5px]"
+                    className="-ml-1 grid size-5 shrink-0 place-items-center rounded-full"
                     style={
                       node.kind === "fund"
                         ? FUND_BADGE
@@ -931,7 +931,7 @@ export default function HoldingsMap({
                       alt={country ?? ""}
                       title={`${node.kind === "fund" ? "Listed in" : "Based in"} ${country}`}
                       // On a fund's black box, a white outline sets the flag off from the black.
-                      className={`h-2.5 w-auto shrink-0 rounded-[1.5px] ${
+                      className={`h-2.5 w-auto shrink-0 rounded-xs ${
                         node.kind === "fund" ? "ring-1 ring-white" : "ring-1 ring-black/15"
                       }`}
                     />
@@ -969,7 +969,7 @@ export default function HoldingsMap({
                     aria-expanded={open}
                     aria-label={`${open ? "Hide" : "Show"} what ${nameOf(node)} holds`}
                     onClick={() => toggle(node.id)}
-                    className={`-mr-1 grid size-5 shrink-0 place-items-center rounded transition-colors ${
+                    className={`-mr-1 grid size-5 shrink-0 place-items-center rounded-sm transition-colors ${
                       node.kind === "fund" ? "hover:bg-white/20" : "hover:bg-black/15"
                     }`}
                   >

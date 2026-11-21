@@ -86,7 +86,7 @@ export function Swap({ swapKey, children }: { swapKey: string; children: React.R
         {out && (
           <span
             aria-hidden
-            className="swap-wait pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 p-2 shadow-md ring-1 ring-slate-200"
+            className="swap-wait pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-lg bg-white/90 p-2 shadow-md ring-1 ring-slate-200"
           >
             <DiamondLoader className="size-4" />
           </span>

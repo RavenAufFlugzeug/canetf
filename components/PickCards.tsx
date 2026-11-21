@@ -86,12 +86,12 @@ export default function PickCards({ cards }: { cards: PickCard[] }) {
         >
           <span
             aria-hidden
-            className="absolute inset-y-2 left-1.5 w-1 rounded-full"
+            className="absolute inset-y-2 left-1.5 w-1 rounded-xs"
             style={{ background: card.color }}
           />
           <div className="flex items-start gap-2">
             <span
-              className="kind-badge grid size-7 shrink-0 place-items-center rounded-lg"
+              className="kind-badge grid size-7 shrink-0 place-items-center rounded-full"
               style={{ background: card.color, color: card.mark, ["--badge" as string]: card.color }}
             >
               <KindMark kind={card.kind} className="size-4" />
@@ -103,7 +103,7 @@ export default function PickCards({ cards }: { cards: PickCard[] }) {
                 src={countryFlag(card.country, true)!}
                 alt={card.country ?? ""}
                 title={`${card.kind === "ETF" ? "Listed in" : "Based in"} ${card.country}`}
-                className="mt-2 h-3 w-auto shrink-0 rounded-[2px] ring-1 ring-black/10"
+                className="mt-2 h-3 w-auto shrink-0 rounded-xs ring-1 ring-black/10"
               />
             )}
             <div className="min-w-0 flex-1">

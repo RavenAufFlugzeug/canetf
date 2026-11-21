@@ -1,13 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import LogoMark from "@/components/LogoMark";
-import { MoonMark } from "@/components/TestMarks";
-import { POPUP_OUT_MS } from "@/lib/popup";
-import Popup from "@/components/Popup";
-import { button, LABEL } from "@/lib/ui";
 
 // The lid's front flap's angle (degrees) for each state: closed, lifted a little as the
 // cat peeks, and fallen right open once she is out (see LogoMark).
@@ -21,9 +17,8 @@ const DAMPING = 17;
 // The navbar's logo: the box, by the site's name, linking home. Pointed at (or tabbed to),
 // the box's lid lifts a little and its cat peeks out, ears first. Clicked, the lid falls
 // open and her whole head comes out (data-peek); clicked again, she gets cross, an angry
-// mark popping up by her head (data-angry). A click on another page first asks, in a pop-up
-// (HomeCard), whether to go home, as what is not saved there will be lost; only once that is
-// confirmed does it go. The navbar stays in place as the page changes (it is built once, in
+// mark popping up by her head (data-angry). A click on another page goes home (asking first
+// while a Sandbox test is under way, as every link does: LeaveGuard). The navbar stays in place as the page changes (it is built once, in
 // the site's layout), so she stays as she was. All of it goes back only when the pointer leaves
 // (.logo-mark-* in globals.css; the lid's angle is sprung here). The name folds away like
 // the links' labels once the page is scrolled, and opens again while the logo is pointed
@@ -33,10 +28,6 @@ export default function NavLogo() {
   const [clicks, setClicks] = useState(0);
   const [pointedAt, setPointedAt] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
-  // The pop-up asking before going home: whether it is up, and whether it is fading away.
-  const [asking, setAsking] = useState(false);
-  const [askLeaving, setAskLeaving] = useState(false);
   const target = clicks >= 1 ? LID.open : pointedAt ? LID.peeking : LID.closed;
 
   // The lid's angle as it swings, and how fast, sprung towards the target each frame.
@@ -76,20 +67,9 @@ export default function NavLogo() {
     // Opening the link elsewhere (a new tab or window) is left to the browser.
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     setClicks((n) => Math.min(n + 1, 2));
-    event.preventDefault();
-    // Already home: just the cat, no reload of the page. Elsewhere: first, ask.
-    if (pathname !== "/" && !asking) setAsking(true);
-  }
-
-  // The pop-up fades away; then, if going home was confirmed, home.
-  function answer(home: boolean) {
-    if (askLeaving) return;
-    setAskLeaving(true);
-    window.setTimeout(() => {
-      setAsking(false);
-      setAskLeaving(false);
-      if (home) router.push("/");
-    }, POPUP_OUT_MS);
+    // Already home: just the cat, no reload of the page. Elsewhere it goes home, as any link
+    // does (asking first while a Sandbox test is under way: LeaveGuard).
+    if (pathname === "/") event.preventDefault();
   }
 
   return (
@@ -120,55 +100,6 @@ export default function NavLogo() {
           </span>
         </span>
       </Link>
-      {asking && <HomeCard leaving={askLeaving} onDone={answer} />}
     </>
   );
 }
-
-// The pop-up asking before going home (from the logo, on any other page), in every pop-up's
-// style (lib/popup.ts), coming and going as the Sandbox's day recap does, with the same moon
-// (its stars twinkling): home is where it will
-// go, and what is not saved on this page (a test under way, a strategy not saved) will be lost.
-// Stay here (or Escape, or a click beside it) closes it; Go home goes.
-function HomeCard({ leaving, onDone }: { leaving: boolean; onDone: (home: boolean) => void }) {
-  // Opened with the keyboard on the safe choice.
-  const stay = useRef<HTMLButtonElement>(null);
-
-  return (
-    <Popup
-      label="Go back home?"
-      leaving={leaving}
-      onClose={() => onDone(false)}
-      initialFocus={stay}
-      className="max-w-sm overflow-hidden p-5"
-    >
-      <div className="flex items-center gap-3">
-        <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
-          <MoonMark className="size-5" />
-        </span>
-        <div>
-          <p className={`${LABEL}`}>Leaving this page</p>
-          <p className="text-lg font-semibold text-slate-900">Go back home?</p>
-        </div>
-      </div>
-      <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
-        You&apos;ll be taken back to the home page.
-      </p>
-      <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
-        Anything you haven&apos;t saved here, such as a test under way, won&apos;t be kept.
-      </p>
-      <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
-        <button ref={stay} type="button" onClick={() => onDone(false)} className={`${DARK} flex-1`}>
-          Stay here
-        </button>
-        <button type="button" onClick={() => onDone(true)} className={`${LIGHT} flex-1`}>
-          Go home
-        </button>
-      </div>
-    </Popup>
-  );
-}
-
-// The pop-up's buttons, the site's (lib/ui.ts).
-const DARK = button("primary");
-const LIGHT = button("secondary");

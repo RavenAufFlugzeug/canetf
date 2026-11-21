@@ -6,7 +6,7 @@ import { getAppDb } from "@/lib/appDb";
 import { getCompanies } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import Page from "@/components/Page";
-import { CARD } from "@/lib/ui";
+import { CARD, PAGE_TITLE } from "@/lib/ui";
 
 export default async function WatchlistPage() {
   const user = await getCurrentUser();
@@ -29,31 +29,31 @@ export default async function WatchlistPage() {
     <Page width="xl">
       {/* The same card as the Company lookup's search. */}
       <div className={CARD}>
-        <h1 className="text-2xl font-bold text-slate-900">Watch List</h1>
-
         {!user ? (
           // Signed out: the same login prompt as the Sandbox page's.
-          <div className="mt-4 max-w-xl">
-            <Prompt
-              text="Log in to build your watch list of companies and ETFs."
-              href="/login?next=/watchlist"
-              action="Log in"
-            />
-          </div>
-        ) : (
           <>
-            <div className="max-w-xl">
-              {/* Add a company or ETF, found by its ticker or by (part of) its name. */}
-              <SearchBox
-                lead="Add a company or ETF by"
-                placeholders={{ symbol: "e.g. AAPL or XEQT.TO", name: "e.g. Apple or iShares" }}
-                onChoose={addToWatchlist}
-                added={symbols}
+            <h1 className={PAGE_TITLE}>Watch List</h1>
+            <div className="mt-4 max-w-xl">
+              <Prompt
+                text="Log in to build your watch list of companies and ETFs."
+                href="/login?next=/watchlist"
+                action="Log in"
               />
             </div>
+          </>
+        ) : (
+          <>
+            {/* The title, with the switch for adding a company or ETF by its ticker or by (part
+                of) its name at the end of its line; the search box under them, the card's width. */}
+            <SearchBox
+              heading={<h1 className={PAGE_TITLE}>Watch List</h1>}
+              placeholders={{ symbol: "e.g. AAPL or XEQT.TO", name: "e.g. Apple or iShares" }}
+              onChoose={addToWatchlist}
+              added={symbols}
+            />
             {companies.length === 0 && (
               <p className="mt-4 text-slate-600">
-                Your watch list is empty. Search above to add companies or ETFs.
+                Your watch list is empty.
               </p>
             )}
           </>

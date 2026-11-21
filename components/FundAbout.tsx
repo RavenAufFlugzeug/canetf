@@ -2,6 +2,7 @@ import { BasedIn } from "@/components/FlagPair";
 import ProviderLink from "@/components/ProviderLink";
 import type { CompanyProfile } from "@/lib/db";
 import { listingOf } from "@/lib/exchanges";
+import { SECTION_TITLE } from "@/lib/ui";
 
 // The Search page's About section for an ETF, in place of a company's: which country it is
 // from (where it is listed, by that country's flag, and on which exchange), who runs it and
@@ -45,7 +46,7 @@ export default function FundAbout({
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-6">
-      <h3 className="rise-in text-lg font-semibold text-slate-900" style={{ animationDelay: `${delay}ms` }}>
+      <h3 className={`rise-in ${SECTION_TITLE}`} style={{ animationDelay: `${delay}ms` }}>
         About this fund
       </h3>
       <dl className="mt-4 text-sm">
@@ -61,7 +62,7 @@ export default function FundAbout({
                 <span
                   tabIndex={0}
                   aria-describedby={tip}
-                  className="cursor-help rounded whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="cursor-help rounded-sm whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
                 >
                   {row.label}
                 </span>

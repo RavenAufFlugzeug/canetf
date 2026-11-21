@@ -33,7 +33,7 @@ export default function ChangePasswordForm() {
               required
               aria-invalid={Boolean(error)}
               aria-describedby={error || hint ? `${field.name}-note` : undefined}
-              className={`mt-1 w-full ${fieldLook()}`}
+              className={`mt-1 w-full ${fieldLook("lg")}`}
             />
             {(error || hint) && (
               <p

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import StrategyBuilder from "@/components/StrategyBuilder";
 import Page from "@/components/Page";
-import { CARD } from "@/lib/ui";
+import { CARD, PAGE_TITLE } from "@/lib/ui";
 
 export const metadata: Metadata = { title: "Strategies" };
 
@@ -12,11 +12,9 @@ export default function StrategyPage() {
   return (
     <Page width="2xl">
       <div className={`rise-in ${CARD}`}>
-        <h1 className="text-2xl font-bold text-slate-900">Strategies</h1>
+        <h1 className={PAGE_TITLE}>Strategies</h1>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Each strategy is a deck, and each of its rules is a card that decides when to buy or sell. Open a
-          deck, choose what it applies to, then click a card to edit it. Start from the tech example below,
-          or a new deck.
+          Each strategy is a deck, and each of its rules is a card that decides when to buy or sell.
         </p>
         <ol className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           {[
@@ -25,7 +23,7 @@ export default function StrategyPage() {
             ["Then", "The card buys or sells a number of shares."],
           ].map(([title, text], i) => (
             <li key={title} className="flex gap-3 rounded-xl bg-slate-50 p-4">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
                 {i + 1}
               </span>
               <span>

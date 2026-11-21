@@ -18,7 +18,7 @@ import {
   getPriceHistory,
 } from "@/lib/db";
 import Page from "@/components/Page";
-import { CARD, FOCUS_RING } from "@/lib/ui";
+import { CARD, PAGE_TITLE, SECTION_TITLE, button } from "@/lib/ui";
 
 export default async function MapPage({
   searchParams,
@@ -48,7 +48,7 @@ export default async function MapPage({
         {/* Back to the Search page, showing the ETF that is on the map (if any). */}
         <Link
           href={etf ? `/search?symbol=${encodeURIComponent(etf.symbol)}` : "/search"}
-          className={`group mb-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-900 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-md hover:shadow-slate-300/60 ${FOCUS_RING} active:shadow-sm`}
+          className={`group mb-4 ${button("secondary")}`}
         >
           <svg
             aria-hidden
@@ -64,20 +64,15 @@ export default async function MapPage({
           </svg>
           Back to Search
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">Holdings Map</h1>
-        <p className="mt-1 text-slate-600">
-          Explore an ETF&rsquo;s underlying holdings, level by level.
-        </p>
-        <div className="max-w-xl">
-          {/* Find an ETF by its ticker or by (part of) its name, with a switch. */}
-          <SearchBox
-            symbol={etf?.symbol ?? null}
-            name={etf?.name ?? null}
-            lead="Find an ETF by"
-            placeholders={{ symbol: "e.g. XEQT.TO", name: "e.g. iShares" }}
-            etfsOnly
-          />
-        </div>
+        {/* The title, with the switch for finding an ETF by its ticker or by (part of) its name
+            at the end of its line, as on the Search page; the search box under them. */}
+        <SearchBox
+          heading={<h1 className={PAGE_TITLE}>Holdings Map</h1>}
+          symbol={etf?.symbol ?? null}
+          name={etf?.name ?? null}
+          placeholders={{ symbol: "e.g. XEQT.TO", name: "e.g. iShares" }}
+          etfsOnly
+        />
 
         {etf && tree ? (
           // Keyed by symbol, so each newly chosen ETF plays its entrance.
@@ -89,10 +84,10 @@ export default async function MapPage({
                 industry={etf.industry}
                 fundFamily={etf.fundFamily}
                 category={etf.category}
-                className="size-10 rounded-xl"
+                className="size-10"
                 markClassName="size-5"
               />
-              <p className="text-lg font-semibold text-slate-900">
+              <p className={SECTION_TITLE}>
                 {/* Name, then the ticker on its own line, so a long name never splits them. */}
                 {etf.name ?? etf.symbol}
                 <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
@@ -114,7 +109,7 @@ export default async function MapPage({
                     industry={picked.industry}
                     fundFamily={picked.fundFamily}
                     category={picked.category}
-                    className="size-10 rounded-xl"
+                    className="size-10"
                     markClassName="size-5"
                   />
                 }

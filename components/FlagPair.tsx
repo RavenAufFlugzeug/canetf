@@ -17,7 +17,7 @@ export default function FlagPair({
     const src = flagOf(code);
     return (
       <span
-        className={`${back ? "flag-b -ml-2.5" : "flag-a relative z-10"} grid shrink-0 place-items-center overflow-hidden rounded-[28%] bg-slate-100 text-[8px] font-bold text-slate-700 ring-2 ring-white shadow-sm ${className}`}
+        className={`${back ? "flag-b -ml-2.5" : "flag-a relative z-10"} grid shrink-0 place-items-center overflow-hidden rounded-md bg-slate-100 text-[8px] font-bold text-slate-700 ring-2 ring-white shadow-sm ${className}`}
       >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG
@@ -56,7 +56,7 @@ export function Flag({
   if (!code && !src) return null;
   return (
     <span
-      className={`grid shrink-0 place-items-center overflow-hidden rounded-[28%] bg-slate-100 text-[8px] font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 ${className}`}
+      className={`grid shrink-0 place-items-center overflow-hidden rounded-md bg-slate-100 text-[8px] font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 ${className}`}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG
@@ -77,7 +77,7 @@ export function BasedIn({ place, country }: { place: string; country: string | n
     <span className="inline-flex items-start gap-2">
       {src && (
         // On the first line's middle (a line is 20px; the flag 14px), even if the place wraps.
-        <span className="mt-[3px] inline-block h-3.5 shrink-0 overflow-hidden rounded-[2px] shadow-sm ring-1 ring-slate-900/10">
+        <span className="mt-[3px] inline-block h-3.5 shrink-0 overflow-hidden rounded-xs shadow-sm ring-1 ring-slate-900/10">
           {/* eslint-disable-next-line @next/next/no-img-element -- a tiny static SVG */}
           <img src={src} alt="" className="block h-full w-auto" />
         </span>

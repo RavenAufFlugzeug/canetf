@@ -65,7 +65,9 @@ export default function SlideTabs<V extends string>({
       {options.map((o) => {
         const on = o.value === value;
         const look = `relative inline-flex items-center justify-center rounded-md transition-colors duration-200 ${FOCUS_RING} ${
-          xs ? "px-2.5 py-1" : "px-4 py-1"
+          // Each option 28px tall in the track's padding: the switch a control's height
+          // (CONTROL_HEIGHT), 32px (xs) or 36px (sm), so it lines up with buttons and fields.
+          xs ? "h-7 px-2.5" : "h-7 px-4"
         } ${on ? `text-slate-900 ${placed ? "" : "bg-white shadow-sm"}` : "text-slate-500 hover:text-slate-700"}`;
         const inner = (
           <>

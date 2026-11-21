@@ -5,6 +5,15 @@ import { createContext, useContext, useState } from "react";
 // Whether the Sandbox's test is under way, shared by the test (SandboxTest), which says so as
 // it starts and as it is left, and the set-up above it (SetupArea), which folds away while it
 // is. Set round them both.
+//
+// Separately, whether a test is being traded right now (started, and neither finished nor
+// left), for the rest of the site, outside the Sandbox's page: leaving asks first only then
+// (LeaveGuard). The test keeps it up to date (markTestUnderway); anyone can ask (testUnderway).
+let underway = false;
+export const testUnderway = () => underway;
+export function markTestUnderway(now: boolean) {
+  underway = now;
+}
 type Stage = { testing: boolean; setTesting: (testing: boolean) => void };
 
 const StageContext = createContext<Stage | null>(null);

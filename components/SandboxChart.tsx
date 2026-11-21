@@ -644,7 +644,7 @@ export default function SandboxChart({
               <div
                 aria-live="polite"
                 aria-hidden={!visible}
-                className="chart-tip pointer-events-none absolute top-0 overflow-hidden whitespace-nowrap rounded-md border bg-white px-3 py-1.5 text-sm shadow"
+                className="chart-tip pointer-events-none absolute top-0 overflow-hidden whitespace-nowrap rounded-lg border bg-white px-3 py-1.5 text-sm shadow"
                 style={{ left: tipLeft, opacity: visible ? 1 : 0, transform: "translateX(-50%)" }}
               >
                 <span className="font-semibold tabular-nums text-slate-900">{tipPrice}</span>{" "}
@@ -851,7 +851,7 @@ function ExampleDay({ day, width }: { day: Example; width: number }) {
           // The price and time, gliding along above the crosshair.
           <div
             aria-hidden={!shown}
-            className="chart-tip pointer-events-none absolute top-0 whitespace-nowrap rounded-md border bg-white px-3 py-1.5 text-sm shadow"
+            className="chart-tip pointer-events-none absolute top-0 whitespace-nowrap rounded-lg border bg-white px-3 py-1.5 text-sm shadow"
             style={{ left: tipLeft, opacity: shown ? 1 : 0, transform: "translateX(-50%)" }}
           >
             <span className="font-semibold tabular-nums text-slate-900">{money.format(point.price)}</span>{" "}

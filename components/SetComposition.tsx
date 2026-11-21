@@ -203,7 +203,7 @@ export default function SetComposition({ cards }: { cards: PickCard[] }) {
               }`}
             >
               <span
-                className={`size-3 shrink-0 rounded-sm transition-transform duration-300 ${group === g.key ? "scale-125" : ""}`}
+                className={`size-3 shrink-0 rounded-full transition-transform duration-300 ${group === g.key ? "scale-125" : ""}`}
                 style={{ background: g.color }}
               />
               <span className="min-w-0 flex-1 truncate text-slate-700">{g.label}</span>

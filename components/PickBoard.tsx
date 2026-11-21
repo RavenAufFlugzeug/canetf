@@ -9,7 +9,7 @@ import { LISTING_KINDS as KINDS } from "@/lib/kinds";
 import { countryFlag } from "@/lib/fx";
 import { moneyFormatter } from "@/lib/money";
 import { NAICS_GROUPS } from "@/lib/naics";
-import { field, LABEL, FOCUS_RING } from "@/lib/ui";
+import { CONTROL_HEIGHT, field, LABEL, FOCUS_RING, LINK_TEXT, TAG, EMPTY_STATE } from "@/lib/ui";
 import { ChevronDownIcon } from "@/components/Icons";
 
 export type BoardPick = {
@@ -244,7 +244,7 @@ export default function PickBoard({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
-            className={`w-full ${field("sm")} pl-8`}
+            className={`w-full ${field("xs")} pl-8`}
           />
         </label>
         {/* The filters (Show, Type, Sector, NAICS), folded away until asked for: the button
@@ -257,7 +257,7 @@ export default function PickBoard({
             setFiltersSettled(false);
             setFiltersOpen(!filtersOpen);
           }}
-          className={`group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition duration-200 ${FOCUS_RING} ${
+          className={`group inline-flex ${CONTROL_HEIGHT.xs} items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition duration-200 ${FOCUS_RING} ${
             filtersOpen
               ? "border-slate-900 bg-slate-900 text-white"
               : "border-slate-200 bg-white text-slate-900 hover:border-slate-400"
@@ -278,7 +278,7 @@ export default function PickBoard({
           {tokens.length > 0 && (
             <span
               key={tokens.length}
-              className={`text-fade-in rounded-full px-1.5 text-[10px] tabular-nums ${
+              className={`text-fade-in rounded-sm px-1.5 text-[10px] tabular-nums ${
                 filtersOpen ? "bg-white/20 text-white" : "bg-slate-900 text-white"
               }`}
             >
@@ -368,7 +368,7 @@ export default function PickBoard({
                       ).length,
                       swatch: (
                         // The mark alone, without colour: colour is the NAICS group's (the other menu).
-                        <span className="kind-badge grid size-5 shrink-0 place-items-center rounded-md bg-white text-slate-800 ring-1 ring-slate-200">
+                        <span className="kind-badge grid size-5 shrink-0 place-items-center rounded-full bg-white text-slate-800 ring-1 ring-slate-200">
                           <KindMark kind={k.kind} className="size-3" />
                         </span>
                       ),
@@ -406,7 +406,7 @@ export default function PickBoard({
                     count: picks.filter(
                       (p) => p.naics === g.code && others(p) && (sector === "all" || p.kind === sector),
                     ).length,
-                    swatch: <span className="size-4 shrink-0 rounded" style={{ background: g.color }} />,
+                    swatch: <span className="size-4 shrink-0 rounded-full" style={{ background: g.color }} />,
                   })),
                 ]}
               />
@@ -437,7 +437,7 @@ export default function PickBoard({
             type="button"
             onClick={t.clear}
             aria-label={`Remove filter ${t.label}`}
-            className="text-fade-in group inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-2 pr-1.5 font-semibold text-slate-900 transition hover:bg-slate-200"
+            className="text-fade-in group inline-flex items-center gap-1 rounded-sm bg-slate-100 py-0.5 pl-2 pr-1.5 font-semibold text-slate-900 transition hover:bg-slate-200"
           >
             {t.label}
             <span aria-hidden className="text-slate-500 transition group-hover:text-slate-900">
@@ -449,7 +449,7 @@ export default function PickBoard({
           <button
             type="button"
             onClick={clear}
-            className="text-fade-in font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 transition hover:decoration-slate-900"
+            className={`text-fade-in ${LINK_TEXT}`}
           >
             Clear all
           </button>
@@ -471,7 +471,7 @@ export default function PickBoard({
             className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-auto overscroll-x-contain px-2 pb-2 pt-0`}
           >
             {shown.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
+              <p className={EMPTY_STATE}>
                 {/* A sector and NAICS group that no listing here has together, said so; else the
                     filters as a whole. */}
                 {applied.sector !== "all" &&
@@ -482,7 +482,7 @@ export default function PickBoard({
                       "–",
                     )} (${NAICS_GROUPS.find((g) => g.code === applied.naics)?.name ?? ""}): that combination isn't available. `
                   : "Nothing matches these filters. "}
-                <button type="button" onClick={clear} className="font-semibold text-slate-900 underline">
+                <button type="button" onClick={clear} className={LINK_TEXT}>
                   Clear all
                 </button>
               </p>
@@ -534,7 +534,7 @@ export default function PickBoard({
                             className={`flex min-w-0 items-center gap-2 text-left ${FOCUS_RING}`}
                           >
                             <span
-                              className="universe-badge kind-badge grid size-6 shrink-0 place-items-center rounded-md shadow-sm"
+                              className="universe-badge kind-badge grid size-6 shrink-0 place-items-center rounded-full shadow-sm"
                               style={{ background: p.color, color: p.ink, ["--badge" as string]: p.color }}
                             >
                               <KindMark kind={p.kind} className="size-3.5" />
@@ -551,7 +551,7 @@ export default function PickBoard({
                             </span>
                             {/* The listing being traded, said so. */}
                             {on && (
-                              <span className="universe-tag shrink-0 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+                              <span className={`universe-tag ${TAG}`}>
                                 Trading
                               </span>
                             )}
@@ -652,12 +652,12 @@ export function FilterMenu({
           setFocus(Math.max(0, options.indexOf(current)));
           setOpen(!open);
         }}
-        className={`group inline-flex min-w-36 items-center gap-2 rounded-lg border bg-white py-1 pl-1.5 pr-2.5 text-xs font-semibold text-slate-900 transition duration-200 ${FOCUS_RING} ${
+        className={`group inline-flex ${CONTROL_HEIGHT.xs} min-w-36 items-center gap-2 rounded-lg border bg-white pl-1.5 pr-2.5 text-xs font-semibold text-slate-900 transition duration-200 ${FOCUS_RING} ${
           open ? "border-slate-900 shadow-sm" : "border-slate-200 hover:border-slate-400"
         }`}
       >
         <span key={current.value} className="text-fade-in flex min-w-0 flex-1 items-center gap-2">
-          {current.swatch ?? <span className="size-5 shrink-0 rounded-md bg-slate-100" />}
+          {current.swatch ?? <span className="size-5 shrink-0 rounded-full bg-slate-100" />}
           <span className="truncate">{current.label}</span>
         </span>
         <ChevronDownIcon className={`size-3 shrink-0 text-slate-500 transition duration-300 ease-out ${open ? "rotate-180 text-slate-900" : ""}`} />
@@ -713,7 +713,7 @@ export function FilterMenu({
               </span>
               {o.count !== undefined && (
                 <span
-                  className={`shrink-0 rounded-full px-1.5 text-[10px] font-bold tabular-nums ${
+                  className={`shrink-0 rounded-sm px-1.5 text-[10px] font-bold tabular-nums ${
                     on ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
                   }`}
                 >
@@ -739,7 +739,7 @@ function CountryFlag({ pick }: { pick: BoardPick }) {
       src={src}
       alt={pick.country ?? ""}
       title={`${pick.fund ? "Listed in" : "Based in"} ${pick.country}`}
-      className="h-3 w-auto shrink-0 self-center rounded-[2px] ring-1 ring-black/10"
+      className="h-3 w-auto shrink-0 self-center rounded-xs ring-1 ring-black/10"
     />
   );
 }

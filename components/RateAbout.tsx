@@ -2,7 +2,7 @@ import Link from "next/link";
 import FlagPair, { Flag } from "@/components/FlagPair";
 import { currencyName, pairOf, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
-import { button } from "@/lib/ui";
+import { button, SECTION_TITLE } from "@/lib/ui";
 
 // The Search page's About section for an exchange rate (USDCAD=X), in place of a company's:
 // the pair, what one of each currency buys of the other, how the rate moved over the last
@@ -93,7 +93,7 @@ export default function RateAbout({
   return (
     <div className="mt-8 border-t border-slate-200 pt-6">
       <div className="rise-in flex flex-wrap items-center gap-3" style={{ animationDelay: `${delay}ms` }}>
-        <h3 className="flag-hover flex items-center gap-2.5 text-lg font-semibold text-slate-900">
+        <h3 className={`flag-hover flex items-center gap-2.5 ${SECTION_TITLE}`}>
           <FlagPair base={base} quote={quote} className="size-7" />
           About this rate
         </h3>
@@ -102,7 +102,7 @@ export default function RateAbout({
           <Link
             href={`/search?symbol=${encodeURIComponent(reverse)}`}
             title={`See ${currencyName(quote)} to ${currencyName(base)}: one ${quote} in ${base}`}
-            className={`group ml-auto ${button("primary", "sm")}`}
+            className={`group ml-auto ${button("primary", "xs")}`}
           >
             <svg
               aria-hidden
@@ -135,7 +135,7 @@ export default function RateAbout({
                 <span
                   tabIndex={0}
                   aria-describedby={tip}
-                  className="cursor-help rounded whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="cursor-help rounded-sm whitespace-nowrap text-slate-600 underline decoration-slate-300 decoration-dotted underline-offset-4 outline-none group-hover/row:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-300"
                 >
                   {row.label}
                 </span>

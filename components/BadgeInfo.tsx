@@ -5,7 +5,7 @@ import BadgeLegend from "@/components/BadgeLegend";
 import KindMark from "@/components/KindMark";
 import Popup, { usePopupClose } from "@/components/Popup";
 import CloseButton from "@/components/CloseButton";
-import { FOCUS_RING } from "@/lib/ui";
+import { FOCUS_RING, SECTION_TITLE } from "@/lib/ui";
 
 // The "i" drawn in the info button and the pop-up's title.
 function InfoMark({ className }: { className: string }) {
@@ -57,7 +57,7 @@ export default function BadgeInfo({
         onClick={() => setOpen(true)}
         aria-label={label}
         aria-haspopup="dialog"
-        className={`group/info relative inline-flex shrink-0 items-center gap-1.5 rounded-full normal-case tracking-normal transition duration-200 ${FOCUS_RING} active:scale-95 motion-safe:hover:-translate-y-px ${
+        className={`group/info relative inline-flex shrink-0 items-center gap-1.5 rounded-lg normal-case tracking-normal transition duration-200 ${FOCUS_RING} active:scale-95 motion-safe:hover:-translate-y-px ${
           labelled
             ? "border border-slate-300 bg-white px-2.5 py-1 text-[11px] leading-none font-semibold text-slate-700 hover:border-slate-900 hover:bg-slate-900 hover:text-white"
             : ""
@@ -69,14 +69,14 @@ export default function BadgeInfo({
                 it is noticed. */}
             <span
               aria-hidden
-              className="info-ping pointer-events-none absolute inset-0 rounded-full border border-slate-900"
+              className="info-ping pointer-events-none absolute inset-0 rounded-lg border border-slate-900"
             />
             {/* One of the icons it explains (always the same one), drawn plainly in the
                 button's own colour, and still. */}
             <KindMark kind={BUTTON_ICON} className="size-3.5" />
           </>
         ) : (
-          <span className="grid size-5 shrink-0 place-items-center rounded-full text-slate-500 ring-1 ring-slate-300 transition duration-200 group-hover/info:bg-slate-900 group-hover/info:text-white group-hover/info:ring-slate-900">
+          <span className="grid size-5 shrink-0 place-items-center rounded-sm text-slate-500 ring-1 ring-slate-300 transition duration-200 group-hover/info:bg-slate-900 group-hover/info:text-white group-hover/info:ring-slate-900">
             <InfoMark className="size-3" />
           </span>
         )}
@@ -114,7 +114,7 @@ function LegendPopup({
         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-white">
           <InfoMark className="size-4" />
         </span>
-        <h2 className="min-w-0 flex-1 self-center text-lg font-semibold text-slate-900">Icons</h2>
+        <h2 className={`min-w-0 flex-1 self-center ${SECTION_TITLE}`}>Icons</h2>
         <CloseButton ref={button} onClick={close} />
       </div>
       <BadgeLegend popup className="mt-3" mark={mark} colour={colour} highlight={highlight} />

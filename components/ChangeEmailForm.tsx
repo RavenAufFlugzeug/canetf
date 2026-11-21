@@ -34,7 +34,7 @@ export default function ChangeEmailForm({ current }: { current: string }) {
           defaultValue={state?.success ? "" : state?.email}
           aria-invalid={Boolean(emailError)}
           aria-describedby={emailError ? "email-note" : undefined}
-          className={`mt-1 w-full ${field()}`}
+          className={`mt-1 w-full ${field("lg")}`}
         />
         {emailError && (
           <p id="email-note" className="mt-1 text-sm text-red-600">
@@ -55,7 +55,7 @@ export default function ChangeEmailForm({ current }: { current: string }) {
           required
           aria-invalid={Boolean(passwordError)}
           aria-describedby={passwordError ? "currentPassword-note" : undefined}
-          className={`mt-1 w-full ${field()}`}
+          className={`mt-1 w-full ${field("lg")}`}
         />
         {passwordError && (
           <p id="currentPassword-note" className="mt-1 text-sm text-red-600">

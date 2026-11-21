@@ -35,6 +35,11 @@ const FEATURES = [
   },
 ];
 
+// The buttons on the dark banner at the foot of the page: white, large, lifting when pointed
+// at, with a white keyboard outline to show on the dark.
+const BANNER_BUTTON =
+  "group/cta mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition duration-300 ease-out hover:bg-slate-100 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-safe:hover:-translate-y-0.5";
+
 export default async function Home() {
   const user = await getCurrentUser();
 
@@ -89,7 +94,7 @@ export default async function Home() {
           again on the way home. */}
       <section className="px-6 pb-20">
         <ViewTransition name="auth-card" share="auth-morph">
-          <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl bg-neutral-800 px-8 py-14 text-center shadow-xl">
+          <div className="relative mx-auto max-w-4xl overflow-hidden rounded-2xl bg-neutral-800 px-8 py-14 text-center shadow-xl">
             <div className="relative">
               {user ? (
                 <>
@@ -99,7 +104,7 @@ export default async function Home() {
                   </p>
                   <Link
                     href="/watchlist"
-                    className="mt-8 inline-block rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-100"
+                    className={BANNER_BUTTON}
                   >
                     Open my Watch List
                   </Link>
@@ -112,7 +117,7 @@ export default async function Home() {
                   </p>
                   <Link
                     href="/signup"
-                    className="group/cta mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-lg transition duration-300 ease-out hover:bg-slate-100 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-safe:hover:-translate-y-0.5"
+                    className={BANNER_BUTTON}
                   >
                     Create account
                     {/* An arrow that slides on when the button is pointed at, like the others. */}
@@ -133,7 +138,7 @@ export default async function Home() {
                     Already have one?{" "}
                     <Link
                       href="/login"
-                      className="rounded font-semibold text-white underline decoration-slate-500 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                      className="rounded-sm font-semibold text-white underline decoration-slate-500 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                     >
                       Log in
                     </Link>

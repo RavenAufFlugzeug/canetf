@@ -8,7 +8,7 @@ import KindMark from "@/components/KindMark";
 import SandboxChart from "@/components/SandboxChart";
 import type { EtfTreeNode } from "@/lib/db";
 import Popup, { usePopupClose } from "@/components/Popup";
-import { LABEL } from "@/lib/ui";
+import { LABEL, SECTION_TITLE } from "@/lib/ui";
 import CloseButton from "@/components/CloseButton";
 
 type Holdings = Awaited<ReturnType<typeof getSandboxEtfHoldings>>;
@@ -214,14 +214,14 @@ function HoldingChart({
     >
       <div className="flex items-start gap-3">
         <span
-          className="kind-badge grid size-11 shrink-0 place-items-center rounded-xl shadow-sm"
+          className="kind-badge grid size-11 shrink-0 place-items-center rounded-full shadow-sm"
           style={{ background: holding.color, color: holding.mark, ["--badge" as string]: holding.color }}
         >
           <KindMark kind={holding.kind} className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p className={`${LABEL}`}>Held by the fund</p>
-          <p className="text-lg font-semibold text-slate-900">{holding.name}</p>
+          <p className={SECTION_TITLE}>{holding.name}</p>
           <p className="text-xs text-slate-500">
             {`${pct(holding.weight)} of the fund · not one of your picks, so it can't be traded here`}
           </p>

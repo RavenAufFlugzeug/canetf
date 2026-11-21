@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import ViewTransitionGuard from "@/components/ViewTransitionGuard";
 import "./globals.css";
+import LeaveGuard from "@/components/LeaveGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,8 @@ export default function RootLayout({
             (app/template.tsx), so it never resets mid-way: its logo's cat keeps her state. */}
         <Navbar />
         {children}
+        {/* Leaving a Sandbox test under way, by any link (or closing the tab), asks first. */}
+        <LeaveGuard />
         {/* While the tab is hidden, pages change without asking to animate (which would fail). */}
         <ViewTransitionGuard />
       </body>

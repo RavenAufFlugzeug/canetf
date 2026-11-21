@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DeckBack from "@/components/DeckBack";
 import { DECK_BACKS, saveDeckBack, useDeckBack } from "@/lib/deckBack";
+import { TAG } from "@/lib/ui";
 
 // The account page's choice of deck back, used by every deck on the site: each design as a small
 // card (a deck of its own, so the cat on it is surprised when it is pointed at, and happy once it
@@ -42,7 +43,7 @@ export default function DeckBackPicker() {
               </span>
               <span
                 aria-hidden
-                className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-slate-900 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide whitespace-nowrap text-white shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+                className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
                   on ? "scale-100 opacity-100" : "scale-75 opacity-0"
                 }`}
               >

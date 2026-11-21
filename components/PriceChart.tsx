@@ -857,7 +857,7 @@ export default function PriceChart({
             key={`tip-${visits}`}
             aria-live="polite"
             aria-hidden={!hoverVisible}
-            className="chart-tip pointer-events-none absolute overflow-hidden whitespace-nowrap rounded-md border bg-white px-3 py-1.5 text-sm shadow"
+            className="chart-tip pointer-events-none absolute overflow-hidden whitespace-nowrap rounded-lg border bg-white px-3 py-1.5 text-sm shadow"
             style={{
               left: tipLeft,
               top: tipTop,

@@ -2,6 +2,7 @@
 
 import { useId, useState, useSyncExternalStore } from "react";
 import type { EtfBreakdown as Breakdown } from "@/lib/db";
+import { SECTION_TITLE } from "@/lib/ui";
 
 // The breakdown is drawn as a treemap: one square split into tiles sized by weight.
 // Tiles are ordered (largest share first), so they share one family of
@@ -105,7 +106,7 @@ export function PalettePicker({
             title={label}
             onClick={() => onPick(name)}
             // A small square turned 45 degrees.
-            className={`size-3 rotate-45 rounded-[3px] transition duration-300 ease-out focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${
+            className={`size-3 rotate-45 rounded-xs transition duration-300 ease-out focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${
               selected ? "scale-125 opacity-100" : "scale-90 opacity-40 hover:scale-110 hover:opacity-80"
             }`}
             style={{
@@ -312,7 +313,7 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
   const clipId = useId(); // unique per chart, for clipping each tile's label
   return (
     <div className="mt-8 border-t border-slate-200 pt-6">
-      <h3 className="text-lg font-semibold text-slate-900">{heading}</h3>
+      <h3 className={SECTION_TITLE}>{heading}</h3>
       <p className="mt-1 text-sm text-slate-500">{note}</p>
 
       <div className="mt-6 flex flex-col items-center gap-8 sm:flex-row sm:items-start">
@@ -432,7 +433,7 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
                   lit ? "bg-slate-100" : ""
                 }`}
               >
-                <span className="size-3 shrink-0 rounded-sm transition-colors duration-500" style={{ backgroundColor: r.color }} />
+                <span className="size-3 shrink-0 rounded-xs transition-colors duration-500" style={{ backgroundColor: r.color }} />
                 <span className="min-w-0 flex-1 truncate">
                   {r.symbol && <span className="font-semibold text-slate-900">{r.symbol} </span>}
                   <span className={r.symbol ? "text-slate-500" : "text-slate-700"}>{r.label}</span>
@@ -448,7 +449,7 @@ export default function EtfBreakdown({ breakdown }: { breakdown: Breakdown }) {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-sm transition-colors duration-500" style={{ backgroundColor: r.color }} />
+                    <span className="size-2.5 shrink-0 rounded-xs transition-colors duration-500" style={{ backgroundColor: r.color }} />
                     <span className="font-semibold text-slate-900">{r.symbol ?? r.label}</span>
                     <span className="ml-auto pl-4 font-semibold tabular-nums text-slate-900">{pct(r.weight)}</span>
                   </div>

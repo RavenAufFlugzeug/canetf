@@ -134,7 +134,7 @@ export function AliasName({
             setEditing(true);
           }
         }}
-        className={`group/pen inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900 ${FOCUS_RING}`}
+        className={`group/pen inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-sm border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900 ${FOCUS_RING}`}
       >
         <svg
           aria-hidden

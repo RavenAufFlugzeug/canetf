@@ -12,7 +12,7 @@ import { pairOf } from "@/lib/fx";
 import { naicsOf } from "@/lib/naics";
 import { kindOf } from "@/lib/sandbox";
 import SearchBox from "@/components/SearchBox";
-import { button, CARD } from "@/lib/ui";
+import { button, CARD, PAGE_TITLE, SECTION_TITLE } from "@/lib/ui";
 import {
   getCompany,
   getCompanyProfile,
@@ -48,7 +48,7 @@ export default async function SearchPage({
         {/* The title, with the switch for finding a company or ETF by its ticker or by (part
             of) its name at the end of its line; the search box under them. */}
         <SearchBox
-          heading={<h1 className="text-2xl font-bold text-slate-900">Search</h1>}
+          heading={<h1 className={PAGE_TITLE}>Search</h1>}
           rates
           symbol={company?.symbol ?? null}
           name={company?.name ?? null}
@@ -63,14 +63,14 @@ export default async function SearchPage({
                 industry={company.industry}
                 fundFamily={company.fundFamily}
                 category={company.category}
-                className="size-10 rounded-xl"
+                className="size-10"
                 markClassName="size-5"
               />
               <div className="min-w-0">
                 {/* Name, then the ticker on its own line, so a long name never splits them;
                     right after the name, what its icon means, in a pop-up (its sector and
                     its NAICS group picked out). */}
-                <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-lg font-semibold text-slate-900">
+                <p className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 ${SECTION_TITLE}`}>
                   {company.name ?? company.symbol}
                   <BadgeInfo
                     labelled

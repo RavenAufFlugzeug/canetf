@@ -10,7 +10,7 @@ import KindBadge from "@/components/KindBadge";
 import PriceChart from "@/components/PriceChart";
 import { providerOf } from "@/lib/providers";
 import Popup, { usePopupClose } from "@/components/Popup";
-import { button as buttonLook, LABEL, FOCUS_RING } from "@/lib/ui";
+import { button as buttonLook, LABEL, SECTION_TITLE, LINK } from "@/lib/ui";
 import CloseButton from "@/components/CloseButton";
 
 type Data = Awaited<ReturnType<typeof getProviderCompany>>;
@@ -28,7 +28,7 @@ export default function ProviderLink({ fundFamily }: { fundFamily: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`group/link inline-flex items-center gap-1.5 rounded text-right underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 ${FOCUS_RING}`}
+        className={`group/link inline-flex items-center gap-1.5 text-right ${LINK}`}
       >
         {fundFamily}
         <svg
@@ -89,12 +89,12 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
             industry={company.industry}
             fundFamily={company.fundFamily}
             category={company.category}
-            className="size-11 rounded-xl"
+            className="size-11"
             markClassName="size-5"
           />
         ) : (
           // A building: the company, with no badge to give it.
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700">
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-700">
             <svg
               aria-hidden
               viewBox="0 0 20 20"
@@ -113,7 +113,7 @@ function ProviderCard({ fundFamily, onClose }: { fundFamily: string; onClose: ()
           <p className={`${LABEL}`}>
             Behind {fundFamily}
           </p>
-          <p className="text-lg font-semibold text-slate-900">{company?.name ?? provider.name}</p>
+          <p className={SECTION_TITLE}>{company?.name ?? provider.name}</p>
           {provider.symbol && <p className="text-sm text-slate-500">{provider.symbol}</p>}
         </div>
         <CloseButton ref={button} onClick={close} />

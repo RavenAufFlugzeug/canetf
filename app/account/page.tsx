@@ -4,7 +4,7 @@ import { EmailMark, PasswordMark } from "@/components/TestMarks";
 import { getAppDb } from "@/lib/appDb";
 import { questions, type Answers } from "@/lib/questions";
 import { requireUser } from "@/lib/session";
-import { button, CARD } from "@/lib/ui";
+import { button, CARD, PAGE_TITLE, SECTION_TITLE } from "@/lib/ui";
 import Page from "@/components/Page";
 
 const dateFormat = new Intl.DateTimeFormat("en-CA", { dateStyle: "long" });
@@ -29,7 +29,7 @@ export default async function AccountPage() {
   return (
     <Page width="md">
       <div className={CARD}>
-        <h1 className="text-2xl font-bold text-slate-900">Your account</h1>
+        <h1 className={PAGE_TITLE}>Your account</h1>
         <p className="mt-2 text-slate-600">{user.email}</p>
         <p className="text-sm text-slate-500">Member since {dateFormat.format(new Date(user.createdAt))}</p>
 
@@ -47,16 +47,13 @@ export default async function AccountPage() {
       </div>
 
       <div className={CARD}>
-        <h2 className="text-xl font-bold text-slate-900">Deck back</h2>
-        <p className="mt-1 text-slate-600">
-          The design on the back of every deck and card, in the Sandbox and in Strategies.
-        </p>
+        <h2 className={SECTION_TITLE}>Deck back</h2>
         <DeckBackPicker />
       </div>
 
       <div className={CARD}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xl font-bold text-slate-900">Your investor profile</h2>
+          <h2 className={SECTION_TITLE}>Your investor profile</h2>
           {profile && (
             <span className="text-sm text-slate-500">
               Saved {dateFormat.format(new Date(profile.updatedAt))}

@@ -32,7 +32,7 @@ import {
   TIMEFRAMES,
 } from "@/lib/sandbox";
 import Page from "@/components/Page";
-import { CARD } from "@/lib/ui";
+import { CARD, PAGE_TITLE, SECTION_TITLE } from "@/lib/ui";
 
 const cad = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 
@@ -59,7 +59,7 @@ function Step({
       className="rise-in relative mt-6 scroll-mt-24 border-t border-slate-200 pt-6 focus-within:z-10 hover:z-10"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <h2 className="flex items-center gap-2.5 text-lg font-semibold text-slate-900">
+      <h2 className={`flex items-center gap-2.5 ${SECTION_TITLE}`}>
         <span className="grid size-6 place-items-center rounded-full bg-slate-900 text-xs font-bold text-white">
           {n}
         </span>
@@ -166,7 +166,7 @@ export default async function SandboxPage({
       <SandboxSwapProvider>
         <StageProvider>
           <div className={CARD}>
-            <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
+            <h1 className={PAGE_TITLE}>Sandbox</h1>
             <p className="mt-1 text-slate-600">
               Test your ideas against real market data.
             </p>

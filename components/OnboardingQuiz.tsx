@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { saveAnswers } from "@/app/actions/profile";
 import { questions, type Answers } from "@/lib/questions";
-import { button, field, LABEL, CARD, FOCUS_RING } from "@/lib/ui";
+import { button, field, LABEL, CARD, FOCUS_RING, PAGE_TITLE, LINK_TEXT } from "@/lib/ui";
 
-// A link in running text, as the site's others are: dark, with an underline that darkens
-// when pointed at.
-const LINK =
-  "font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 transition hover:decoration-slate-900";
 
 // Answers and the step reached are kept for this tab (sessionStorage), so they survive going
 // off to log in and coming back.
@@ -199,7 +195,7 @@ export default function OnboardingQuiz() {
         </p>
       </div>
       <div
-        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+        className="mt-2 h-1.5 w-full overflow-hidden rounded-xs bg-slate-100"
         role="progressbar"
         aria-valuemin={1}
         aria-valuemax={questions.length}
@@ -207,14 +203,14 @@ export default function OnboardingQuiz() {
         aria-label="Questionnaire progress"
       >
         <div
-          className="h-full rounded-full bg-slate-900 transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          className="h-full rounded-xs bg-slate-900 transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
           style={{ width: `${progress}%` }}
         />
       </div>
 
       {/* Keyed by the step, so each question rises in as it comes. */}
       <div key={step} className="rise-in">
-        <h1 className="mt-6 text-2xl font-bold text-slate-900">{currentQuestion.title}</h1>
+        <h1 className={`mt-6 ${PAGE_TITLE}`}>{currentQuestion.title}</h1>
         <p className="mt-1 text-sm text-slate-600">{getQuestionHint()}</p>
 
         {currentQuestion.type === "number" && (
@@ -229,7 +225,7 @@ export default function OnboardingQuiz() {
                 autoComplete="off"
                 aria-label={currentQuestion.title}
                 aria-invalid={showValidationError}
-                className={`w-full ${field()} pl-7 tabular-nums`}
+                className={`w-full ${field("lg")} pl-7 tabular-nums`}
                 value={selectedAnswer ?? ""}
                 onChange={(e) => updateNumber(e.target.value.replace(/\D/g, ""))}
                 placeholder="0"
@@ -270,7 +266,7 @@ export default function OnboardingQuiz() {
                   {multi ? (
                     <span
                       aria-hidden
-                      className={`grid size-5 shrink-0 place-items-center rounded-md border transition-colors duration-200 ${
+                      className={`grid size-5 shrink-0 place-items-center rounded-sm border transition-colors duration-200 ${
                         selected ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white"
                       }`}
                     >
@@ -289,12 +285,12 @@ export default function OnboardingQuiz() {
                   ) : (
                     <span
                       aria-hidden
-                      className={`grid size-5 shrink-0 place-items-center rounded-full border transition-colors duration-200 ${
+                      className={`grid size-5 shrink-0 place-items-center rounded-sm border transition-colors duration-200 ${
                         selected ? "border-slate-900" : "border-slate-300"
                       }`}
                     >
                       <span
-                        className={`size-2.5 rounded-full bg-slate-900 transition duration-200 ${
+                        className={`size-2.5 rounded-xs bg-slate-900 transition duration-200 ${
                           selected ? "scale-100 opacity-100" : "scale-0 opacity-0"
                         }`}
                       />
@@ -330,11 +326,11 @@ export default function OnboardingQuiz() {
 
       {finishStatus === "needsLogin" && (
         <p role="alert" className="mt-6 text-slate-600">
-          <Link href="/signup?next=/onboarding" className={LINK}>
+          <Link href="/signup?next=/onboarding" className={LINK_TEXT}>
             Create an account
           </Link>{" "}
           or{" "}
-          <Link href="/login?next=/onboarding" className={LINK}>
+          <Link href="/login?next=/onboarding" className={LINK_TEXT}>
             log in
           </Link>{" "}
           to save your answers. They&apos;ll be waiting here when you come back.
