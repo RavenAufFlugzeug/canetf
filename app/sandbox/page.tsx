@@ -31,6 +31,8 @@ import {
   SEEDS,
   TIMEFRAMES,
 } from "@/lib/sandbox";
+import Page from "@/components/Page";
+import { CARD } from "@/lib/ui";
 
 const cad = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 
@@ -160,110 +162,106 @@ export default async function SandboxPage({
   const choices = { range: timeframe.key, amount, count };
 
   return (
-    <main className="flex-1 bg-slate-50">
-      <div className="mx-auto max-w-4xl px-6 pt-10 pb-12">
-        <SandboxSwapProvider>
-          <StageProvider>
-            <div className="rounded-2xl bg-white p-8 shadow">
-              <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
-              <p className="mt-1 text-slate-600">
-                A workspace for testing your ideas, forecasts and expectations against real market data: trade
-                a mystery set of companies and ETFs day by day, all through the same stretch of time, and see
-                how you do.
-              </p>
+    <Page width="lg">
+      <SandboxSwapProvider>
+        <StageProvider>
+          <div className={CARD}>
+            <h1 className="text-2xl font-bold text-slate-900">Sandbox</h1>
+            <p className="mt-1 text-slate-600">
+              Test your ideas against real market data.
+            </p>
 
-              {/* The set-up: folded away while the test is under way (SetupArea). */}
-              <SetupArea>
-                <Step n={1} title="Starting amount">
-                  <ChoiceChips
-                    label="Starting amount"
-                    swaps={testKey}
-                    chosen={String(amount)}
-                    choices={AMOUNTS.map((a) => ({
-                      key: String(a),
-                      label: `${cad.format(a)} CAD`,
-                      href: sandboxHref({ ...choices, amount: a, seed: seeded ? seed : undefined }),
-                    }))}
-                  />
-                </Step>
+            {/* The set-up: folded away while the test is under way (SetupArea). */}
+            <SetupArea>
+              <Step n={1} title="Starting amount">
+                <ChoiceChips
+                  label="Starting amount"
+                  swaps={testKey}
+                  chosen={String(amount)}
+                  choices={AMOUNTS.map((a) => ({
+                    key: String(a),
+                    label: `${cad.format(a)} CAD`,
+                    href: sandboxHref({ ...choices, amount: a, seed: seeded ? seed : undefined }),
+                  }))}
+                />
+              </Step>
 
-                <Step n={2} title="Timeframe" delay={40}>
-                  <ChoiceChips
-                    label="Timeframe"
-                    swaps={testKey}
-                    chosen={timeframe.key}
-                    choices={TIMEFRAMES.map((t) => ({
-                      key: t.key,
-                      label: t.label,
-                      href: sandboxHref({ ...choices, range: t.key, seed: seeded ? seed : undefined }),
-                    }))}
-                  />
-                </Step>
+              <Step n={2} title="Timeframe" delay={40}>
+                <ChoiceChips
+                  label="Timeframe"
+                  swaps={testKey}
+                  chosen={timeframe.key}
+                  choices={TIMEFRAMES.map((t) => ({
+                    key: t.key,
+                    label: t.label,
+                    href: sandboxHref({ ...choices, range: t.key, seed: seeded ? seed : undefined }),
+                  }))}
+                />
+              </Step>
 
-                <Step n={3} title="Companies & ETFs" delay={80}>
-                  <ChoiceChips
-                    label="Number of companies and ETFs"
-                    swaps={setKey}
-                    chosen={String(count)}
-                    choices={COUNTS.map((c) => ({
-                      key: String(c),
-                      label: String(c),
-                      href: sandboxHref({ ...choices, count: c, seed: seeded ? seed : undefined }),
-                    }))}
-                  />
-                </Step>
+              <Step n={3} title="Companies & ETFs" delay={80}>
+                <ChoiceChips
+                  label="Number of companies and ETFs"
+                  swaps={setKey}
+                  chosen={String(count)}
+                  choices={COUNTS.map((c) => ({
+                    key: String(c),
+                    label: String(c),
+                    href: sandboxHref({ ...choices, count: c, seed: seeded ? seed : undefined }),
+                  }))}
+                />
+              </Step>
 
-                <Step n={4} title="Investment universe" delay={120} id="sandbox-picks">
-                  {/* The button to generate a set (with, when none could be, why, in a box); once
-                      one is shown below, the same button generates another in its place. */}
-                  <div
-                    className={`rise-in mt-3 flex flex-wrap items-center gap-4 ${
-                      seeded && !set ? "justify-between rounded-xl bg-slate-50 p-4" : ""
-                    }`}
-                  >
-                    {/* Only when no set could be picked: why, cross-fading in (FadeText). */}
-                    {seeded && !set && (
-                      <FadeText
-                        className="min-w-0 flex-1 text-sm text-slate-600"
-                        text={`There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`}
+              <Step n={4} title="Investment universe" delay={120} id="sandbox-picks">
+                {/* The button to generate a set (with, when none could be, why, in a box); once
+                    one is shown below, the same button generates another in its place. */}
+                <div
+                  className={`rise-in mt-3 flex flex-wrap items-center gap-4 ${
+                    seeded && !set ? "justify-between rounded-xl bg-slate-50 p-4" : ""
+                  }`}
+                >
+                  {/* Only when no set could be picked: why, cross-fading in (FadeText). */}
+                  {seeded && !set && (
+                    <FadeText
+                      className="min-w-0 flex-1 text-sm text-slate-600"
+                      text={`There aren't ${count} listings trading through a stretch of ${timeframe.label}. Try fewer, or a shorter timeframe.`}
+                    />
+                  )}
+                  <PickButton current={set ? setKey : undefined} {...choices} />
+                </div>
+              </Step>
+            </SetupArea>
+
+            {/* Everything below the picking, which changes smoothly with the set (Swap); the
+              aliases given its picks are the set's own (AliasProvider). */}
+            <Swap swapKey={setKey}>
+              {set && (
+                <AliasProvider key={setKey} setKey={setKey}>
+                  <SetupArea>
+                    {/* What the set is made of, then the picks themselves, folded away. */}
+                    <PickOverview cards={cards} starts={set.picks.map((p) => p.from)} />
+                  </SetupArea>
+
+                  <Step n={5} title="Testing ground" delay={200}>
+                    {/* A new amount starts the test over, smoothly (Swap). */}
+                    <Swap swapKey={testKey}>
+                      <SandboxTest
+                        key={testKey}
+                        picks={cards.map((c, i) => ({ ...c, from: set.picks[i].from }))}
+                        days={timeframe.days}
+                        amount={amount}
+                        setKey={setKey}
+                        choices={choices}
                       />
-                    )}
-                    <PickButton current={set ? setKey : undefined} {...choices} />
-                  </div>
-                </Step>
-              </SetupArea>
-
-              {/* Everything below the picking, which changes smoothly with the set (Swap); the
-                aliases given its picks are the set's own (AliasProvider). */}
-              <Swap swapKey={setKey}>
-                {set && (
-                  <AliasProvider key={setKey} setKey={setKey}>
-                    <SetupArea>
-                      {/* What the set is made of, then the picks themselves, folded away. */}
-                      <PickOverview cards={cards} starts={set.picks.map((p) => p.from)} />
-                    </SetupArea>
-
-                    <Step n={5} title="Testing ground" delay={200}>
-                      {/* A new amount starts the test over, smoothly (Swap). */}
-                      <Swap swapKey={testKey}>
-                        <SandboxTest
-                          key={testKey}
-                          picks={cards.map((c, i) => ({ ...c, from: set.picks[i].from }))}
-                          days={timeframe.days}
-                          amount={amount}
-                          setKey={setKey}
-                          choices={choices}
-                        />
-                      </Swap>
-                    </Step>
-                  </AliasProvider>
-                )}
-              </Swap>
-            </div>
-          </StageProvider>
-        </SandboxSwapProvider>
-      </div>
-    </main>
+                    </Swap>
+                  </Step>
+                </AliasProvider>
+              )}
+            </Swap>
+          </div>
+        </StageProvider>
+      </SandboxSwapProvider>
+    </Page>
   );
 }
 

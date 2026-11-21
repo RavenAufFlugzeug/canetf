@@ -2,6 +2,7 @@ import Link from "next/link";
 import FlagPair, { Flag } from "@/components/FlagPair";
 import { currencyName, pairOf, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
+import { button } from "@/lib/ui";
 
 // The Search page's About section for an exchange rate (USDCAD=X), in place of a company's:
 // the pair, what one of each currency buys of the other, how the rate moved over the last
@@ -101,7 +102,7 @@ export default function RateAbout({
           <Link
             href={`/search?symbol=${encodeURIComponent(reverse)}`}
             title={`See ${currencyName(quote)} to ${currencyName(base)}: one ${quote} in ${base}`}
-            className="group ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition duration-300 ease-out hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-400/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:translate-y-0 active:shadow-sm motion-safe:hover:-translate-y-0.5"
+            className={`group ml-auto ${button("primary", "sm")}`}
           >
             <svg
               aria-hidden

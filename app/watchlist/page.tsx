@@ -5,6 +5,8 @@ import WatchlistTable from "@/components/WatchlistTable";
 import { getAppDb } from "@/lib/appDb";
 import { getCompanies } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import Page from "@/components/Page";
+import { CARD } from "@/lib/ui";
 
 export default async function WatchlistPage() {
   const user = await getCurrentUser();
@@ -24,48 +26,46 @@ export default async function WatchlistPage() {
   const companies = (await getCompanies(symbols)) ?? [];
 
   return (
-    <main className="flex-1 bg-slate-50">
-      <section className="mx-auto max-w-5xl space-y-6 px-6 pt-10 pb-12">
-        {/* The same card as the Company lookup's search. */}
-        <div className="rounded-2xl bg-white p-8 shadow">
-          <h1 className="text-2xl font-bold text-slate-900">Watch List</h1>
+    <Page width="xl">
+      {/* The same card as the Company lookup's search. */}
+      <div className={CARD}>
+        <h1 className="text-2xl font-bold text-slate-900">Watch List</h1>
 
-          {!user ? (
-            // Signed out: the same login prompt as the Sandbox page's.
-            <div className="mt-4 max-w-xl">
-              <Prompt
-                text="Log in to build your watch list of companies and ETFs."
-                href="/login?next=/watchlist"
-                action="Log in"
+        {!user ? (
+          // Signed out: the same login prompt as the Sandbox page's.
+          <div className="mt-4 max-w-xl">
+            <Prompt
+              text="Log in to build your watch list of companies and ETFs."
+              href="/login?next=/watchlist"
+              action="Log in"
+            />
+          </div>
+        ) : (
+          <>
+            <div className="max-w-xl">
+              {/* Add a company or ETF, found by its ticker or by (part of) its name. */}
+              <SearchBox
+                lead="Add a company or ETF by"
+                placeholders={{ symbol: "e.g. AAPL or XEQT.TO", name: "e.g. Apple or iShares" }}
+                onChoose={addToWatchlist}
+                added={symbols}
               />
             </div>
-          ) : (
-            <>
-              <div className="max-w-xl">
-                {/* Add a company or ETF, found by its ticker or by (part of) its name. */}
-                <SearchBox
-                  lead="Add a company or ETF by"
-                  placeholders={{ symbol: "e.g. AAPL or XEQT.TO", name: "e.g. Apple or iShares" }}
-                  onChoose={addToWatchlist}
-                  added={symbols}
-                />
-              </div>
-              {companies.length === 0 && (
-                <p className="mt-4 text-slate-600">
-                  Your watch list is empty. Search above to add companies or ETFs.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* The table (what its icons mean is a pop-up from its Sector heading). */}
-        {companies.length > 0 && (
-          <div className="rounded-2xl bg-white shadow">
-            <WatchlistTable companies={companies} justAdded={justAdded} remove={removeFromWatchlist} />
-          </div>
+            {companies.length === 0 && (
+              <p className="mt-4 text-slate-600">
+                Your watch list is empty. Search above to add companies or ETFs.
+              </p>
+            )}
+          </>
         )}
-      </section>
-    </main>
+      </div>
+
+      {/* The table (what its icons mean is a pop-up from its Sector heading). */}
+      {companies.length > 0 && (
+        <div className="rounded-2xl bg-white shadow">
+          <WatchlistTable companies={companies} justAdded={justAdded} remove={removeFromWatchlist} />
+        </div>
+      )}
+    </Page>
   );
 }

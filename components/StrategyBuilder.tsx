@@ -6,6 +6,7 @@ import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
 import DeckBack, { Suit } from "@/components/DeckBack";
 import { BuyMark, SellMark } from "@/components/TestMarks";
+import { button, field, LABEL as UI_LABEL, PANEL_TITLE, CARD_COMPACT, FOCUS_RING } from "@/lib/ui";
 
 // The Strategies page's builder (app/strategy/page.tsx), in the Sandbox's cards. Each strategy
 // is a deck: on the shelf at the top, the decks kept, face down (DeckBack, in the design chosen on the account page) in their
@@ -251,11 +252,10 @@ function ruleText(rule: Rule, s: Strategy) {
 
 const ruleName = (r: Rule, i: number) => r.name.trim() || `Card ${i + 1}`;
 
-const FIELD =
-  "rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 transition-colors hover:border-slate-400 focus:border-slate-900 focus:outline-none";
-const LABEL = "text-xs font-semibold uppercase tracking-wide text-slate-500";
-const LIGHT_BUTTON =
-  "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50";
+// The site's fields and labels (lib/ui.ts).
+const FIELD = field("sm");
+const LABEL = UI_LABEL;
+const LIGHT_BUTTON = `gap-1.5 ${button("secondary", "sm")}`;
 
 export default function StrategyBuilder() {
   const [saved, setSaved] = useState<Saved>(starting);
@@ -364,9 +364,9 @@ export default function StrategyBuilder() {
   return (
     <div className="space-y-6">
       {/* The shelf: every deck kept, and room for a new one. */}
-      <section className="rise-in rounded-2xl bg-white p-6 shadow">
+      <section className={`rise-in ${CARD_COMPACT}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-900">
+          <p className={`${PANEL_TITLE}`}>
             Your decks · {saved.decks.length}
           </p>
           <button type="button" onClick={() => addDeck(techExample())} className={LIGHT_BUTTON}>
@@ -401,7 +401,7 @@ export default function StrategyBuilder() {
       >
         <div className="space-y-4">
           {/* Its name, and what it applies to. */}
-          <div className="rounded-2xl bg-white p-6 shadow">
+          <div className={CARD_COMPACT}>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <label className={`flex min-w-48 flex-1 flex-col gap-1.5 ${LABEL}`}>
                 Strategy name
@@ -494,9 +494,9 @@ export default function StrategyBuilder() {
           </div>
 
           {/* Its cards, one per rule: click one to edit it. */}
-          <div className="rounded-2xl bg-white p-6 shadow">
+          <div className={CARD_COMPACT}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-900">
+              <p className={`${PANEL_TITLE}`}>
                 Cards · {deck.rules.length}
               </p>
               <p className="text-xs text-slate-500">Click a card to edit it.</p>
@@ -529,8 +529,8 @@ export default function StrategyBuilder() {
         </div>
 
         {/* The deck in plain words, kept in view beside it; a card's words choose it too. */}
-        <aside className="rounded-2xl bg-white p-6 shadow lg:sticky lg:top-28">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-900">In plain words</p>
+        <aside className={`${CARD_COMPACT} lg:sticky lg:top-28`}>
+          <p className={`${PANEL_TITLE}`}>In plain words</p>
           <p className="mt-2 text-base font-semibold text-slate-900">
             {deck.name.trim() || "Untitled strategy"}
           </p>
@@ -589,6 +589,11 @@ const SCOPES = [
   { value: "sector", label: "A sector" },
   { value: "etfs", label: "All ETFs" },
   { value: "single", label: "One firm or ETF" },
+] as const;
+
+const SIDES = [
+  { value: "buy", label: "Buy" },
+  { value: "sell", label: "Sell" },
 ] as const;
 
 // A deck on the shelf: up to three card backs in its colour (the cat hiding behind a cup of
@@ -700,7 +705,7 @@ function Hand({
             onClick={() => onEdit(r.id)}
             aria-pressed={on}
             aria-label={`${ruleName(r, i)}: ${r.side} ${r.shares || "?"} shares. ${on ? "Editing" : "Click to edit"}`}
-            className="group absolute left-0 top-3 rounded-xl transition-transform duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            className={`group absolute left-0 top-3 rounded-xl transition-transform duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${FOCUS_RING}`}
             style={{
               width: CARD_W,
               height: CARD_H,
@@ -718,7 +723,7 @@ function Hand({
       <button
         type="button"
         onClick={onAdd}
-        className="absolute left-0 top-3 grid place-items-center rounded-xl border-2 border-dashed border-slate-300 text-center text-slate-400 transition-[transform,border-color,color] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] hover:border-slate-500 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        className={`absolute left-0 top-3 grid place-items-center rounded-xl border-2 border-dashed border-slate-300 text-center text-slate-400 transition-[transform,border-color,color] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] hover:border-slate-500 hover:text-slate-700 ${FOCUS_RING}`}
         style={{ width: CARD_W, height: CARD_H, transform: `translateX(${slot}px)` }}
       >
         <span className="flex flex-col items-center gap-1.5 text-xs font-semibold">
@@ -819,7 +824,7 @@ function RuleEditor({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="rounded-2xl bg-white p-6 shadow">
+    <section aria-labelledby={id} className={CARD_COMPACT}>
       <div className="flex items-center justify-between gap-4">
         <h2 id={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-slate-900">
           <span className="shrink-0 rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
@@ -926,23 +931,12 @@ function RuleEditor({
       <p className={`mt-5 ${LABEL}`}>Then</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="hidden w-9 sm:block" />
-        <div role="group" aria-label="Buy or sell" className="flex rounded-lg bg-slate-100 p-0.5">
-          {(["buy", "sell"] as const).map((side) => (
-            <button
-              key={side}
-              type="button"
-              aria-pressed={rule.side === side}
-              onClick={() => onRule({ side })}
-              className={`rounded-md px-3 py-1 text-sm font-semibold capitalize transition ${
-                rule.side === side
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              {side}
-            </button>
-          ))}
-        </div>
+        <SlideTabs
+          label="Buy or sell"
+          value={rule.side}
+          onChange={(side) => onRule({ side })}
+          options={SIDES}
+        />
         <input
           aria-label="Number of shares"
           inputMode="numeric"

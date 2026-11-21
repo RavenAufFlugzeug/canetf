@@ -3,6 +3,7 @@
 import { useActionState, useLayoutEffect, useRef, useState, ViewTransition } from "react";
 import { login, signup } from "@/app/actions/auth";
 import DiamondLoader from "@/components/DiamondLoader";
+import { button, field as fieldLook, CARD, FOCUS_RING } from "@/lib/ui";
 
 type Mode = "login" | "signup";
 
@@ -64,7 +65,7 @@ export default function AuthForm({ mode: initial, next }: Props) {
     // Named "auth-card", like the home page's create-account panel, so following its links
     // the panel morphs into this card (and back on the way home).
     <ViewTransition name="auth-card" share="auth-morph">
-      <div ref={card} className="w-full max-w-md rounded-2xl bg-white p-8 shadow">
+      <div ref={card} className={`w-full max-w-md ${CARD}`}>
         {/* Keyed by the mode, so a switch starts the form afresh and slides it in. */}
         <div
           key={`form-${mode}`}
@@ -89,7 +90,7 @@ export default function AuthForm({ mode: initial, next }: Props) {
           <button
             type="button"
             onClick={() => choose(isLogin ? "signup" : "login")}
-            className="rounded font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            className={`rounded font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 ${FOCUS_RING}`}
           >
             {isLogin ? "Create an account" : "Log in"}
           </button>
@@ -108,8 +109,7 @@ function Fields({ mode, next }: { mode: Mode; next?: string }) {
   const [showPassword, setShowPassword] = useState(false);
   const isLogin = mode === "login";
 
-  const field =
-    "mt-1 w-full rounded-lg border border-slate-300 p-3 text-slate-900 transition-[border-color,box-shadow] duration-200 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";
+  const field = `mt-1 w-full ${fieldLook()}`;
   const label =
     "block text-sm font-medium text-slate-600 transition-colors group-focus-within/field:text-slate-900";
 
@@ -118,36 +118,27 @@ function Fields({ mode, next }: { mode: Mode; next?: string }) {
       {next && <input type="hidden" name="next" value={next} />}
 
       <div className="group/field">
-        <label htmlFor="username" className={label}>
-          Username
+        <label htmlFor="email" className={label}>
+          Email
         </label>
         <input
-          id="username"
-          name="username"
-          type="text"
-          autoComplete="username"
+          id="email"
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
           autoCapitalize="none"
           spellCheck={false}
           required
-          defaultValue={state?.username}
-          aria-invalid={Boolean(state?.errors.username)}
-          aria-describedby={state?.errors.username ? "username-error" : isLogin ? undefined : "username-hint"}
+          defaultValue={state?.email}
+          aria-invalid={Boolean(state?.errors.email)}
+          aria-describedby={state?.errors.email ? "email-error" : undefined}
           className={field}
         />
-        {state?.errors.username ? (
-          <p key={state.errors.username} id="username-error" className="shake mt-1 text-sm text-red-600">
-            {state.errors.username}
+        {state?.errors.email && (
+          <p key={state.errors.email} id="email-error" className="shake mt-1 text-sm text-red-600">
+            {state.errors.email}
           </p>
-        ) : (
-          !isLogin && (
-            <p
-              id="username-hint"
-              className="rise-in mt-1 text-sm text-slate-500"
-              style={{ animationDelay: "120ms" }}
-            >
-              3–20 characters: letters, numbers or _.
-            </p>
-          )
         )}
       </div>
 
@@ -225,7 +216,8 @@ function Fields({ mode, next }: { mode: Mode; next?: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="group/submit flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-6 py-3 font-semibold text-white shadow-sm transition duration-300 ease-out hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:translate-y-0 active:shadow-sm disabled:cursor-not-allowed disabled:bg-slate-500 motion-safe:hover:-translate-y-0.5 disabled:motion-safe:hover:translate-y-0"
+        aria-busy={pending}
+        className={`group/submit flex w-full ${button("primary", "lg")}`}
       >
         {pending ? (
           <>

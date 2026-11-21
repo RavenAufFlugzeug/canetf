@@ -9,6 +9,10 @@
 //  - finishing: a flag that waves;
 //  - trying again: a circling arrow that spins round once;
 //  - exiting: a door with an arrow that steps out of it.
+// And, in the same style, the account page's buttons:
+//  - changing the password: a password's dots typed in one after another before a blinking
+//    cursor;
+//  - changing the email: an envelope whose flap lifts open and closes again.
 
 type Props = { className?: string };
 
@@ -155,6 +159,28 @@ export function RetryMark(props: Props) {
         <path d="M16 10a6 6 0 1 1-1.8-4.3" />
         <path d="M14.8 2.8v3.4h-3.4" />
       </g>
+    </Mark>
+  );
+}
+
+export function PasswordMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <g fill="currentColor" stroke="none">
+        <circle className="password-mark-dot" cx="3.5" cy="10" r="1.6" />
+        <circle className="password-mark-dot" cx="8" cy="10" r="1.6" />
+        <circle className="password-mark-dot" cx="12.5" cy="10" r="1.6" />
+      </g>
+      <path className="password-mark-caret" d="M17 5v10M15.5 5h3M15.5 15h3" strokeWidth="1.5" />
+    </Mark>
+  );
+}
+
+export function EmailMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <rect x="2.5" y="4.5" width="15" height="11" rx="1.5" />
+      <path className="email-mark-flap" d="M3 5.5 10 11l7-5.5" />
     </Mark>
   );
 }

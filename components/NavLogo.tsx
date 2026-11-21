@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import LogoMark from "@/components/LogoMark";
 import { MoonMark } from "@/components/TestMarks";
-import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
+import { POPUP_OUT_MS } from "@/lib/popup";
+import Popup from "@/components/Popup";
+import { button, LABEL } from "@/lib/ui";
 
 // The lid's front flap's angle (degrees) for each state: closed, lifted a little as the
 // cat peeks, and fallen right open once she is out (see LogoMark).
@@ -130,57 +131,44 @@ export default function NavLogo() {
 // go, and what is not saved on this page (a test under way, a strategy not saved) will be lost.
 // Stay here (or Escape, or a click beside it) closes it; Go home goes.
 function HomeCard({ leaving, onDone }: { leaving: boolean; onDone: (home: boolean) => void }) {
+  // Opened with the keyboard on the safe choice.
   const stay = useRef<HTMLButtonElement>(null);
 
-  // Ready for the keyboard (on the safe choice), without jumping the page.
-  useEffect(() => {
-    stay.current?.focus({ preventScroll: true });
-  }, []);
-
-  return createPortal(
-    <div
-      className={popupOverlay(leaving)}
-      onClick={() => onDone(false)}
-      onKeyDown={(e) => e.key === "Escape" && onDone(false)}
+  return (
+    <Popup
+      label="Go back home?"
+      leaving={leaving}
+      onClose={() => onDone(false)}
+      initialFocus={stay}
+      className="max-w-sm overflow-hidden p-5"
     >
-      <div
-        role="dialog"
-        aria-label="Go back home?"
-        className={`${POPUP_CARD} max-w-sm overflow-hidden p-5`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3">
-          <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
-            <MoonMark className="size-5" />
-          </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Leaving this page</p>
-            <p className="text-lg font-semibold text-slate-900">Go back home?</p>
-          </div>
-        </div>
-        <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
-          You&apos;ll be taken back to the home page.
-        </p>
-        <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
-          Anything you haven&apos;t saved here, such as a test under way, won&apos;t be kept.
-        </p>
-        <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
-          <button ref={stay} type="button" onClick={() => onDone(false)} className={`${DARK} flex-1`}>
-            Stay here
-          </button>
-          <button type="button" onClick={() => onDone(true)} className={`${LIGHT} flex-1`}>
-            Go home
-          </button>
+      <div className="flex items-center gap-3">
+        <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
+          <MoonMark className="size-5" />
+        </span>
+        <div>
+          <p className={`${LABEL}`}>Leaving this page</p>
+          <p className="text-lg font-semibold text-slate-900">Go back home?</p>
         </div>
       </div>
-    </div>,
-    document.body,
+      <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
+        You&apos;ll be taken back to the home page.
+      </p>
+      <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
+        Anything you haven&apos;t saved here, such as a test under way, won&apos;t be kept.
+      </p>
+      <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
+        <button ref={stay} type="button" onClick={() => onDone(false)} className={`${DARK} flex-1`}>
+          Stay here
+        </button>
+        <button type="button" onClick={() => onDone(true)} className={`${LIGHT} flex-1`}>
+          Go home
+        </button>
+      </div>
+    </Popup>
   );
 }
 
-// The pop-up's buttons, as the Sandbox's pop-ups have them: pointed at, each lifts a little
-// with a soft shadow; pressed, it sinks a touch.
-const BUTTON =
-  "inline-flex justify-center rounded-lg px-4 py-2 text-sm font-semibold transition duration-200 ease-out hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98]";
-const DARK = `${BUTTON} bg-slate-900 text-white hover:bg-slate-700`;
-const LIGHT = `${BUTTON} border border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50`;
+// The pop-up's buttons, the site's (lib/ui.ts).
+const DARK = button("primary");
+const LIGHT = button("secondary");

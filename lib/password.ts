@@ -35,8 +35,8 @@ export async function verifyPassword(password: string, stored: string) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-// Used when the username doesn't exist, so a failed login takes the same time either way
-// and response timing doesn't reveal which usernames exist.
+// Used when the email isn't registered, so a failed login takes the same time either way
+// and response timing doesn't reveal which emails have accounts.
 export async function fakeVerify(password: string) {
   await derive(password, Buffer.alloc(16), N, R, P);
   return false;

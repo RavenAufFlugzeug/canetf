@@ -10,6 +10,7 @@ import { AliasName } from "@/components/SandboxAliases";
 import SandboxChart from "@/components/SandboxChart";
 import SetComposition from "@/components/SetComposition";
 import { countryFlag } from "@/lib/fx";
+import { LABEL } from "@/lib/ui";
 
 const compact = new Intl.NumberFormat("en-CA", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -215,7 +216,7 @@ function TestingRow({ card, from }: { card: PickCard; from: string }) {
       ) : (
         card.note && <p className="mt-2 text-xs font-medium text-slate-700">{card.note}</p>
       )}
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <p className={`mt-4 ${LABEL}`}>
         Its price before the test
       </p>
       {history === "loading" ? (

@@ -259,7 +259,7 @@ Design rules:
 
 | Table | Contents |
 |---|---|
-| `users` | `username` (case-insensitive), scrypt `password_hash`, `created_at` |
+| `users` | `email` (case-insensitive), scrypt `password_hash`, `created_at` |
 | `sessions` | SHA-256 of the session token (never the token), `user_id`, `expires_at` (7 days) |
 | `profiles` | latest questionnaire answers (JSON) per user |
 | `watchlist` | `user_id`, `symbol`, `added_at` |

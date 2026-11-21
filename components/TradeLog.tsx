@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import FoldButton from "@/components/FoldButton";
 import KindMark from "@/components/KindMark";
 import { BuyMark, SellMark } from "@/components/TestMarks";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
+import { LABEL, FOCUS_RING } from "@/lib/ui";
+import { useSlidingPill } from "@/lib/useSlidingPill";
 
 export type LoggedTrade = {
   symbol: string;
@@ -166,7 +168,7 @@ export default function TradeLog({
         <div>
           {/* Which holding: all, or one that was traded. */}
           <div className="flex items-center gap-2 px-4 pt-3">
-            <span className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className={`w-14 shrink-0 ${LABEL}`}>
               Holding
             </span>
             <Strip
@@ -188,7 +190,7 @@ export default function TradeLog({
 
           {/* Which day: all, or one that had trades, with arrows to step between them. */}
           <div className="flex items-center gap-2 px-4 pt-2">
-            <span className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className={`w-14 shrink-0 ${LABEL}`}>
               Day
             </span>
             {arrow(-1)}
@@ -252,7 +254,7 @@ function RoundArrow({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="group grid size-7 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+      className={`group grid size-7 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 transition duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-90 disabled:pointer-events-none disabled:opacity-35 ${FOCUS_RING}`}
     >
       <svg
         aria-hidden
@@ -272,8 +274,9 @@ function RoundArrow({
   );
 }
 
-// A row of chips, one chosen, scrolling sideways when they don't fit: a dark pill slides
-// behind the chosen one, and the strip scrolls it into view. With `scrolls`, it has arrows at
+// A row of chips, one chosen, scrolling sideways when they don't fit, in the look of the
+// site's switch (SlideTabs): a white pill springs across a light grey track behind the
+// chosen one, and the strip scrolls it into view. With `scrolls`, it has arrows at
 // its ends to scroll it a stretch at a time (greyed out at either end, both while it all
 // fits), and the mouse wheel scrolls it sideways while there is more that way.
 function Strip({
@@ -289,22 +292,20 @@ function Strip({
   onChoose: (value: string | number) => void;
   scrolls?: boolean;
 }) {
-  const strip = useRef<HTMLDivElement>(null);
   // Whether there is more of the strip off to the left, and to the right.
   const [ends, setEnds] = useState({ left: false, right: false });
-  const pill = useRef<HTMLSpanElement>(null);
   const shape = items.map((i) => `${i.value}:${i.count}`).join(",");
+  const chosenChip = `[data-value="${CSS.escape(String(chosen))}"]`;
+  const { group: strip, pill } = useSlidingPill(chosenChip, shape);
+  // The chosen chip scrolled to the middle of the strip, as far as it will go.
   useEffect(() => {
-    const chip = strip.current?.querySelector<HTMLElement>(`[data-value="${CSS.escape(String(chosen))}"]`);
-    if (!chip || !pill.current) return;
-    pill.current.style.width = `${chip.offsetWidth}px`;
-    pill.current.style.transform = `translateX(${chip.offsetLeft}px)`;
-    pill.current.style.opacity = "1";
+    const chip = strip.current?.querySelector<HTMLElement>(chosenChip);
+    if (!chip) return;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const box = strip.current!;
     const left = chip.offsetLeft - (box.clientWidth - chip.offsetWidth) / 2;
     box.scrollTo({ left: Math.max(0, left), behavior: calm ? "auto" : "smooth" });
-  }, [chosen, shape]);
+  }, [strip, chosenChip, shape]);
 
   // Keep track of where the strip is scrolled to (as it scrolls, and as it or its chips
   // change size), and turn the wheel into sideways scrolling while it can go that way.
@@ -331,7 +332,7 @@ function Strip({
       box.removeEventListener("scroll", measure);
       box.removeEventListener("wheel", wheel);
     };
-  }, [scrolls, shape]);
+  }, [strip, scrolls, shape]);
 
   const nudge = (dir: -1 | 1) => {
     const box = strip.current;
@@ -345,12 +346,12 @@ function Strip({
       ref={strip}
       role="group"
       aria-label={label}
-      className="trade-strip relative flex min-w-0 flex-1 gap-1 overflow-x-auto px-3 py-0.5"
+      className="trade-strip relative flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-1"
     >
       <span
         ref={pill}
         aria-hidden
-        className="absolute left-0 top-0.5 h-[calc(100%-4px)] rounded-full bg-slate-900 opacity-0 shadow-sm transition-[transform,width] duration-[400ms] ease-[cubic-bezier(0.3,1.2,0.5,1)]"
+        className="pointer-events-none absolute left-0 top-0 rounded-md bg-white opacity-0 shadow-sm transition-[transform,width,height] duration-[380ms] ease-[cubic-bezier(0.3,1.3,0.5,1)]"
       />
       {items.map((item) => {
         const on = item.value === chosen;
@@ -361,15 +362,15 @@ function Strip({
             data-value={item.value}
             aria-pressed={on}
             onClick={() => onChoose(item.value)}
-            className={`kind-hover relative z-10 inline-flex max-w-64 shrink-0 items-center gap-1.5 rounded-full py-1 pr-3 text-xs font-semibold transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-              item.badge ? "pl-1" : "pl-3"
-            } ${on ? "text-white" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"}`}
+            className={`kind-hover relative z-10 inline-flex max-w-64 shrink-0 items-center gap-1.5 rounded-md py-1 pr-2.5 text-xs font-semibold transition-colors duration-200 ${FOCUS_RING} ${
+              item.badge ? "pl-1" : "pl-2.5"
+            } ${on ? "text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
           >
             {item.badge && <Badge look={item.badge} className="size-5 rounded-full" />}
             <span className="truncate">{item.label}</span>
             <span
               className={`rounded-full px-1.5 text-[10px] tabular-nums transition-colors duration-300 ${
-                on ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                on ? "bg-slate-100 text-slate-500" : "bg-slate-200/70 text-slate-400"
               }`}
             >
               {item.count}
@@ -380,7 +381,10 @@ function Strip({
     </div>
   );
 
-  if (!scrolls) return row;
+  // The grey track, outside the scroller so that its fading ends leave the track whole.
+  const track = <div className="flex min-w-0 flex-1 rounded-lg bg-slate-100 py-0.5">{row}</div>;
+
+  if (!scrolls) return track;
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <RoundArrow
@@ -389,7 +393,7 @@ function Strip({
         disabled={!ends.left}
         onClick={() => nudge(-1)}
       />
-      {row}
+      {track}
       <RoundArrow
         dir={1}
         label={`Scroll ${label.toLowerCase()} on`}
@@ -428,7 +432,7 @@ function Board({
         const { net } = totals(rows.map(({ t }) => t));
         return (
           <div key={d}>
-            <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 backdrop-blur">
+            <div className={`sticky top-0 z-10 flex items-center justify-between bg-white/90 px-2 pb-1 pt-2 ${LABEL} backdrop-blur`}>
               <span>Day {d}</span>
               <span className="normal-case tracking-normal tabular-nums">
                 {tradesText(rows.length)} · <span className={tone(net)}>{netText(net)}</span>

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import AuthForm from "@/components/AuthForm";
 import { getCurrentUser } from "@/lib/session";
+import Page from "@/components/Page";
 
 export default async function LoginPage({
   searchParams,
@@ -14,10 +15,8 @@ export default async function LoginPage({
   const { next } = await searchParams;
 
   return (
-    <main className="flex-1 bg-slate-50">
-      <section className="flex justify-center px-6 py-12">
-        <AuthForm mode="login" next={typeof next === "string" ? next : undefined} />
-      </section>
-    </main>
+    <Page width="sm">
+      <AuthForm mode="login" next={typeof next === "string" ? next : undefined} />
+    </Page>
   );
 }

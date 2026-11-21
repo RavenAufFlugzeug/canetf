@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { getSandboxEtfHoldingChart, getSandboxEtfHoldings, type EtfHolding } from "@/app/actions/sandbox";
 import DiamondLoader from "@/components/DiamondLoader";
 import HoldingsMap from "@/components/HoldingsMap";
 import KindMark from "@/components/KindMark";
 import SandboxChart from "@/components/SandboxChart";
 import type { EtfTreeNode } from "@/lib/db";
-import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
+import Popup, { usePopupClose } from "@/components/Popup";
+import { LABEL } from "@/lib/ui";
+import CloseButton from "@/components/CloseButton";
 
 type Holdings = Awaited<ReturnType<typeof getSandboxEtfHoldings>>;
 type Chart = Awaited<ReturnType<typeof getSandboxEtfHoldingChart>>;
@@ -188,15 +189,9 @@ function HoldingChart({
   day: number;
   onClose: () => void;
 }) {
-  const [leaving, setLeaving] = useState(false);
+  const { leaving, close } = usePopupClose(onClose);
   const [chart, setChart] = useState<Chart | "loading">("loading");
   const button = useRef<HTMLButtonElement>(null);
-  const close = () => {
-    if (leaving) return;
-    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    setLeaving(true);
-    window.setTimeout(onClose, calm ? 0 : POPUP_OUT_MS);
-  };
 
   useEffect(() => {
     let live = true;
@@ -209,81 +204,54 @@ function HoldingChart({
     };
   }, [entry.symbol, entry.from, day, holding.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    button.current?.focus({ preventScroll: true });
-    const key = (e: KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  });
-
-  return createPortal(
-    <div className={popupOverlay(leaving)} onClick={close}>
-      <div
-        role="dialog"
-        aria-label={`${holding.name}: its price`}
-        onClick={(e) => e.stopPropagation()}
-        className={`${POPUP_CARD} kind-hover my-8 max-w-2xl p-5`}
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className="kind-badge grid size-11 shrink-0 place-items-center rounded-xl shadow-sm"
-            style={{ background: holding.color, color: holding.mark, ["--badge" as string]: holding.color }}
-          >
-            <KindMark kind={holding.kind} className="size-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Held by the fund</p>
-            <p className="text-lg font-semibold text-slate-900">{holding.name}</p>
-            <p className="text-xs text-slate-500">
-              {`${pct(holding.weight)} of the fund · not one of your picks, so it can't be traded here`}
-            </p>
-          </div>
-          <button
-            ref={button}
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            className="group grid size-8 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              className="size-3 transition-transform duration-300 group-hover:rotate-90"
-            >
-              <path d="M3 3l6 6M9 3l-6 6" />
-            </svg>
-          </button>
+  return (
+    <Popup
+      label={`${holding.name}: its price`}
+      leaving={leaving}
+      onClose={close}
+      initialFocus={button}
+      className="kind-hover my-8 max-w-2xl p-5"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className="kind-badge grid size-11 shrink-0 place-items-center rounded-xl shadow-sm"
+          style={{ background: holding.color, color: holding.mark, ["--badge" as string]: holding.color }}
+        >
+          <KindMark kind={holding.kind} className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className={`${LABEL}`}>Held by the fund</p>
+          <p className="text-lg font-semibold text-slate-900">{holding.name}</p>
+          <p className="text-xs text-slate-500">
+            {`${pct(holding.weight)} of the fund · not one of your picks, so it can't be traded here`}
+          </p>
         </div>
-        <div className="min-h-64">
-          {chart === "loading" ? (
-            <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
-              <DiamondLoader className="size-3.5" />
-              Loading its prices…
-            </p>
-          ) : chart ? (
-            <div className="text-fade-in">
-              <SandboxChart
-                symbol={holding.id}
-                exampleDay={false}
-                history={chart.history}
-                prices={chart.prices}
-                yearStarts={chart.yearStarts}
-              />
-            </div>
-          ) : (
-            <p className="mt-6 text-sm text-slate-500">
-              {
-                "No prices on record for it over your test's days: it may not have been trading yet (the holdings shown are today's)."
-              }
-            </p>
-          )}
-        </div>
+        <CloseButton ref={button} onClick={close} />
       </div>
-    </div>,
-    document.body,
+      <div className="min-h-64">
+        {chart === "loading" ? (
+          <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
+            <DiamondLoader className="size-3.5" />
+            Loading its prices…
+          </p>
+        ) : chart ? (
+          <div className="text-fade-in">
+            <SandboxChart
+              symbol={holding.id}
+              exampleDay={false}
+              history={chart.history}
+              prices={chart.prices}
+              yearStarts={chart.yearStarts}
+            />
+          </div>
+        ) : (
+          <p className="mt-6 text-sm text-slate-500">
+            {
+              "No prices on record for it over your test's days: it may not have been trading yet (the holdings shown are today's)."
+            }
+          </p>
+        )}
+      </div>
+    </Popup>
   );
 }

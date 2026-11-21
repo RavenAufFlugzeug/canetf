@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { button } from "@/lib/ui";
 
 // A short message panel in place of something that can't be shown yet (signed out, or an
 // empty watch list): a line of text and a button, after an icon when it has one, used by
@@ -26,7 +27,7 @@ export default function Prompt({
       <p className="min-w-0 flex-1 text-sm text-slate-600">{text}</p>
       <Link
         href={href}
-        className="group/button inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-300 ease-out hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:translate-y-0 active:shadow-sm motion-safe:hover:-translate-y-0.5"
+        className={`group/button shrink-0 ${button("primary")}`}
       >
         {action}
         <svg

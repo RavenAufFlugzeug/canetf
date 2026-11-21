@@ -16,7 +16,7 @@ export const APP_DB_PATH =
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- stored as typed, compared case-insensitively
+    email         TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- stored as typed, compared case-insensitively
     password_hash TEXT NOT NULL,
     created_at    TEXT NOT NULL
 );
@@ -55,8 +55,9 @@ export function getAppDb() {
 function migrate(db: DatabaseSync) {
   const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
 
-  // Accounts used to be identified by email; existing values become usernames.
-  if (userColumns.some((c) => c.name === "email")) {
-    db.exec("ALTER TABLE users RENAME COLUMN email TO username");
+  // Accounts were identified by email, then for a while by username, and now by email again:
+  // a username column goes back to being the email column (its values were emails already).
+  if (userColumns.some((c) => c.name === "username")) {
+    db.exec("ALTER TABLE users RENAME COLUMN username TO email");
   }
 }

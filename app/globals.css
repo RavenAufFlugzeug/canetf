@@ -248,8 +248,8 @@ body:has(> main.bg-slate-50) {
 }
 
 /* A tile in the Search page's badge legend (components/BadgeLegend.tsx) folds as a
-   .legend-row does, and still eases its hover look (border, background, shadow, the colour
-   rows' slide) at once, without waiting its turn in the cascade. */
+   .legend-row does, and still eases its hover look (border, background, shadow) at once,
+   without waiting its turn in the cascade. */
 .legend-row.legend-tile {
   transition:
     opacity 280ms ease-out var(--d, 0ms),
@@ -1072,9 +1072,8 @@ html[data-company-leaving] .company-view {
   }
 }
 
-/* Likewise a card's pop plays on its badge, not on the card, which has its own entrance. */
-.universe-row[data-on] .universe-badge,
-.universe-card[data-on] .kind-badge {
+/* Likewise a row's pop plays on its badge, not on the row, which has its own entrance. */
+.universe-row[data-on] .universe-badge {
   animation: universe-pop 520ms cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
@@ -1451,6 +1450,53 @@ html[data-company-leaving] .company-view {
   transform-origin: center; /* it spins round its own middle */
 }
 
+/* Change password's mark (PasswordMark): pointed at, its dots are typed in again one after
+   another, each popping up from nothing, while the cursor after them blinks. Its button is a
+   link, so this runs on any hovered group, not only an enabled button. */
+.group:hover .password-mark-dot {
+  animation: password-mark-dot 420ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+.group:hover .password-mark-dot:nth-child(2) {
+  animation-delay: 110ms;
+}
+
+.group:hover .password-mark-dot:nth-child(3) {
+  animation-delay: 220ms;
+}
+
+@keyframes password-mark-dot {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* Change email's mark (EmailMark): pointed at, the envelope's flap lifts open about its top
+   edge and closes again. */
+.email-mark-flap {
+  transform-origin: 50% 0%;
+}
+
+.group:hover .email-mark-flap {
+  animation: email-mark-flap 650ms cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+@keyframes email-mark-flap {
+  45% {
+    transform: scaleY(-0.9);
+  }
+}
+
+.group:hover .password-mark-caret {
+  animation: password-mark-caret 1s steps(1) 360ms infinite;
+}
+
+@keyframes password-mark-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
 .group:enabled:hover .test-mark-spin {
   animation: test-mark-spin 700ms cubic-bezier(0.3, 1.3, 0.5, 1);
 }
@@ -1683,17 +1729,13 @@ html[data-company-leaving] .company-view {
   65% { scale: 0.96 1.08; translate: 0 -1.5px; }
 }
 
-/* The NAICS colours in the badge legend (components/BadgeLegend.tsx): a row pointed at slides
-   over a touch, and its swatch springs up larger with a soft ring of its colour round it. */
+/* The NAICS colours in the badge legend (components/BadgeLegend.tsx): pointed at, a row stays
+   where it is (its words don't move), and its swatch springs larger from its middle with a
+   soft ring of its colour round it. */
 .naics-row {
   transition:
-    translate 300ms cubic-bezier(0.3, 1.6, 0.5, 1),
     background-color 200ms ease,
     box-shadow 200ms ease;
-}
-
-.naics-row:hover {
-  translate: 3px 0;
 }
 
 .naics-swatch {
@@ -1708,22 +1750,21 @@ html[data-company-leaving] .company-view {
 }
 
 /* Every badge (a kind's mark on its colour: components/KindBadge.tsx and the squares drawn
-   like it across the app), the same way everywhere, as the Search page's big one does: pointed
-   at, or when the card, row or tile holding it (.kind-hover) is, it lifts, grows a touch and
-   glows in its own colour (--badge, else slate), while its mark does its dance; no sheen. */
+   like it across the app), the same way everywhere: pointed at, or when the card, row or tile
+   holding it (.kind-hover) is, it grows a touch from its middle (no lift, so nothing beside it
+   moves) and glows evenly round it in its own colour (--badge, else slate), while its mark
+   does its dance; no sheen. */
 .kind-badge {
   transition:
-    translate 350ms cubic-bezier(0.3, 1.6, 0.5, 1),
     scale 350ms cubic-bezier(0.3, 1.6, 0.5, 1),
     box-shadow 350ms ease;
 }
 
 :is(.kind-badge, .kind-hover):hover .kind-badge,
 .kind-badge:hover {
-  translate: 0 -2px;
   scale: 1.12;
   box-shadow:
-    0 6px 14px -4px color-mix(in oklab, var(--badge, #64748b) 70%, transparent),
+    0 0 10px -2px color-mix(in oklab, var(--badge, #64748b) 60%, transparent),
     0 0 0 3px color-mix(in oklab, var(--badge, #64748b) 22%, transparent);
 }
 
@@ -3131,6 +3172,9 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .switch-in,
   .result-pop,
   .group:enabled:hover .test-mark-spin,
+  .group:hover .password-mark-dot,
+  .group:hover .email-mark-flap,
+  .group:hover .password-mark-caret,
   .test-mark-out,
   .test-mark-live .test-mark-sun,
   .test-mark-live .test-mark-moon,
@@ -3166,8 +3210,6 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .universe-row,
   .universe-row > td,
   .universe-row .universe-badge,
-  .universe-card .kind-badge,
-  .universe-card,
   .universe-tag,
   .result-line,
   .result-area,

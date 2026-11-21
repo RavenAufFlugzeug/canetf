@@ -7,6 +7,7 @@ import type { EtfTreeNode, MissingReason } from "@/lib/db";
 import { listingOf } from "@/lib/exchanges";
 import { countryFlag } from "@/lib/fx";
 import FoldButton, { FOLD_BUTTON } from "@/components/FoldButton";
+import { Tip } from "@/components/BadgeLegend";
 import KindMark from "@/components/KindMark";
 import { KINDS } from "@/lib/kinds";
 import { NAICS_GROUPS, markOn, naicsOf, type NaicsGroup } from "@/lib/naics";
@@ -223,7 +224,7 @@ function SectorSwatch({ color }: { color: string }) {
   return (
     <span
       aria-hidden
-      className="legend-swatch h-3 w-5 shrink-0 rounded-sm border border-black/10"
+      className="legend-swatch size-3.5 shrink-0 rounded border border-black/10"
       style={{ backgroundColor: color }}
     />
   );
@@ -368,6 +369,8 @@ export default function HoldingsMap({
   const [active, setActive] = useState<string | null>(null);
   // Whether the NAICS sector legend is open (it starts open).
   const [legendOpen, setLegendOpen] = useState(true);
+  // Whether the key is open and done opening: only then may a row's tip reach past its edge.
+  const [legendSettled, setLegendSettled] = useState(true);
   const legendId = useId();
   // Where the active product's box is on screen, for its hover card (see below).
   const [cardBox, setCardBox] = useState<DOMRect | null>(null);
@@ -627,28 +630,46 @@ export default function HoldingsMap({
       {sectorKey && all.some(({ node }) => node.kind === "holding") && (
         <div className="mt-3 w-fit max-w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="flex items-center gap-4">
-            <p className="text-xs font-semibold text-slate-700">Key: NAICS and sectors</p>
+            <p className="text-xs font-semibold text-slate-700">NAICS & Sectors</p>
             <FoldButton
               open={legendOpen}
               controls={legendId}
-              onClick={() => setLegendOpen((open) => !open)}
+              onClick={() => {
+                const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                setLegendSettled(calm && !legendOpen);
+                setLegendOpen(!legendOpen);
+              }}
               className="ml-auto text-xs"
             />
           </div>
-          <div id={legendId} className="legend-fold" data-closed={legendOpen ? undefined : ""}>
+          <div
+            id={legendId}
+            className="legend-fold"
+            data-closed={legendOpen ? undefined : ""}
+            onTransitionEnd={(e) => {
+              if (e.target === e.currentTarget && legendOpen) setLegendSettled(true);
+            }}
+          >
             {/* The folding element's only child (padding on it wouldn't fold away), so the
-                gap above the list is the list's own and is clipped with it. */}
-            <div>
+                gap above the list is the list's own and is clipped with it; once open, the
+                rows' tips may reach past it. */}
+            <div style={legendSettled ? { overflow: "visible" } : undefined}>
               <ul className="grid gap-y-1 pt-2 text-xs text-slate-600">
                 {[
-                  ...NAICS_GROUPS.map((g) => ({ key: g.code, color: g.color, code: g.code, name: g.name })),
+                  ...NAICS_GROUPS.map((g) => ({
+                    key: g.code,
+                    color: g.color,
+                    code: g.code.replace("-", "\u2013"),
+                    name: g.name,
+                  })),
                   ...(unclassified
                     ? [{ key: "unknown", color: UNKNOWN_SECTOR, code: "", name: "Sector unknown" }]
                     : []),
                 ].map((row, i, rows) => (
                   <li
                     key={row.key}
-                    className="legend-row flex items-center gap-1.5"
+                    tabIndex={row.code ? 0 : undefined}
+                    className="group/tip legend-row relative flex items-center gap-2 rounded-md px-1 outline-none hover:z-20 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-slate-300"
                     style={
                       {
                         "--d": `${legendOpen ? 90 + i * 28 : (rows.length - 1 - i) * 14}ms`,
@@ -656,8 +677,14 @@ export default function HoldingsMap({
                     }
                   >
                     <SectorSwatch color={row.color} />
-                    <span className="w-9 shrink-0 font-semibold tabular-nums text-slate-700">{row.code}</span>
+                    <span className="w-9 shrink-0 font-medium tabular-nums text-slate-900">{row.code}</span>
                     <span className="min-w-0">{row.name}</span>
+                    {row.code && (
+                      <Tip
+                        title={row.name}
+                        sub={`NAICS ${row.code.includes("\u2013") ? "sectors" : "sector"} ${row.code}`}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -666,22 +693,12 @@ export default function HoldingsMap({
                   the fold would otherwise clip its swatches' outlines at. */}
               {marks.length > 0 && (
                 <>
-                  <p
-                    className="legend-row mt-3 text-xs font-semibold text-slate-700"
-                    style={
-                      {
-                        "--d": `${legendOpen ? 90 + (NAICS_GROUPS.length + 1) * 28 : 0}ms`,
-                      } as React.CSSProperties
-                    }
-                  >
-                    Sectors (for a fund or a credit rating, what it is)
-                  </p>
-                  <ul className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1.5 pb-1 text-xs text-slate-600 sm:grid-cols-3">
+                  <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 pt-1.5 pb-1 text-xs text-slate-600 sm:grid-cols-3">
                     {marks.map((k, i) => (
                       <li
                         key={k.kind}
-                        title={`${k.from}: ${k.about}`}
-                        className="legend-row flex items-center gap-1.5"
+                        tabIndex={0}
+                        className="group/tip legend-row relative flex items-center gap-2 rounded-md px-1 outline-none hover:z-20 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-slate-300"
                         style={
                           {
                             "--d": `${legendOpen ? 90 + (NAICS_GROUPS.length + 2 + i) * 28 : 0}ms`,
@@ -691,7 +708,7 @@ export default function HoldingsMap({
                         {/* As the map shows it: a fund's mark on black, a credit rating's on slate;
                             a company's on white here, its colour being its sector's (above). */}
                         <span
-                          className={`legend-swatch grid h-4 w-5 shrink-0 place-items-center rounded-sm ${
+                          className={`legend-swatch grid size-4 shrink-0 place-items-center rounded ${
                             k.kind === "ETF"
                               ? "bg-slate-950 text-white ring-1 ring-black"
                               : k.kind === "Rating"
@@ -702,7 +719,10 @@ export default function HoldingsMap({
                         >
                           <KindMark kind={k.kind} className="size-3" />
                         </span>
-                        <span className="min-w-0 font-medium text-slate-700">{k.label}</span>
+                        <span className="min-w-0 font-semibold text-slate-900">{k.label}</span>
+                        <Tip title={k.label} sub={`Yahoo sector: ${k.from}`}>
+                          {k.about}
+                        </Tip>
                       </li>
                     ))}
                   </ul>

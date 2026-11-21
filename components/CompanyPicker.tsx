@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { searchCompanies } from "@/app/actions/companies";
 import DiamondLoader from "@/components/DiamondLoader";
 import type { CompanyMatch } from "@/lib/db";
+import { field } from "@/lib/ui";
 
 const DEBOUNCE_MS = 200;
 // The "Searching…" stage always shows for at least this long, so a fast search
@@ -58,9 +59,10 @@ const leaveAll = (rows: Row[]) => rows.map((r) => ({ ...r, leftAt: r.leftAt ?? D
 
 type Props = {
   selected?: string | null;
-  // Search by symbol (the default: symbols starting with what is typed) or by name (names
-  // containing it). A search by name shows the chosen company's name, selectedName.
-  by?: "symbol" | "name";
+  // Search by symbol (the default: symbols starting with what is typed), by name (names
+  // containing it), or for exchange rates (by their codes or currencies' names). A search by
+  // name or for a rate shows the chosen one's name, selectedName.
+  by?: "symbol" | "name" | "rate";
   selectedName?: string | null;
   // Instead of showing the chosen company (?symbol= in the URL), hand its symbol to
   // this, e.g. a server action; the box is then cleared for the next search.
@@ -90,7 +92,8 @@ export default function CompanyPicker({
   const router = useRouter();
   const pathname = usePathname();
   const listId = useId();
-  const byName = by === "name";
+  // A rate is shown, found and listed as a search by name is.
+  const byName = by !== "symbol";
   const [query, setQuery] = useState((byName ? selectedName : selected) ?? "");
   const [rows, setRows] = useState<Row[]>([]);
   const [searching, setSearching] = useState(false);
@@ -238,7 +241,7 @@ export default function CompanyPicker({
           }}
           onKeyDown={onKeyDown}
           autoFocus={autoFocus}
-          className={`w-full rounded-lg border p-3 text-slate-700 placeholder:normal-case ${byName ? "" : "uppercase"}`}
+          className={`w-full ${field()} placeholder:normal-case ${byName ? "" : "uppercase"}`}
         />
         {navigating && (
           <DiamondLoader label="Loading" className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-slate-500" />
@@ -288,7 +291,7 @@ export default function CompanyPicker({
                     <div
                       className={`flex justify-between gap-4 px-4 py-2 transition-colors ${
                         isAdded ? "cursor-default" : "cursor-pointer"
-                      } ${!leaving && i === active ? (isAdded ? "bg-slate-50" : "bg-blue-50") : ""}`}
+                      } ${!leaving && i === active ? (isAdded ? "bg-slate-50" : "bg-slate-100") : ""}`}
                     >
                       {/* By symbol: the symbol first, then the name. By name: the name
                           first, the matched part picked out, then the symbol. */}

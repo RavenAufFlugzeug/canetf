@@ -9,6 +9,8 @@ import { LISTING_KINDS as KINDS } from "@/lib/kinds";
 import { countryFlag } from "@/lib/fx";
 import { moneyFormatter } from "@/lib/money";
 import { NAICS_GROUPS } from "@/lib/naics";
+import { field, LABEL, FOCUS_RING } from "@/lib/ui";
+import { ChevronDownIcon } from "@/components/Icons";
 
 export type BoardPick = {
   symbol: string;
@@ -45,7 +47,6 @@ const TYPES: { value: Type; label: string }[] = [
 // How the board is ordered: as the universe lists it, or by a column (its heading, clicked).
 type Sort = "default" | "price-desc" | "price-asc" | "move-desc" | "move-asc" | "value-desc" | "name";
 
-type View = "grid" | "list";
 
 // How long the board takes to fade out when the filters change, before it shows the new ones.
 const FADE_MS = 170;
@@ -65,17 +66,12 @@ const pctText = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x)
 const tone = (x: number) => (x > 0 ? "text-green-700" : x < 0 ? "text-red-600" : "text-slate-500");
 const labelOf = (kind: string) => KINDS.find((k) => k.kind === kind)?.label ?? "Other";
 
-const segment = (on: boolean) =>
-  `rounded-md px-2.5 py-1 text-xs font-semibold transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-    on ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-white hover:text-slate-900"
-  }`;
-
 // The Sandbox test's investment universe: every listing in the set, to choose the one to
 // trade. Narrowed by a search (name, alias or sector), by what is held or how it moved today,
 // by type (companies or ETFs), by sector (its mark) and by NAICS group (its colour), each of
 // those two a menu of every one there is, with what the one chosen means beside it; ordered as chosen (by name, price, today's move or position value). The
-// filters in use are listed as tokens, each removable on its own. Shown as cards (Grid) or
-// as rows of a table (List, the default), whose column headings sort it too; the board scrolls when it
+// filters in use are listed as tokens, each removable on its own. Shown as rows of a table,
+// whose column headings sort it too; the board scrolls when it
 // doesn't fit. The chosen listing stays chosen while filtered out of view.
 export default function PickBoard({
   picks,
@@ -97,7 +93,6 @@ export default function PickBoard({
   const [sector, setSector] = useState("all");
   const [naics, setNaics] = useState("all");
   const [sort, setSort] = useState<Sort>("default");
-  const [view, setView] = useState<View>("list");
   // Whether the filters are open (folded to begin with), and done opening (their menus may then
   // reach past the fold's edges).
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -132,7 +127,7 @@ export default function PickBoard({
     if (by === 0) return;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     box.scrollBy({ top: by, behavior: calm ? "auto" : "smooth" });
-  }, [chosen, view]);
+  }, [chosen]);
 
   const words = query.trim().toLowerCase();
   const matchesStatus = (p: BoardPick, s: Status) =>
@@ -229,7 +224,7 @@ export default function PickBoard({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      {/* A search, and how to show the board. */}
+      {/* A search, the filters, and what the badges mean. */}
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-48 flex-1">
           <span className="sr-only">Search the universe</span>
@@ -249,7 +244,7 @@ export default function PickBoard({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-sm text-slate-900 transition placeholder:text-slate-400 hover:border-slate-300 focus:border-slate-900 focus:bg-white focus:outline-none"
+            className={`w-full ${field("sm")} pl-8`}
           />
         </label>
         {/* The filters (Show, Type, Sector, NAICS), folded away until asked for: the button
@@ -262,7 +257,7 @@ export default function PickBoard({
             setFiltersSettled(false);
             setFiltersOpen(!filtersOpen);
           }}
-          className={`group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
+          className={`group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition duration-200 ${FOCUS_RING} ${
             filtersOpen
               ? "border-slate-900 bg-slate-900 text-white"
               : "border-slate-200 bg-white text-slate-900 hover:border-slate-400"
@@ -290,48 +285,10 @@ export default function PickBoard({
               {tokens.length}
             </span>
           )}
-          <svg
-            aria-hidden
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`size-3 transition-transform duration-300 ease-out ${filtersOpen ? "rotate-180" : ""}`}
-          >
-            <path d="M3 4.5 6 7.5l3-3" />
-          </svg>
+          <ChevronDownIcon className={`size-3 transition-transform duration-300 ease-out ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
-        {/* Cards or a list, its pill sliding as the charts' range tabs'. */}
-        <SlideTabs
-          label="View"
-          value={view}
-          onChange={setView}
-          options={(["grid", "list"] as const).map((v) => ({
-            value: v,
-            ariaLabel: v === "grid" ? "Show as cards" : "Show as a list",
-            label: (
-              <svg
-                aria-hidden
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="size-3.5"
-              >
-                {v === "grid" ? (
-                  <path
-                    d="M2.5 2.5h4.5V7H2.5ZM9 2.5h4.5V7H9ZM2.5 9h4.5v4.5H2.5ZM9 9h4.5v4.5H9Z"
-                    strokeLinejoin="round"
-                  />
-                ) : (
-                  <path d="M2.5 4h11M2.5 8h11M2.5 12h11" strokeLinecap="round" />
-                )}
-              </svg>
-            ),
-          }))}
-        />
+        {/* What the badges mean, in a pop-up. */}
+        {info}
       </div>
 
       {/* The filters, folding open and shut; once open, their menus may reach past its edges. */}
@@ -348,46 +305,32 @@ export default function PickBoard({
       {/* What to show: what is held or how it moved, and what type. */}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Show</span>
-          <div role="group" aria-label="Show" className="flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
-            {STATUSES.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                aria-pressed={status === s.value}
-                onClick={() => setStatus(s.value)}
-                className={segment(status === s.value)}
-              >
-                {s.label}
-                <span
-                  className={`ml-1 tabular-nums ${status === s.value ? "text-white/70" : "text-slate-500"}`}
-                >
-                  {picks.filter((p) => matchesStatus(p, s.value) && matchesType(p, type)).length}
-                </span>
-              </button>
-            ))}
-          </div>
+          <span className={`${LABEL}`}>Show</span>
+          <SlideTabs
+            size="xs"
+            label="Show"
+            value={status}
+            onChange={setStatus}
+            options={STATUSES.map((s) => ({
+              value: s.value,
+              label: s.label,
+              count: picks.filter((p) => matchesStatus(p, s.value) && matchesType(p, type)).length,
+            }))}
+          />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Type</span>
-          <div role="group" aria-label="Type" className="flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
-            {TYPES.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                aria-pressed={type === t.value}
-                onClick={() => setType(t.value)}
-                className={segment(type === t.value)}
-              >
-                {t.label}
-                <span
-                  className={`ml-1 tabular-nums ${type === t.value ? "text-white/70" : "text-slate-500"}`}
-                >
-                  {picks.filter((p) => matchesType(p, t.value) && matchesStatus(p, status)).length}
-                </span>
-              </button>
-            ))}
-          </div>
+          <span className={`${LABEL}`}>Type</span>
+          <SlideTabs
+            size="xs"
+            label="Type"
+            value={type}
+            onChange={setType}
+            options={TYPES.map((t) => ({
+              value: t.value,
+              label: t.label,
+              count: picks.filter((p) => matchesType(p, t.value) && matchesStatus(p, status)).length,
+            }))}
+          />
         </div>
       </div>
 
@@ -401,7 +344,7 @@ export default function PickBoard({
         return (
           <div className="mt-2 grid gap-1.5">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className={`w-14 shrink-0 ${LABEL}`}>
                 Sector
               </span>
               <FilterMenu
@@ -438,13 +381,11 @@ export default function PickBoard({
                 className="text-fade-in min-w-0 flex-1 truncate text-[11px] text-slate-500"
                 title={kindInfo?.about}
               >
-                {kindInfo
-                  ? `${kindInfo.from}: ${kindInfo.about}`
-                  : "The mark: each listing's sector, as Yahoo Finance gives it."}
+                {kindInfo ? `${kindInfo.from}: ${kindInfo.about}` : ""}
               </p>
             </div>
             <div className="flex min-w-0 items-center gap-2">
-              <span className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <span className={`w-14 shrink-0 ${LABEL}`}>
                 NAICS
               </span>
               <FilterMenu
@@ -474,9 +415,7 @@ export default function PickBoard({
                 className="text-fade-in min-w-0 flex-1 truncate text-[11px] text-slate-500"
                 title={group?.name}
               >
-                {group
-                  ? `${group.name} (NAICS ${group.code.replace("-", "\u2013")})`
-                  : "The colour: each listing's NAICS sector group."}
+                {group ? `${group.name} (NAICS ${group.code.replace("-", "\u2013")})` : ""}
               </p>
             </div>
           </div>
@@ -492,8 +431,6 @@ export default function PickBoard({
           {tokens.length ? `Showing ${shown.length} of ${picks.length}` : `${picks.length} listings`} · choose
           one to trade it
         </span>
-        {/* In the grid (which has no headings), what the badges mean sits here. */}
-        {view === "grid" && info}
         {tokens.map((t) => (
           <button
             key={t.key}
@@ -519,10 +456,8 @@ export default function PickBoard({
         )}
       </div>
 
-      {/* The board: scrolls when it doesn't fit. Keyed by its view, so switching fades it over.
-          The cards keep room above for their held badges; the table's heading row sits flush at
-          the top, solid, so nothing shows above or through it as the rows scroll under it. */}
-      <EaseHeight changeKey={`${appliedKey}-${view}`} duration={320}>
+      {/* The board: scrolls when it doesn't fit. The table's heading row sits flush at the top, solid, so nothing shows above or through it as the rows scroll under it. */}
+      <EaseHeight changeKey={appliedKey} duration={320}>
         <div
           style={{
             opacity: changing ? 0 : 1,
@@ -532,9 +467,8 @@ export default function PickBoard({
           }}
         >
           <div
-            key={view}
             ref={board}
-            className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-auto overscroll-x-contain px-2 pb-2 ${view === "grid" ? "pt-2" : "pt-0"}`}
+            className={`pick-board text-fade-in -mx-2 mt-1 max-h-72 overflow-auto overscroll-x-contain px-2 pb-2 pt-0`}
           >
             {shown.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
@@ -552,73 +486,6 @@ export default function PickBoard({
                   Clear all
                 </button>
               </p>
-            ) : view === "grid" ? (
-              <div
-                className="grid min-w-[22rem] grid-cols-2 gap-2 md:grid-cols-4"
-                role="group"
-                aria-label="Investment universe"
-              >
-                {shown.map((p, i) => {
-                  const on = p.symbol === chosen;
-                  return (
-                    <button
-                      key={p.symbol}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => onChoose(p.symbol)}
-                      data-on={on ? "" : undefined}
-                      className={`universe-card kind-hover group/pick rise-in relative flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
-                        on
-                          ? "border-slate-900 bg-white shadow-md shadow-slate-900/10"
-                          : "border-slate-200 bg-slate-50/60 hover:border-slate-400 hover:bg-white motion-safe:hover:-translate-y-0.5 hover:shadow-sm"
-                      }`}
-                      style={{ animationDelay: `${Math.min(i, 12) * 25}ms`, animationDuration: "400ms" }}
-                    >
-                      <span
-                        className="kind-badge grid size-7 shrink-0 place-items-center rounded-lg shadow-sm"
-                        style={{ background: p.color, color: p.ink, ["--badge" as string]: p.color }}
-                      >
-                        <KindMark kind={p.kind} className="size-4" />
-                      </span>
-                      <CountryFlag pick={p} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block break-words text-xs font-semibold leading-snug text-slate-900">
-                          {p.name}
-                        </span>
-                        <span className="mt-0.5 flex items-baseline justify-between gap-2 tabular-nums">
-                          <span className="text-sm font-semibold text-slate-900">
-                            <Tween value={p.price} format={(x) => priceText(x, p.currency)} />
-                            {p.currency && (
-                              <span className="ml-1 text-[10px] font-bold text-slate-500">{p.currency}</span>
-                            )}
-                            {foreign(p) && (
-                              <span className="block text-[10px] font-medium text-slate-500">
-                                {money.format(p.price * p.rate)} CAD
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-right text-[11px] font-semibold leading-tight">
-                            <span className={`block transition-colors duration-500 ${tone(p.move ?? 0)}`}>
-                              {p.move === null ? "" : pctText(p.move)}
-                            </span>
-                            {foreign(p) && p.cadMove !== null && (
-                              <span className={`block text-[10px] ${tone(p.cadMove)}`}>
-                                <span className="font-normal text-slate-400">FX </span>
-                                {pctText(p.cadMove)}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                      </span>
-                      {p.held > 0 && (
-                        <span className="absolute -right-1.5 -top-1.5 rounded-full bg-slate-900 px-1.5 text-[10px] font-bold tabular-nums text-white shadow">
-                          {p.held.toLocaleString("en-CA")}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
             ) : (
               <table className="w-full min-w-[36rem] table-fixed text-sm tabular-nums" aria-label="Investment universe">
                 {/* Fixed column widths (table-fixed), so the columns stay put as the listing being
@@ -632,7 +499,7 @@ export default function PickBoard({
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-semibold text-slate-500 shadow-[0_1px_0_#e2e8f0]">
                   <tr>
-                    {heading("Listing", "name", null, "text-left", info)}
+                    {heading("Listing", "name", null, "text-left")}
                     {heading("Price", "price-desc", "price-asc")}
                     {heading("Day change", "move-desc", "move-asc")}
                     <th className="px-2 py-1.5 text-right font-medium">Shares</th>
@@ -664,7 +531,7 @@ export default function PickBoard({
                               e.stopPropagation();
                               onChoose(p.symbol);
                             }}
-                            className="flex min-w-0 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                            className={`flex min-w-0 items-center gap-2 text-left ${FOCUS_RING}`}
                           >
                             <span
                               className="universe-badge kind-badge grid size-6 shrink-0 place-items-center rounded-md shadow-sm"
@@ -785,7 +652,7 @@ export function FilterMenu({
           setFocus(Math.max(0, options.indexOf(current)));
           setOpen(!open);
         }}
-        className={`group inline-flex min-w-36 items-center gap-2 rounded-lg border bg-white py-1 pl-1.5 pr-2.5 text-xs font-semibold text-slate-900 transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 ${
+        className={`group inline-flex min-w-36 items-center gap-2 rounded-lg border bg-white py-1 pl-1.5 pr-2.5 text-xs font-semibold text-slate-900 transition duration-200 ${FOCUS_RING} ${
           open ? "border-slate-900 shadow-sm" : "border-slate-200 hover:border-slate-400"
         }`}
       >
@@ -793,18 +660,7 @@ export function FilterMenu({
           {current.swatch ?? <span className="size-5 shrink-0 rounded-md bg-slate-100" />}
           <span className="truncate">{current.label}</span>
         </span>
-        <svg
-          aria-hidden
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`size-3 shrink-0 text-slate-500 transition duration-300 ease-out ${open ? "rotate-180 text-slate-900" : ""}`}
-        >
-          <path d="M3 4.5 6 7.5l3-3" />
-        </svg>
+        <ChevronDownIcon className={`size-3 shrink-0 text-slate-500 transition duration-300 ease-out ${open ? "rotate-180 text-slate-900" : ""}`} />
       </button>
       <ul
         ref={list}

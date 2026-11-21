@@ -9,7 +9,7 @@ import SandboxMark from "@/components/SandboxMark";
 import SearchMark from "@/components/SearchMark";
 import StrategyMark from "@/components/StrategyMark";
 import WatchMark from "@/components/WatchMark";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, shortName } from "@/lib/session";
 
 // Every link's icon gets the same box, so they line up at one size. Each mark's viewBox
 // frames its main shape (the glass, the cube, the knight and king, the book, the pawn, the
@@ -72,7 +72,7 @@ export default async function Navbar() {
           <>
             <Link href="/account" className={ITEM}>
               <AccountMark className={`${ICON} motion-safe:group-hover:scale-110`} />
-              <NavLabel>{user.username}</NavLabel>
+              <NavLabel>{shortName(user)}</NavLabel>
             </Link>
 
             <form action={logout} className="flex">

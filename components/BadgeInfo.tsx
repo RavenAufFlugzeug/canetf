@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import BadgeLegend from "@/components/BadgeLegend";
 import KindMark from "@/components/KindMark";
-import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
+import Popup, { usePopupClose } from "@/components/Popup";
+import CloseButton from "@/components/CloseButton";
+import { FOCUS_RING } from "@/lib/ui";
 
 // The "i" drawn in the info button and the pop-up's title.
 function InfoMark({ className }: { className: string }) {
@@ -49,17 +50,14 @@ export default function BadgeInfo({
   labelled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
       <button
-        ref={trigger}
         type="button"
         onClick={() => setOpen(true)}
         aria-label={label}
-        title={`${label}: what they mean (click)`}
         aria-haspopup="dialog"
-        className={`group/info relative inline-flex shrink-0 items-center gap-1.5 rounded-full normal-case tracking-normal transition duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-95 motion-safe:hover:-translate-y-px ${
+        className={`group/info relative inline-flex shrink-0 items-center gap-1.5 rounded-full normal-case tracking-normal transition duration-200 ${FOCUS_RING} active:scale-95 motion-safe:hover:-translate-y-px ${
           labelled
             ? "border border-slate-300 bg-white px-2.5 py-1 text-[11px] leading-none font-semibold text-slate-700 hover:border-slate-900 hover:bg-slate-900 hover:text-white"
             : ""
@@ -89,10 +87,7 @@ export default function BadgeInfo({
           mark={mark}
           colour={colour}
           highlight={highlight}
-          onClose={() => {
-            setOpen(false);
-            trigger.current?.focus({ preventScroll: true });
-          }}
+          onClose={() => setOpen(false)}
         />
       )}
     </>
@@ -110,58 +105,19 @@ function LegendPopup({
   highlight: boolean;
   onClose: () => void;
 }) {
-  const [leaving, setLeaving] = useState(false);
+  const { leaving, close } = usePopupClose(onClose);
   const button = useRef<HTMLButtonElement>(null);
-  const close = () => {
-    if (leaving) return;
-    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    setLeaving(true);
-    window.setTimeout(onClose, calm ? 0 : POPUP_OUT_MS);
-  };
 
-  useEffect(() => {
-    button.current?.focus({ preventScroll: true });
-    const key = (e: KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  });
-
-  return createPortal(
-    <div className={popupOverlay(leaving)} onClick={close}>
-      <div
-        role="dialog"
-        aria-label="Icons"
-        onClick={(e) => e.stopPropagation()}
-        className={`${POPUP_CARD} my-8 max-w-3xl p-6`}
-      >
-        <div className="flex items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-white">
-            <InfoMark className="size-4" />
-          </span>
-          <h2 className="min-w-0 flex-1 self-center text-lg font-semibold text-slate-900">Icons</h2>
-          <button
-            ref={button}
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            className="group grid size-8 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              className="size-3 transition-transform duration-300 group-hover:rotate-90"
-            >
-              <path d="M3 3l6 6M9 3l-6 6" />
-            </svg>
-          </button>
-        </div>
-        <BadgeLegend popup className="mt-3" mark={mark} colour={colour} highlight={highlight} />
+  return (
+    <Popup label="Icons" leaving={leaving} onClose={close} initialFocus={button} className="my-8 max-w-3xl p-6">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-white">
+          <InfoMark className="size-4" />
+        </span>
+        <h2 className="min-w-0 flex-1 self-center text-lg font-semibold text-slate-900">Icons</h2>
+        <CloseButton ref={button} onClick={close} />
       </div>
-    </div>,
-    document.body,
+      <BadgeLegend popup className="mt-3" mark={mark} colour={colour} highlight={highlight} />
+    </Popup>
   );
 }

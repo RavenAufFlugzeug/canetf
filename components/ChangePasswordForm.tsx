@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { changePassword } from "@/app/actions/auth";
+import { button, field as fieldLook } from "@/lib/ui";
 
 const fields = [
   { name: "currentPassword", label: "Current password", autoComplete: "current-password" },
@@ -31,7 +33,7 @@ export default function ChangePasswordForm() {
               required
               aria-invalid={Boolean(error)}
               aria-describedby={error || hint ? `${field.name}-note` : undefined}
-              className="mt-1 w-full rounded-lg border p-3 text-slate-700"
+              className={`mt-1 w-full ${fieldLook()}`}
             />
             {(error || hint) && (
               <p
@@ -51,13 +53,15 @@ export default function ChangePasswordForm() {
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-      >
-        {pending ? "Updating…" : "Change password"}
-      </button>
+      {/* Changing it, or cancelling (back to the account page). */}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={pending} aria-busy={pending} className={button("primary", "lg")}>
+          {pending ? "Updating…" : "Change password"}
+        </button>
+        <Link href="/account" className={button("secondary", "lg")}>
+          Cancel
+        </Link>
+      </div>
     </form>
   );
 }

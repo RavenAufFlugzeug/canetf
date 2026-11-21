@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppDb } from "@/lib/appDb";
 import { fakeVerify, hashPassword, verifyPassword } from "@/lib/password";
@@ -7,8 +8,16 @@ import { createSession, deleteOtherSessions, deleteSession, getCurrentUser } fro
 
 export type AuthFormState =
   | {
-      username: string;
-      errors: { username?: string; password?: string; form?: string };
+      email: string;
+      errors: { email?: string; password?: string; form?: string };
+    }
+  | undefined;
+
+export type ChangeEmailState =
+  | {
+      email?: string;
+      success?: boolean;
+      errors?: { email?: string; currentPassword?: string; form?: string };
     }
   | undefined;
 
@@ -19,7 +28,10 @@ export type ChangePasswordState =
     }
   | undefined;
 
-const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
+// Something@something.something, with no spaces: enough to catch typos, without rejecting
+// unusual but valid addresses.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL = 254;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
 
@@ -29,9 +41,15 @@ function safeNext(value: FormDataEntryValue | null) {
 }
 
 function readForm(formData: FormData) {
-  const username = String(formData.get("username") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  return { username, password, next: safeNext(formData.get("next")) };
+  return { email, password, next: safeNext(formData.get("next")) };
+}
+
+function emailError(email: string) {
+  if (email.length > MAX_EMAIL || !EMAIL_PATTERN.test(email)) {
+    return "Enter a valid email address, like name@example.com.";
+  }
 }
 
 function passwordError(password: string) {
@@ -44,46 +62,44 @@ function passwordError(password: string) {
 }
 
 export async function signup(_state: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const { username, password, next } = readForm(formData);
+  const { email, password, next } = readForm(formData);
   const errors: NonNullable<AuthFormState>["errors"] = {};
 
-  if (!USERNAME_PATTERN.test(username)) {
-    errors.username = "Username must be 3–20 characters: letters, numbers or _.";
-  }
+  errors.email = emailError(email);
   errors.password = passwordError(password);
-  if (errors.username || errors.password) {
-    return { username, errors };
+  if (errors.email || errors.password) {
+    return { email, errors };
   }
 
   const db = getAppDb();
-  // The username column is case-insensitive, so "Eric" and "eric" can't both exist.
-  if (db.prepare("SELECT 1 FROM users WHERE username = ?").get(username)) {
-    return { username, errors: { username: "That username is taken." } };
+  // The email column is case-insensitive, so "Eric@x.com" and "eric@x.com" are one account.
+  if (db.prepare("SELECT 1 FROM users WHERE email = ?").get(email)) {
+    return { email, errors: { email: "An account with that email already exists. Log in instead?" } };
   }
 
   const passwordHash = await hashPassword(password);
   const { lastInsertRowid } = db
-    .prepare("INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)")
-    .run(username, passwordHash, new Date().toISOString());
+    .prepare("INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)")
+    .run(email, passwordHash, new Date().toISOString());
 
   await createSession(Number(lastInsertRowid));
   redirect(next);
 }
 
 export async function login(_state: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const { username, password, next } = readForm(formData);
+  const { email, password, next } = readForm(formData);
 
   const user = getAppDb()
-    .prepare("SELECT id, password_hash AS passwordHash FROM users WHERE username = ?")
-    .get(username) as { id: number; passwordHash: string } | undefined;
+    .prepare("SELECT id, password_hash AS passwordHash FROM users WHERE email = ?")
+    .get(email) as { id: number; passwordHash: string } | undefined;
 
   const valid = user
     ? await verifyPassword(password, user.passwordHash)
     : await fakeVerify(password);
 
   if (!user || !valid) {
-    // Same message either way, so the form doesn't reveal which usernames exist.
-    return { username, errors: { form: "Incorrect username or password." } };
+    // Same message either way, so the form doesn't reveal which emails have accounts.
+    return { email, errors: { form: "Incorrect email or password." } };
   }
 
   // Housekeeping: drop this user's expired sessions.
@@ -98,6 +114,43 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
 export async function logout() {
   await deleteSession();
   redirect("/login");
+}
+
+// A new email for the signed-in account, confirmed with its current password.
+export async function changeEmail(_state: ChangeEmailState, formData: FormData): Promise<ChangeEmailState> {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const email = String(formData.get("email") ?? "").trim();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+
+  const invalid = emailError(email);
+  if (invalid) {
+    return { email, errors: { email: invalid } };
+  }
+  // Compared as the column does, ignoring case.
+  if (email.toLowerCase() === user.email.toLowerCase()) {
+    return { email, errors: { email: "That's already your email." } };
+  }
+
+  const db = getAppDb();
+  const { passwordHash } = db
+    .prepare("SELECT password_hash AS passwordHash FROM users WHERE id = ?")
+    .get(user.id) as { passwordHash: string };
+  if (!(await verifyPassword(currentPassword, passwordHash))) {
+    return { email, errors: { currentPassword: "Current password is incorrect." } };
+  }
+
+  if (db.prepare("SELECT 1 FROM users WHERE email = ? AND id != ?").get(email, user.id)) {
+    return { email, errors: { email: "Another account already uses that email." } };
+  }
+
+  db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, user.id);
+  // The navbar and the account page show it.
+  revalidatePath("/", "layout");
+  return { email, success: true };
 }
 
 export async function changePassword(

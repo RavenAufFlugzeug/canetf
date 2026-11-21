@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import DeckBack, { Suit } from "@/components/DeckBack";
 import KindMark from "@/components/KindMark";
+import { LABEL, FOCUS_RING } from "@/lib/ui";
 
 // One pick as a card: the pick's name (or alias), what its card calls it, short (its alias or
 // its kind: "Tech"), its number among its kind, its kind (for its mark), its sector's colour
@@ -240,10 +241,10 @@ export default function HoldingsDeck({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className={`${LABEL}`}>
           Your holdings{n ? ` · ${n}` : ""}
         </p>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className={`${LABEL}`}>
           Deck{deck.length ? ` · ${deck.length}` : ""}
         </p>
       </div>
@@ -279,7 +280,7 @@ export default function HoldingsDeck({
                 onClick={() => onSelect(card.symbol)}
                 aria-pressed={chosen}
                 aria-label={`${card.name}: ${card.shares} shares, worth ${money.format(card.value)}`}
-                className="kind-hover absolute left-0 top-3 rounded-xl transition-transform duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                className={`kind-hover absolute left-0 top-3 rounded-xl transition-transform duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${FOCUS_RING}`}
                 style={{
                   width: CARD_W,
                   height: CARD_H,
@@ -307,7 +308,7 @@ export default function HoldingsDeck({
                 aria-label={`${shown.name}: not held, ${money.format(shown.value)} a share. ${
                   shown.symbol === selected ? "Click to put it back" : "Click to view it"
                 }`}
-                className="kind-hover relative block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                className={`kind-hover relative block rounded-xl ${FOCUS_RING}`}
                 style={{ width: CARD_W, height: CARD_H, ["--from" as string]: `${CARD_W + GAP}px` }}
               >
                 <Card card={shown} flip="deck-draw" chosen={shown.symbol === selected} />
@@ -342,7 +343,7 @@ export default function HoldingsDeck({
               onPointerLeave={() => setHappy(false)}
               disabled={deck.length === 0}
               aria-label={`Draw at random from the deck (${deck.length} ${deck.length === 1 ? "card" : "cards"})`}
-              className="deck-pile group relative block size-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              className={`deck-pile group relative block size-full rounded-xl ${FOCUS_RING}`}
             >
               {/* A card being put back, tucking in under the others (above them as it comes out
                   to the side, then beneath them), to end where the bottom card lies. */}

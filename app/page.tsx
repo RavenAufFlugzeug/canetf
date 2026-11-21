@@ -4,7 +4,7 @@ import MapMark from "@/components/MapMark";
 import SandboxMark from "@/components/SandboxMark";
 import SearchMark from "@/components/SearchMark";
 import WatchMark from "@/components/WatchMark";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, shortName } from "@/lib/session";
 
 // What the site offers, one card each, each with its page's mark, which plays its
 // animation while the card is pointed at.
@@ -93,7 +93,7 @@ export default async function Home() {
             <div className="relative">
               {user ? (
                 <>
-                  <h2 className="text-3xl font-bold text-white">Welcome back, {user.username}</h2>
+                  <h2 className="text-3xl font-bold text-white">Welcome back, {shortName(user)}</h2>
                   <p className="mx-auto mt-3 max-w-lg text-slate-300">
                     Pick up where you left off with your watch list.
                   </p>

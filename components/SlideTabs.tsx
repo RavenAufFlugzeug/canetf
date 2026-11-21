@@ -1,71 +1,110 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useSlidingPill } from "@/lib/useSlidingPill";
+import { FOCUS_RING } from "@/lib/ui";
 
-export type SlideOption<V extends string> = { value: V; label: React.ReactNode; ariaLabel?: string };
+export type SlideOption<V extends string> = {
+  value: V;
+  label: React.ReactNode;
+  ariaLabel?: string;
+  // How many there are of it (a filter's matches), in a lighter shade after the label.
+  count?: number;
+  // An option that is a link (the Sandbox's choice chips): clicking it plainly calls
+  // onChange, while a link opened elsewhere (a new tab, say) is left to the browser.
+  href?: string;
+};
 
-// A small switch between a few options, as the charts' range tabs (RangeTabs) are: a dark
-// pill sits behind the chosen one and slides to the next when another is picked, whose label
-// gives a small pop; the others darken when pointed at, and every option dips when pressed.
-// On a light grey track, for the Sandbox's switches (Market value / Count, cards / list).
+// The site's one switch between a few options, in the look of the Search page's Ticker / Name
+// switch: a white pill sits on a light grey track behind the chosen option and springs across
+// to the next when another is picked; the others are grey and darken when pointed at. The
+// options wrap onto another line when there is no room, and the pill follows. Used for the
+// charts' ranges, the Sandbox's switches and choice chips, and the filters and Buy / Sell.
+// `xs` is the smaller size, for the busier toolbars.
 export default function SlideTabs<V extends string>({
   options,
   value,
   onChange,
   label,
+  labelledBy,
+  size = "sm",
+  className = "",
 }: {
   options: readonly SlideOption<V>[];
   value: V;
   onChange: (v: V) => void;
-  label: string; // what the switch chooses, for screen readers
+  label?: string; // what the switch chooses, for screen readers
+  labelledBy?: string; // or the id of the words beside it that say so
+  size?: "sm" | "xs";
+  className?: string;
 }) {
-  const group = useRef<HTMLDivElement>(null);
-  const pill = useRef<HTMLSpanElement>(null);
-  const placed = useRef(false);
+  const links = options.some((o) => o.href);
+  // Until the pill is placed (before the page has run its script), the chosen option is
+  // white itself, so it never shows as unchosen.
+  const { group, pill, placed } = useSlidingPill(
+    '[data-on="true"]',
+    `${value}|${options.map((o) => o.value).join(",")}`,
+  );
 
-  useLayoutEffect(() => {
-    const place = () => {
-      const chosen = group.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
-      const el = pill.current;
-      if (!chosen || !el) return;
-      // The first time, it is simply put in place rather than sliding in from the corner.
-      if (!placed.current) {
-        el.style.transition = "none";
-        requestAnimationFrame(() => (el.style.transition = ""));
-        placed.current = true;
-      }
-      el.style.transform = `translate(${chosen.offsetLeft}px, ${chosen.offsetTop}px)`;
-      el.style.width = `${chosen.offsetWidth}px`;
-      el.style.height = `${chosen.offsetHeight}px`;
-      el.style.opacity = "1";
-    };
-    place();
-    const watch = new ResizeObserver(place);
-    if (group.current) watch.observe(group.current);
-    return () => watch.disconnect();
-  }, [value, options]);
+  const xs = size === "xs";
 
   return (
-    <div ref={group} role="group" aria-label={label} className="relative flex gap-0.5 rounded-lg bg-slate-100 p-0.5">
+    <div
+      ref={group}
+      role={links ? "group" : "radiogroup"}
+      aria-label={label}
+      aria-labelledby={labelledBy}
+      className={`relative inline-flex max-w-full flex-wrap rounded-lg bg-slate-100 font-semibold ${
+        xs ? "gap-0.5 p-0.5 text-xs" : "gap-1 p-1 text-sm"
+      } ${className}`}
+    >
       <span
         ref={pill}
         aria-hidden
-        className="range-pill pointer-events-none absolute left-0 top-0 rounded-md bg-slate-900 opacity-0 shadow-sm shadow-slate-900/25"
+        className="range-pill pointer-events-none absolute left-0 top-0 rounded-md bg-white opacity-0 shadow-sm"
       />
       {options.map((o) => {
         const on = o.value === value;
-        return (
+        const look = `relative inline-flex items-center justify-center rounded-md transition-colors duration-200 ${FOCUS_RING} ${
+          xs ? "px-2.5 py-1" : "px-4 py-1"
+        } ${on ? `text-slate-900 ${placed ? "" : "bg-white shadow-sm"}` : "text-slate-500 hover:text-slate-700"}`;
+        const inner = (
+          <>
+            {o.label}
+            {o.count !== undefined && (
+              <span className={`ml-1.5 tabular-nums ${on ? "text-slate-500" : "text-slate-400"}`}>{o.count}</span>
+            )}
+          </>
+        );
+        return o.href ? (
+          <a
+            key={o.value}
+            href={o.href}
+            data-on={on}
+            aria-current={on ? "true" : undefined}
+            aria-label={o.ariaLabel}
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              if (!on) onChange(o.value);
+            }}
+            className={look}
+          >
+            {inner}
+          </a>
+        ) : (
           <button
             key={o.value}
             type="button"
-            aria-pressed={on}
+            role="radio"
+            data-on={on}
+            aria-checked={on}
             aria-label={o.ariaLabel}
-            onClick={() => onChange(o.value)}
-            className={`relative inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-90 ${
-              on ? "text-white" : "text-slate-700 hover:text-slate-900"
-            }`}
+            onClick={() => {
+              if (!on) onChange(o.value);
+            }}
+            className={look}
           >
-            <span className={on ? "range-pop inline-flex items-center" : "inline-flex items-center"}>{o.label}</span>
+            {inner}
           </button>
         );
       })}

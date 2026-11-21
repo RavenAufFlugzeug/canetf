@@ -40,9 +40,11 @@ import TradeLog from "@/components/TradeLog";
 import Tween from "@/components/Tween";
 import { currencyName, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
-import { POPUP_CARD, POPUP_OUT_MS, popupOverlay } from "@/lib/popup";
+import { POPUP_OUT_MS } from "@/lib/popup";
+import Popup from "@/components/Popup";
 import { newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
+import { button as buttonLook, field, LABEL, PANEL_TITLE, FOCUS_RING } from "@/lib/ui";
 
 // The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
 // not their names) all trading through the same stretch of time. Starting with `amount`
@@ -286,22 +288,20 @@ const dayText = (x: number) => String(Math.round(x));
 const countText = (x: number) => Math.round(x).toLocaleString("en-CA");
 const sharesWord = (n: number) => (n === 1 ? "share" : "shares");
 
-// A button that can't be used shows the warning cursor (.warn-cursor in globals.css).
-const BUTTON =
-  "rounded-lg px-4 py-2 text-sm font-semibold transition duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 warn-cursor disabled:opacity-40";
-const DARK = `${BUTTON} bg-slate-900 text-white hover:bg-slate-700`;
-const LIGHT = `${BUTTON} border border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50`;
+// The site's buttons (lib/ui.ts); one that can't be used shows the warning cursor
+// (.warn-cursor in globals.css).
+const DARK = `${buttonLook("primary")} warn-cursor`;
+const LIGHT = `${buttonLook("secondary")} warn-cursor`;
+const LEAVE = `${buttonLook("leave")} warn-cursor`;
+const DONE = buttonLook("done");
 // The test's main actions (buying and selling, moving on, finishing), each with its mark
-// (TestMarks): pointed at, the button lifts with a soft shadow and its mark comes alive;
-// pressed, it sinks a touch.
-const ACTION =
-  "group inline-flex items-center gap-2 hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] disabled:hover:translate-y-0 disabled:hover:shadow-none";
+// (TestMarks), which comes alive when the button is pointed at.
+const ACTION = "group";
 // The start button: dark, with its play mark. Pointed at, it lifts a little and the mark
 // springs forwards, ready to go; clicked, the mark launches (shooting forwards out of
 // sight) as a ripple spreads from where it was clicked, then the loading mark shows until
 // Day 1 is in (see begin).
-const START =
-  "group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 ease-out hover:bg-slate-700 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 motion-safe:hover:-translate-y-0.5 disabled:cursor-wait disabled:translate-y-0";
+const START = `group relative overflow-hidden ${buttonLook("primary")}`;
 // How long the play mark takes to launch (.start-mark-launch in globals.css).
 const LAUNCH_MS = 380;
 // Starting the test is unhurried: the loading mark shows for at least START_WAIT_MS from
@@ -1275,7 +1275,7 @@ export default function SandboxTest({
               </svg>
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className={`${LABEL}`}>
                 Result · your grade
               </p>
               <p className="result-pop mt-0.5 text-2xl font-bold text-slate-900">{result.label}</p>
@@ -1361,7 +1361,7 @@ export default function SandboxTest({
           </div>
           {/* The stretch of time it ran over, now that it can be told. */}
           <div className="mt-3 flex min-h-9 flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">The period</span>
+            <span className={`${LABEL}`}>The period</span>
             {reveal ? (
               <span key="period" className="text-fade-in font-semibold text-slate-900">
                 {`${longDay(reveal.first)} to ${longDay(reveal.last)}`}
@@ -1656,7 +1656,7 @@ export default function SandboxTest({
             shows its chart and its order tickets below. */}
         <div {...enter(1)} className="rise-in mt-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-900">
+            <p className={`${PANEL_TITLE}`}>
               Investment universe
             </p>
           </div>
@@ -1664,7 +1664,7 @@ export default function SandboxTest({
             <PickBoard
               chosen={swapTo ?? pick.symbol}
               onChoose={choosePick}
-              // By the Listing heading: what the badges mean, in a pop-up, the chosen pick's
+              // Beside the filters: what the badges mean, in a pop-up, the chosen pick's
               // mark and colour picked out.
               info={
                 <BadgeInfo
@@ -2323,68 +2323,55 @@ function QuitCard({
   leaving: boolean;
   onDone: (confirmed: boolean) => void;
 }) {
+  // Opened with the keyboard on the safe choice.
   const button = useRef<HTMLButtonElement>(null);
 
-  // Ready for the keyboard (on the safe choice), without jumping the page.
-  useEffect(() => {
-    const el = button.current;
-    el?.focus({ preventScroll: true });
-  }, []);
-
-  // Over the screen (a portal), centred in view wherever the page is scrolled, as the day's
-  // recap and the finishing card are.
-  return createPortal(
-    <div
-      className={popupOverlay(leaving)}
-      onClick={() => onDone(false)}
-      onKeyDown={(e) => e.key === "Escape" && onDone(false)}
+  return (
+    <Popup
+      label="Leave the test?"
+      leaving={leaving}
+      onClose={() => onDone(false)}
+      initialFocus={button}
+      className="max-w-sm overflow-hidden p-5"
     >
-      <div
-        role="dialog"
-        aria-label="Leave the test?"
-        className={`${POPUP_CARD} max-w-sm overflow-hidden p-5`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-600">
-            <WarnMark className="warn-pop size-5" />
-          </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Day {day} · leaving early
-            </p>
-            <p className="text-lg font-semibold text-slate-900">Leave the test?</p>
-          </div>
-        </div>
-        <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
-          Your progress won&apos;t be saved:{" "}
-          {day > 1 ? `the ${day - 1} ${day === 2 ? "day" : "days"} gone by` : "this day"}
-          {trades ? ` and your ${trades} ${trades === 1 ? "trade" : "trades"}` : ""} will be lost.
-        </p>
-        <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
-          You&apos;ll go back to the set-up with the same picks and choices, ready to start again.
-        </p>
-        <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
-          <button
-            ref={button}
-            type="button"
-            onClick={() => onDone(false)}
-            className={`${DARK} ${ACTION} flex-1 justify-center`}
-          >
-            Keep testing
-          </button>
-          <button
-            type="button"
-            onClick={() => onDone(true)}
-            className={`${LIGHT} ${ACTION} flex-1 justify-center hover:border-red-300 hover:text-red-700`}
-          >
-            <ExitMark className="size-4" />
-            Exit
-          </button>
+      <div className="flex items-center gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-600">
+          <WarnMark className="warn-pop size-5" />
+        </span>
+        <div>
+          <p className={`${LABEL}`}>
+            Day {day} · leaving early
+          </p>
+          <p className="text-lg font-semibold text-slate-900">Leave the test?</p>
         </div>
       </div>
-    </div>,
-    document.body,
+      <p className="rise-in mt-4 text-sm text-slate-600" style={{ animationDelay: "100ms" }}>
+        Your progress won&apos;t be saved:{" "}
+        {day > 1 ? `the ${day - 1} ${day === 2 ? "day" : "days"} gone by` : "this day"}
+        {trades ? ` and your ${trades} ${trades === 1 ? "trade" : "trades"}` : ""} will be lost.
+      </p>
+      <p className="rise-in mt-2 text-sm text-slate-600" style={{ animationDelay: "170ms" }}>
+        You&apos;ll go back to the set-up with the same picks and choices, ready to start again.
+      </p>
+      <div className="rise-in mt-5 flex gap-2" style={{ animationDelay: "240ms" }}>
+        <button
+          ref={button}
+          type="button"
+          onClick={() => onDone(false)}
+          className={`${DARK} ${ACTION} flex-1 justify-center`}
+        >
+          Keep testing
+        </button>
+        <button
+          type="button"
+          onClick={() => onDone(true)}
+          className={`${LEAVE} ${ACTION} flex-1`}
+        >
+          <ExitMark className="size-4" />
+          Exit
+        </button>
+      </div>
+    </Popup>
   );
 }
 
@@ -2424,7 +2411,7 @@ function DaysPassed({ recap, leaving }: { recap: Recap; leaving: boolean }) {
         <span className="test-mark-live grid size-14 place-items-center rounded-full bg-slate-100 text-slate-900">
           <Mark className="size-7" />
         </span>
-        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{passedText(passed)}</p>
+        <p className={`mt-3 ${LABEL}`}>{passedText(passed)}</p>
         <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-900">
           Day <Tween value={after ? to : from} format={dayText} />
         </p>
@@ -2468,7 +2455,7 @@ function TourGuide({
       className="tour-guide fixed inset-x-0 bottom-5 z-40 mx-auto flex w-[min(30rem,calc(100%-2rem))] items-center gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 pl-4 shadow-xl shadow-slate-900/10 backdrop-blur"
     >
       <div key={at} className="text-fade-in min-w-0 flex-1">
-        <p className="flex items-baseline justify-between gap-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <p className={`flex items-baseline justify-between gap-3 ${LABEL}`}>
           <span>
             Your holdings · {at + 1} of {positions.length}
           </span>
@@ -2545,10 +2532,8 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   const color = move >= 0 ? "#15803d" : "#dc2626";
   const shown = spot ?? values.length - 1;
 
-  // Ready for the keyboard, without jumping the page; then the figures move on.
+  // Just after it opens, the figures move on.
   useEffect(() => {
-    const el = button.current;
-    el?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => setAfter(true), 300);
     return () => window.clearTimeout(timer);
   }, []);
@@ -2564,192 +2549,185 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   // One row of the card rising in, `i` rows after the first.
   const row = (i: number) => ({ className: "rise-in", style: { animationDelay: `${100 + i * 70}ms` } });
 
-  // Over the screen (a portal), as the finishing card is, so all of it is in view wherever the
-  // page is scrolled, with no need to scroll to it.
-  return createPortal(
-    <div
-      className={`recap ${popupOverlay(leaving)}`}
-      onClick={onDone}
-      onKeyDown={(e) => e.key === "Escape" && onDone()}
+  return (
+    <Popup
+      label={`Day ${from} to Day ${to}`}
+      leaving={leaving}
+      onClose={onDone}
+      initialFocus={button}
+      className="max-w-sm overflow-hidden"
+      overlayClassName="recap"
     >
-      <div
-        role="dialog"
-        aria-label={`Day ${from} to Day ${to}`}
-        className={`${POPUP_CARD} max-w-sm overflow-hidden`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-5">
-          <div className="flex items-center gap-3">
-            <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
-              <Mark className="size-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {passedText(passed)}
-              </p>
-              <p className="text-lg font-semibold tabular-nums text-slate-900">
-                Day {from} <span className="text-slate-400">→</span> Day{" "}
-                <Tween value={after ? to : from} format={dayText} />
-              </p>
-            </div>
-          </div>
-
-          <div {...row(0)}>
-            <div className="mt-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs text-slate-500">Account value</p>
-                <p className="tabular-nums text-slate-900">
-                  {money.format(start)} <span className="text-slate-400">→</span>{" "}
-                  <span className="font-semibold">
-                    <Tween value={after ? end : start} format={moneyText} />
-                  </span>
-                </p>
-              </div>
-              <p className={`flex items-center gap-1 text-lg font-bold tabular-nums ${tone(move)}`}>
-                <svg
-                  aria-hidden
-                  viewBox="0 0 10 10"
-                  className={`recap-arrow size-2.5 fill-current ${move < 0 ? "rotate-180" : ""}`}
-                >
-                  {move === 0 ? <rect x="1" y="4" width="8" height="2" rx="1" /> : <path d="M5 1.5 9 8H1Z" />}
-                </svg>
-                <Tween value={after ? pct : 0} format={pctText} />
-              </p>
-            </div>
-          </div>
-
-          {/* The account over the days just passed, as a little line; pointing along it shows
-              each day. Not for a single day, nor while nothing was held (it would be flat). */}
-          {passed > 1 && positions.length > 0 && (
-            <div {...row(1)}>
-              <div
-                ref={chart}
-                className="relative mt-3 h-16 cursor-crosshair touch-none"
-                onPointerMove={(e) => point(e.clientX)}
-                onPointerDown={(e) => point(e.clientX)}
-                onPointerLeave={() => setSpot(null)}
-              >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 100 36"
-                  preserveAspectRatio="none"
-                  className="size-full overflow-visible"
-                >
-                  <path
-                    d={`${line}L100,36L0,36Z`}
-                    fill={color}
-                    fillOpacity={0.1}
-                    className="chart-area-in"
-                    style={{ animationDelay: "400ms" }}
-                  />
-                  <path
-                    d={line}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                    className="recap-draw"
-                  />
-                </svg>
-                <span
-                  className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
-                  style={{
-                    left: `${px(shown)}%`,
-                    top: `${(py(values[shown]) / 36) * 100}%`,
-                    backgroundColor: color,
-                  }}
-                />
-                <span
-                  className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
-                    spot === null ? "opacity-0" : "opacity-100"
-                  }`}
-                  style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
-                >
-                  Day {from + shown}: {money.format(values[shown])}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* How each of the shares held did. */}
-          <div {...row(2)}>
-            <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-              {positions.length ? (
-                <>
-                  <p className="flex justify-between text-xs text-slate-500">
-                    <span>Your shares</span>
-                    <span>Change · You made (CAD)</span>
-                  </p>
-                  <ul
-                    className={`mt-1 space-y-1 tabular-nums ${held.length > SHOWN ? "max-h-36 overflow-y-auto pr-1" : ""}`}
-                  >
-                    {held.map((p, i) => (
-                      <li
-                        key={p.name}
-                        className="rise-in flex items-center justify-between gap-3"
-                        style={{ animationDelay: `${300 + Math.min(i, 8) * 60}ms` }}
-                      >
-                        <span className="min-w-0 truncate">
-                          <span className="font-medium text-slate-900">{p.name}</span> ·{" "}
-                          {p.shares.toLocaleString("en-CA")} {sharesWord(p.shares)}
-                        </span>
-                        <span className="flex shrink-0 items-baseline gap-3">
-                          {/* Its price's change; for one in another currency, then the change
-                              with the exchange rate's move too, which is what it made in CAD. */}
-                          <span className="text-right text-xs leading-tight">
-                            <span className={`block ${tone(p.pricePct)}`}>
-                              {p.foreign && <span className="text-slate-400">Price </span>}
-                              <Tween value={after ? p.pricePct : 0} format={pctText} />
-                            </span>
-                            {p.foreign && (
-                              <span className={`block ${tone(p.pct)}`}>
-                                <span className="text-slate-400">With FX </span>
-                                <Tween value={after ? p.pct : 0} format={pctText} />
-                              </span>
-                            )}
-                          </span>
-                          <span className={`w-20 text-right font-semibold ${tone(p.gain)}`}>
-                            <Tween value={after ? p.gain : 0} format={changeText} />
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                "You held no shares, so your money stayed as it was."
-              )}
-            </div>
-          </div>
-
-          <div {...row(3)} className="rise-in mt-4 flex gap-2">
-            <button
-              ref={button}
-              type="button"
-              onClick={onDone}
-              className={`${DARK} ${ACTION} flex-1 justify-center`}
-            >
-              Continue
-              <svg
-                aria-hidden
-                viewBox="0 0 16 16"
-                className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 8h10M9 4l4 4-4 4" />
-              </svg>
-            </button>
+      <div className="p-5">
+        <div className="flex items-center gap-3">
+          <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
+            <Mark className="size-5" />
+          </span>
+          <div>
+            <p className={`${LABEL}`}>
+              {passedText(passed)}
+            </p>
+            <p className="text-lg font-semibold tabular-nums text-slate-900">
+              Day {from} <span className="text-slate-400">→</span> Day{" "}
+              <Tween value={after ? to : from} format={dayText} />
+            </p>
           </div>
         </div>
+
+        <div {...row(0)}>
+          <div className="mt-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs text-slate-500">Account value</p>
+              <p className="tabular-nums text-slate-900">
+                {money.format(start)} <span className="text-slate-400">→</span>{" "}
+                <span className="font-semibold">
+                  <Tween value={after ? end : start} format={moneyText} />
+                </span>
+              </p>
+            </div>
+            <p className={`flex items-center gap-1 text-lg font-bold tabular-nums ${tone(move)}`}>
+              <svg
+                aria-hidden
+                viewBox="0 0 10 10"
+                className={`recap-arrow size-2.5 fill-current ${move < 0 ? "rotate-180" : ""}`}
+              >
+                {move === 0 ? <rect x="1" y="4" width="8" height="2" rx="1" /> : <path d="M5 1.5 9 8H1Z" />}
+              </svg>
+              <Tween value={after ? pct : 0} format={pctText} />
+            </p>
+          </div>
+        </div>
+
+        {/* The account over the days just passed, as a little line; pointing along it shows
+            each day. Not for a single day, nor while nothing was held (it would be flat). */}
+        {passed > 1 && positions.length > 0 && (
+          <div {...row(1)}>
+            <div
+              ref={chart}
+              className="relative mt-3 h-16 cursor-crosshair touch-none"
+              onPointerMove={(e) => point(e.clientX)}
+              onPointerDown={(e) => point(e.clientX)}
+              onPointerLeave={() => setSpot(null)}
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 100 36"
+                preserveAspectRatio="none"
+                className="size-full overflow-visible"
+              >
+                <path
+                  d={`${line}L100,36L0,36Z`}
+                  fill={color}
+                  fillOpacity={0.1}
+                  className="chart-area-in"
+                  style={{ animationDelay: "400ms" }}
+                />
+                <path
+                  d={line}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                  className="recap-draw"
+                />
+              </svg>
+              <span
+                className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
+                style={{
+                  left: `${px(shown)}%`,
+                  top: `${(py(values[shown]) / 36) * 100}%`,
+                  backgroundColor: color,
+                }}
+              />
+              <span
+                className={`pointer-events-none absolute top-0 -translate-x-1/2 whitespace-nowrap rounded bg-white px-1.5 text-[11px] tabular-nums text-slate-600 shadow-sm transition-[left,opacity] duration-150 ease-out ${
+                  spot === null ? "opacity-0" : "opacity-100"
+                }`}
+                style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
+              >
+                Day {from + shown}: {money.format(values[shown])}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* How each of the shares held did. */}
+        <div {...row(2)}>
+          <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+            {positions.length ? (
+              <>
+                <p className="flex justify-between text-xs text-slate-500">
+                  <span>Your shares</span>
+                  <span>Change · You made (CAD)</span>
+                </p>
+                <ul
+                  className={`mt-1 space-y-1 tabular-nums ${held.length > SHOWN ? "max-h-36 overflow-y-auto pr-1" : ""}`}
+                >
+                  {held.map((p, i) => (
+                    <li
+                      key={p.name}
+                      className="rise-in flex items-center justify-between gap-3"
+                      style={{ animationDelay: `${300 + Math.min(i, 8) * 60}ms` }}
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium text-slate-900">{p.name}</span> ·{" "}
+                        {p.shares.toLocaleString("en-CA")} {sharesWord(p.shares)}
+                      </span>
+                      <span className="flex shrink-0 items-baseline gap-3">
+                        {/* Its price's change; for one in another currency, then the change
+                            with the exchange rate's move too, which is what it made in CAD. */}
+                        <span className="text-right text-xs leading-tight">
+                          <span className={`block ${tone(p.pricePct)}`}>
+                            {p.foreign && <span className="text-slate-400">Price </span>}
+                            <Tween value={after ? p.pricePct : 0} format={pctText} />
+                          </span>
+                          {p.foreign && (
+                            <span className={`block ${tone(p.pct)}`}>
+                              <span className="text-slate-400">With FX </span>
+                              <Tween value={after ? p.pct : 0} format={pctText} />
+                            </span>
+                          )}
+                        </span>
+                        <span className={`w-20 text-right font-semibold ${tone(p.gain)}`}>
+                          <Tween value={after ? p.gain : 0} format={changeText} />
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              "You held no shares, so your money stayed as it was."
+            )}
+          </div>
+        </div>
+
+        <div {...row(3)} className="rise-in mt-4 flex gap-2">
+          <button
+            ref={button}
+            type="button"
+            onClick={onDone}
+            className={`${DARK} ${ACTION} flex-1 justify-center`}
+          >
+            Continue
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -2943,7 +2921,7 @@ function ExchangePanel({
                 setText("");
                 setSwaps((n) => n + 1);
               }}
-              className="mb-0.5 grid size-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900 active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              className={`mb-0.5 grid size-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900 active:scale-90 ${FOCUS_RING}`}
             >
               <svg
                 aria-hidden
@@ -2979,7 +2957,7 @@ function ExchangePanel({
                   value={text}
                   onChange={(e) => setText(e.target.value.replace(/[^\d.,]/g, ""))}
                   placeholder="0.00"
-                  className="w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-semibold tabular-nums text-slate-900 transition-colors hover:border-slate-400 focus-visible:border-slate-900 focus-visible:outline-none"
+                  className={`w-full min-w-0 ${field("sm")} font-semibold tabular-nums`}
                 />
                 <button
                   type="button"
@@ -3083,8 +3061,8 @@ function FinishCard({
   const [after, setAfter] = useState(false);
   const pct = start ? ((end - start) / start) * 100 : 0;
 
+  // Just after it opens, the figures count on to the end.
   useEffect(() => {
-    button.current?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => setAfter(true), 300);
     return () => window.clearTimeout(timer);
   }, []);
@@ -3092,80 +3070,75 @@ function FinishCard({
   // One row of the card rising in, `i` rows after the first.
   const row = (i: number) => ({ className: "rise-in", style: { animationDelay: `${100 + i * 80}ms` } });
 
-  // On the page itself (a portal), so it sits over the screen wherever the page is scrolled,
-  // not in the test's panel (whose entrance leaves a transform that would hold it there).
-  return createPortal(
-    <div
-      className={`recap ${popupOverlay(leaving)}`}
-      onClick={onDone}
-      onKeyDown={(e) => e.key === "Escape" && onDone()}
+  // Over the screen (Popup's portal), not in the test's panel (whose entrance leaves a
+  // transform that would hold it there).
+  return (
+    <Popup
+      label="The test is finished"
+      leaving={leaving}
+      onClose={onDone}
+      initialFocus={button}
+      className="max-w-sm overflow-hidden"
+      overlayClassName="recap"
     >
-      <div
-        role="dialog"
-        aria-label="The test is finished"
-        className={`${POPUP_CARD} max-w-sm overflow-hidden`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-5">
-          <div className="flex items-center gap-3">
-            <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
-              <MoonMark className="size-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Day {days} · the test is over
-              </p>
-              <p className="text-lg font-semibold text-slate-900">Congratulations!</p>
-            </div>
-          </div>
-
-          <p {...row(0)} className="rise-in mt-3 text-sm text-slate-600">
-            {`You traded through all ${days} days. Here's how it went.`}
-          </p>
-
-          <div {...row(1)}>
-            <div className="mt-4 flex items-end justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2.5">
-              <div>
-                <p className="text-xs text-slate-500">Your account</p>
-                <p className="tabular-nums text-slate-900">
-                  {money.format(start)} <span className="text-slate-400">→</span>{" "}
-                  <span className="font-semibold">
-                    <Tween value={after ? end : start} format={moneyText} />
-                  </span>
-                </p>
-              </div>
-              <p className={`text-lg font-bold tabular-nums ${tone(pct)}`}>
-                <Tween value={after ? pct : 0} format={pctText} />
-              </p>
-            </div>
-          </div>
-
-          <div {...row(2)}>
-            <button
-              ref={button}
-              type="button"
-              onClick={onDone}
-              className={`${DARK} ${ACTION} mt-4 w-full justify-center`}
-            >
-              See your results
-              <svg
-                aria-hidden
-                viewBox="0 0 16 16"
-                className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 8h10M9 4l4 4-4 4" />
-              </svg>
-            </button>
+      <div className="p-5">
+        <div className="flex items-center gap-3">
+          <span className="test-mark-live grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-900">
+            <MoonMark className="size-5" />
+          </span>
+          <div>
+            <p className={`${LABEL}`}>
+              Day {days} · the test is over
+            </p>
+            <p className="text-lg font-semibold text-slate-900">Congratulations!</p>
           </div>
         </div>
+
+        <p {...row(0)} className="rise-in mt-3 text-sm text-slate-600">
+          {`You traded through all ${days} days. Here's how it went.`}
+        </p>
+
+        <div {...row(1)}>
+          <div className="mt-4 flex items-end justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2.5">
+            <div>
+              <p className="text-xs text-slate-500">Your account</p>
+              <p className="tabular-nums text-slate-900">
+                {money.format(start)} <span className="text-slate-400">→</span>{" "}
+                <span className="font-semibold">
+                  <Tween value={after ? end : start} format={moneyText} />
+                </span>
+              </p>
+            </div>
+            <p className={`text-lg font-bold tabular-nums ${tone(pct)}`}>
+              <Tween value={after ? pct : 0} format={pctText} />
+            </p>
+          </div>
+        </div>
+
+        <div {...row(2)}>
+          <button
+            ref={button}
+            type="button"
+            onClick={onDone}
+            className={`${DARK} ${ACTION} mt-4 w-full justify-center`}
+          >
+            See your results
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </div>,
-    document.body,
+    </Popup>
   );
 }
 
@@ -3277,7 +3250,7 @@ function OrderTicket({
           type="button"
           onClick={onActivate}
           aria-label={`Switch to ${buying ? "buying" : "selling"}`}
-          className="group/switch absolute inset-0 z-10 grid cursor-pointer place-items-center rounded-xl bg-white/45 backdrop-blur-[1.5px] transition-colors duration-300 hover:bg-white/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          className={`group/switch absolute inset-0 z-10 grid cursor-pointer place-items-center rounded-xl bg-white/45 backdrop-blur-[1.5px] transition-colors duration-300 hover:bg-white/25 ${FOCUS_RING}`}
         >
           <span className="switch-in flex items-center gap-2 rounded-full bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-white shadow-lg shadow-slate-900/20 transition-transform duration-300 ease-[cubic-bezier(0.3,1.5,0.5,1)] group-hover/switch:scale-105">
             {/* Two arrows chasing each other round: pointed at, they turn half a circle. */}
@@ -3477,10 +3450,8 @@ function ConfirmTrade({
   const cashShare =
     ((after ? cashAfter : cash) / worth(after ? cashAfter : cash, after ? sharesAfter : shares)) * 100;
 
-  // Ready for the keyboard, without jumping the page; then the figures move on.
+  // Just after it opens, the figures move on to after the trade.
   useEffect(() => {
-    const el = button.current;
-    el?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => setAfter(true), 350);
     return () => window.clearTimeout(timer);
   }, []);
@@ -3495,219 +3466,212 @@ function ConfirmTrade({
   // One row of the card rising in, `i` rows after the first.
   const row = (i: number) => ({ className: "rise-in", style: { animationDelay: `${120 + i * 60}ms` } });
 
-  // Over the screen (a portal), centred in view wherever the page is scrolled, as the day's
-  // recap and the finishing card are.
-  return createPortal(
-    <div
-      className={popupOverlay(leaving)}
-      onClick={() => !confirmed && onDone(false)}
-      onKeyDown={(e) => e.key === "Escape" && !confirmed && onDone(false)}
+  return (
+    <Popup
+      label={`${buying ? "Buy" : "Sell"} ${ask.shares} ${sharesWord(ask.shares)}`}
+      leaving={leaving}
+      // Once confirmed, it can't be called off.
+      onClose={() => !confirmed && onDone(false)}
+      initialFocus={button}
+      className="confirm-card max-w-sm overflow-hidden p-5"
     >
-      <div
-        role="dialog"
-        aria-label={`${buying ? "Buy" : "Sell"} ${ask.shares} ${sharesWord(ask.shares)}`}
-        className={`${POPUP_CARD} confirm-card max-w-sm overflow-hidden p-5`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3">
-          <span
-            className={`test-mark-live grid size-10 shrink-0 place-items-center rounded-full ${
-              buying ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-900"
-            }`}
-          >
-            {buying ? <BuyMark className="size-5" /> : <SellMark className="size-5" />}
-          </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Day {day} · review your order
-            </p>
-            <p className="text-lg font-semibold text-slate-900">
-              {buying ? "Buy" : "Sell"} {ask.shares.toLocaleString("en-CA")} {sharesWord(ask.shares)}?
-            </p>
-            <p className="text-xs text-slate-500">{ask.name}</p>
-          </div>
-        </div>
-
-        <dl className="mt-4 space-y-1.5 text-sm tabular-nums">
-          <div {...row(0)}>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Price per share</dt>
-              <dd className="text-slate-900">{nativeText(price, currency)}</dd>
-            </div>
-          </div>
-          {/* In another currency: today's rate, which turns it into the CAD paid or received. */}
-          {foreign && (
-            <div {...row(1)}>
-              <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Exchange rate</dt>
-                <dd className="text-slate-900">{rateText(rate, currency)}</dd>
-              </div>
-            </div>
-          )}
-          <div {...row(1)}>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">{buying ? "Total cost" : "You receive"}</dt>
-              <dd className="text-right font-semibold text-slate-900">
-                {ask.shares.toLocaleString("en-CA")} × {nativeText(price, currency)} ={" "}
-                <span className="text-base">{nativeText(amount, cur)}</span>
-                {foreign && (
-                  <span className="block text-xs font-normal text-slate-500">{`≈ ${money.format(total)} CAD`}</span>
-                )}
-              </dd>
-            </div>
-          </div>
-          {/* How a purchase in another currency is paid: from the cash in it, then exchanged
-              from CAD for the rest; a sale's money is kept in its currency. */}
-          {foreign && buying && payment && (
-            <div {...row(2)}>
-              <div className="space-y-0.5 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                {payment.fromHeld > 0 && (
-                  <p className="flex justify-between gap-3">
-                    <span>{`From your ${cur} cash`}</span>
-                    <span className="font-semibold text-slate-900">{nativeText(payment.fromHeld, cur)}</span>
-                  </p>
-                )}
-                {payment.short > 0 && (
-                  <p className="flex justify-between gap-3">
-                    <span>Exchanged from CAD for you</span>
-                    <span className="font-semibold text-slate-900">
-                      {`${money.format(payment.cadPaid)} → ${nativeText(payment.short, cur)}`}
-                    </span>
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-          {foreign && !buying && (
-            <div {...row(2)}>
-              <p className="rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                {`The money is kept in ${cur}, not exchanged back: exchange it to CAD whenever you like.`}
-              </p>
-            </div>
-          )}
-          <div {...row(2)}>
-            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5">
-              <dt className="text-slate-500">{foreign ? "Cash in CAD" : "Cash"}</dt>
-              <dd className="text-slate-900">
-                {money.format(cad)} <span className="text-slate-400">→</span>{" "}
-                <span className="font-semibold">
-                  <Tween value={after ? cadAfter : cad} format={moneyText} />
-                </span>
-              </dd>
-            </div>
-            {foreign && (
-              <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">{`Cash in ${cur}`}</dt>
-                <dd className="text-slate-900">
-                  {nativeText(held, cur)} <span className="text-slate-400">→</span>{" "}
-                  <span className="font-semibold">
-                    <Tween value={after ? heldAfter : held} format={(x) => nativeText(x, cur)} />
-                  </span>
-                </dd>
-              </div>
-            )}
-          </div>
-          <div {...row(3)}>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Shares</dt>
-              <dd className="text-slate-900">
-                {shares.toLocaleString("en-CA")} <span className="text-slate-400">→</span>{" "}
-                <span className="font-semibold">
-                  <Tween value={after ? sharesAfter : shares} format={countText} />
-                </span>
-              </dd>
-            </div>
-          </div>
-        </dl>
-
-        {/* The money, split between cash and shares: sliding from now to after the trade. */}
-        <div {...row(4)} className="rise-in mt-3">
-          <div className="flex h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
-            <span
-              className="h-full bg-slate-400 transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-              style={{ width: `${cashShare}%` }}
-            />
-            <span className="h-full flex-1 border-l-2 border-white bg-slate-900" />
-          </div>
-          <p className="mt-1 flex justify-between text-xs tabular-nums text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-slate-400" />
-              Cash <Tween value={cashShare} format={(x) => `${Math.round(x)}%`} />
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-slate-900" />
-              In shares <Tween value={100 - cashShare} format={(x) => `${Math.round(x)}%`} />
-            </span>
-          </p>
-        </div>
-
-        <p
-          {...row(5)}
-          className="confirm-warning rise-in mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 transition-colors duration-300"
+      <div className="flex items-center gap-3">
+        <span
+          className={`test-mark-live grid size-10 shrink-0 place-items-center rounded-full ${
+            buying ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-900"
+          }`}
         >
-          <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 shrink-0 overflow-visible">
-            <path
-              className="confirm-shackle"
-              d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-            <rect x="3" y="6.5" width="10" height="7.5" rx="1.5" fill="currentColor" />
-          </svg>
-          Once confirmed, this trade can&apos;t be undone.
-        </p>
-
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => onDone(false)}
-            disabled={confirmed}
-            className={`${LIGHT} ${ACTION} flex-1 justify-center`}
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 16 16"
-              className="size-3.5 transition-transform duration-300 group-enabled:group-hover:rotate-90"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            >
-              <path d="m4 4 8 8M12 4l-8 8" />
-            </svg>
-            Cancel
-          </button>
-          <button
-            ref={button}
-            type="button"
-            onClick={confirm}
-            className={`confirm-go ${confirmed ? `${BUTTON} bg-green-700 text-white` : DARK} ${ACTION} flex-1 justify-center`}
-          >
-            <svg
-              aria-hidden
-              viewBox="0 0 16 16"
-              className="size-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path
-                key={confirmed ? "drawn" : "rest"}
-                className={confirmed ? "confirm-check" : ""}
-                pathLength={1}
-                d="m3 8.5 3.2 3.2L13 4.8"
-              />
-            </svg>
-            {confirmed ? "Order placed" : `Place ${buying ? "buy" : "sell"} order`}
-          </button>
+          {buying ? <BuyMark className="size-5" /> : <SellMark className="size-5" />}
+        </span>
+        <div>
+          <p className={`${LABEL}`}>
+            Day {day} · review your order
+          </p>
+          <p className="text-lg font-semibold text-slate-900">
+            {buying ? "Buy" : "Sell"} {ask.shares.toLocaleString("en-CA")} {sharesWord(ask.shares)}?
+          </p>
+          <p className="text-xs text-slate-500">{ask.name}</p>
         </div>
       </div>
-    </div>,
-    document.body,
+
+      <dl className="mt-4 space-y-1.5 text-sm tabular-nums">
+        <div {...row(0)}>
+          <div className="flex justify-between gap-4">
+            <dt className="text-slate-500">Price per share</dt>
+            <dd className="text-slate-900">{nativeText(price, currency)}</dd>
+          </div>
+        </div>
+        {/* In another currency: today's rate, which turns it into the CAD paid or received. */}
+        {foreign && (
+          <div {...row(1)}>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Exchange rate</dt>
+              <dd className="text-slate-900">{rateText(rate, currency)}</dd>
+            </div>
+          </div>
+        )}
+        <div {...row(1)}>
+          <div className="flex justify-between gap-4">
+            <dt className="text-slate-500">{buying ? "Total cost" : "You receive"}</dt>
+            <dd className="text-right font-semibold text-slate-900">
+              {ask.shares.toLocaleString("en-CA")} × {nativeText(price, currency)} ={" "}
+              <span className="text-base">{nativeText(amount, cur)}</span>
+              {foreign && (
+                <span className="block text-xs font-normal text-slate-500">{`≈ ${money.format(total)} CAD`}</span>
+              )}
+            </dd>
+          </div>
+        </div>
+        {/* How a purchase in another currency is paid: from the cash in it, then exchanged
+            from CAD for the rest; a sale's money is kept in its currency. */}
+        {foreign && buying && payment && (
+          <div {...row(2)}>
+            <div className="space-y-0.5 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
+              {payment.fromHeld > 0 && (
+                <p className="flex justify-between gap-3">
+                  <span>{`From your ${cur} cash`}</span>
+                  <span className="font-semibold text-slate-900">{nativeText(payment.fromHeld, cur)}</span>
+                </p>
+              )}
+              {payment.short > 0 && (
+                <p className="flex justify-between gap-3">
+                  <span>Exchanged from CAD for you</span>
+                  <span className="font-semibold text-slate-900">
+                    {`${money.format(payment.cadPaid)} → ${nativeText(payment.short, cur)}`}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+        {foreign && !buying && (
+          <div {...row(2)}>
+            <p className="rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
+              {`The money is kept in ${cur}, not exchanged back: exchange it to CAD whenever you like.`}
+            </p>
+          </div>
+        )}
+        <div {...row(2)}>
+          <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5">
+            <dt className="text-slate-500">{foreign ? "Cash in CAD" : "Cash"}</dt>
+            <dd className="text-slate-900">
+              {money.format(cad)} <span className="text-slate-400">→</span>{" "}
+              <span className="font-semibold">
+                <Tween value={after ? cadAfter : cad} format={moneyText} />
+              </span>
+            </dd>
+          </div>
+          {foreign && (
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">{`Cash in ${cur}`}</dt>
+              <dd className="text-slate-900">
+                {nativeText(held, cur)} <span className="text-slate-400">→</span>{" "}
+                <span className="font-semibold">
+                  <Tween value={after ? heldAfter : held} format={(x) => nativeText(x, cur)} />
+                </span>
+              </dd>
+            </div>
+          )}
+        </div>
+        <div {...row(3)}>
+          <div className="flex justify-between gap-4">
+            <dt className="text-slate-500">Shares</dt>
+            <dd className="text-slate-900">
+              {shares.toLocaleString("en-CA")} <span className="text-slate-400">→</span>{" "}
+              <span className="font-semibold">
+                <Tween value={after ? sharesAfter : shares} format={countText} />
+              </span>
+            </dd>
+          </div>
+        </div>
+      </dl>
+
+      {/* The money, split between cash and shares: sliding from now to after the trade. */}
+      <div {...row(4)} className="rise-in mt-3">
+        <div className="flex h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
+          <span
+            className="h-full bg-slate-400 transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ width: `${cashShare}%` }}
+          />
+          <span className="h-full flex-1 border-l-2 border-white bg-slate-900" />
+        </div>
+        <p className="mt-1 flex justify-between text-xs tabular-nums text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-slate-400" />
+            Cash <Tween value={cashShare} format={(x) => `${Math.round(x)}%`} />
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-slate-900" />
+            In shares <Tween value={100 - cashShare} format={(x) => `${Math.round(x)}%`} />
+          </span>
+        </p>
+      </div>
+
+      <p
+        {...row(5)}
+        className="confirm-warning rise-in mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 transition-colors duration-300"
+      >
+        <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 shrink-0 overflow-visible">
+          <path
+            className="confirm-shackle"
+            d="M5.5 7V4.5a2.5 2.5 0 0 1 5 0V7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <rect x="3" y="6.5" width="10" height="7.5" rx="1.5" fill="currentColor" />
+        </svg>
+        Once confirmed, this trade can&apos;t be undone.
+      </p>
+
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => onDone(false)}
+          disabled={confirmed}
+          className={`${LIGHT} ${ACTION} flex-1 justify-center`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 16 16"
+            className="size-3.5 transition-transform duration-300 group-enabled:group-hover:rotate-90"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          >
+            <path d="m4 4 8 8M12 4l-8 8" />
+          </svg>
+          Cancel
+        </button>
+        <button
+          ref={button}
+          type="button"
+          onClick={confirm}
+          className={`confirm-go ${confirmed ? DONE : DARK} ${ACTION} flex-1 justify-center`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 16 16"
+            className="size-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path
+              key={confirmed ? "drawn" : "rest"}
+              className={confirmed ? "confirm-check" : ""}
+              pathLength={1}
+              d="m3 8.5 3.2 3.2L13 4.8"
+            />
+          </svg>
+          {confirmed ? "Order placed" : `Place ${buying ? "buy" : "sell"} order`}
+        </button>
+      </div>
+    </Popup>
   );
 }
 

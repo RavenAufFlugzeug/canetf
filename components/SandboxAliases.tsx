@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { FOCUS_RING } from "@/lib/ui";
 
 // The aliases the player has given a Sandbox set's picks, by symbol, shared by the pick cards
 // (PickCards) and the test (SandboxTest), and kept in this browser for the set (by `setKey`),
@@ -133,7 +134,7 @@ export function AliasName({
             setEditing(true);
           }
         }}
-        className="group/pen inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        className={`group/pen inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900 ${FOCUS_RING}`}
       >
         <svg
           aria-hidden

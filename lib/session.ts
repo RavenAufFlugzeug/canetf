@@ -9,7 +9,11 @@ import { getAppDb } from "@/lib/appDb";
 const COOKIE_NAME = "session";
 const SESSION_DAYS = 7;
 
-export type CurrentUser = { id: number; username: string; createdAt: string };
+export type CurrentUser = { id: number; email: string; createdAt: string };
+
+// What the site calls a user where the whole address would be too long (the navbar, the home
+// page's welcome): the part of their email before the @.
+export const shortName = (user: CurrentUser) => user.email.split("@")[0];
 
 // The database only stores a hash, so a leaked app.db can't be used to log in.
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -58,7 +62,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const row = getAppDb()
     .prepare(
-      `SELECT u.id, u.username, u.created_at AS createdAt
+      `SELECT u.id, u.email, u.created_at AS createdAt
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.id = ? AND s.expires_at > ?`,
     )

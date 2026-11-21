@@ -4,6 +4,7 @@ import CountUp from "@/components/CountUp";
 import KindBadge from "@/components/KindBadge";
 import type { CompanyProfile } from "@/lib/db";
 import { naicsOf } from "@/lib/naics";
+import { FOCUS_RING } from "@/lib/ui";
 
 // A balance sheet's date as written under its figures: "Jun 30, 2026".
 const day = (iso: string) =>
@@ -187,7 +188,7 @@ export default function CompanyAbout({
         href={profile.website}
         target="_blank"
         rel="noopener noreferrer"
-        className="group/link inline-flex items-center gap-2 rounded underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        className={`group/link inline-flex items-center gap-2 rounded underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-slate-900 ${FOCUS_RING}`}
       >
         <svg
           aria-hidden

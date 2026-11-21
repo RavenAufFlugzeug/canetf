@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { CloseIcon } from "@/components/Icons";
+import { button } from "@/lib/ui";
 
 const CLOSE_MS = 500; // matches .detail-fold in globals.css
 
@@ -50,19 +52,9 @@ export default function MapDetail({ name, symbol, badge, closeHref, children }: 
               <button
                 type="button"
                 onClick={close}
-                className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition duration-200 ease-out hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm active:scale-95 active:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                className={`group shrink-0 gap-1.5 ${button("secondary", "sm")}`}
               >
-                <svg
-                  aria-hidden
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  className="size-3 transition-transform duration-300 ease-out motion-safe:group-hover:rotate-90"
-                >
-                  <path d="M3 3l6 6M9 3l-6 6" />
-                </svg>
+                <CloseIcon className="size-3 transition-transform duration-300 ease-out motion-safe:group-hover:rotate-90" />
                 Close
               </button>
             </div>

@@ -4,6 +4,7 @@ import DiamondLoader from "@/components/DiamondLoader";
 import FadeText from "@/components/FadeText";
 import { useSandboxSwap } from "@/components/SandboxSwap";
 import { newSeed, sandboxHref } from "@/lib/sandbox";
+import { button } from "@/lib/ui";
 
 // The Sandbox's button for a random set of `count` companies and ETFs, keeping the timeframe
 // and starting amount chosen; `current` is the set shown now (the key of the area below it),
@@ -31,11 +32,7 @@ export default function PickButton({
       onClick={() => change(current ?? "none", () => sandboxHref({ range, amount, count, seed: newSeed() }))}
       disabled={pending}
       aria-busy={picking}
-      className={`group inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-300 ease-[cubic-bezier(0.3,1.4,0.5,1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 enabled:hover:-translate-y-0.5 enabled:active:translate-y-0 enabled:active:scale-95 disabled:cursor-wait ${
-        current
-          ? "border border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50 hover:shadow-md hover:shadow-slate-300/60"
-          : "bg-slate-900 text-white shadow-sm hover:bg-slate-700 hover:shadow-lg hover:shadow-slate-900/25"
-      }`}
+      className={`group shrink-0 disabled:cursor-wait ${button(current ? "secondary" : "primary")}`}
     >
       {picking ? <DiamondLoader className="size-3.5" /> : <ShuffleMark />}
       {/* Its words cross-fade when they change (a new number, or a set picked). */}

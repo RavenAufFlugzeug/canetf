@@ -17,6 +17,8 @@ import {
   getKeyStats,
   getPriceHistory,
 } from "@/lib/db";
+import Page from "@/components/Page";
+import { CARD, FOCUS_RING } from "@/lib/ui";
 
 export default async function MapPage({
   searchParams,
@@ -41,112 +43,110 @@ export default async function MapPage({
   const fund = Boolean(breakdown || profile?.fundFamily);
 
   return (
-    <main className="flex-1 bg-slate-50">
-      <section className="mx-auto max-w-6xl px-6 pt-10 pb-12">
-        <div className="rounded-2xl bg-white p-8 shadow">
-          {/* Back to the Search page, showing the ETF that is on the map (if any). */}
-          <Link
-            href={etf ? `/search?symbol=${encodeURIComponent(etf.symbol)}` : "/search"}
-            className="group mb-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-900 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-md hover:shadow-slate-300/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:shadow-sm"
+    <Page width="2xl">
+      <div className={CARD}>
+        {/* Back to the Search page, showing the ETF that is on the map (if any). */}
+        <Link
+          href={etf ? `/search?symbol=${encodeURIComponent(etf.symbol)}` : "/search"}
+          className={`group mb-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-900 transition duration-300 ease-out hover:border-slate-300 hover:bg-white hover:shadow-md hover:shadow-slate-300/60 ${FOCUS_RING} active:shadow-sm`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-3 text-slate-500 transition duration-300 ease-out group-hover:text-slate-900 motion-safe:group-hover:-translate-x-0.5"
           >
-            <svg
-              aria-hidden
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-3 text-slate-500 transition duration-300 ease-out group-hover:text-slate-900 motion-safe:group-hover:-translate-x-0.5"
-            >
-              <path d="M7.5 2.5 4 6l3.5 3.5" />
-            </svg>
-            Back to Search
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Holdings Map</h1>
-          <p className="mt-1 text-slate-600">
-            Explore an ETF&rsquo;s underlying holdings, level by level.
-          </p>
-          <div className="max-w-xl">
-            {/* Find an ETF by its ticker or by (part of) its name, with a switch. */}
-            <SearchBox
-              symbol={etf?.symbol ?? null}
-              name={etf?.name ?? null}
-              lead="Find an ETF by"
-              placeholders={{ symbol: "e.g. XEQT.TO", name: "e.g. iShares" }}
-              etfsOnly
-            />
-          </div>
-
-          {etf && tree ? (
-            // Keyed by symbol, so each newly chosen ETF plays its entrance.
-            <div key={`map-${etf.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
-              <div className="rise-in flex items-center gap-3">
-                {/* Its badge, as on the Search page: its sector's colour and its kind's mark. */}
-                <KindBadge
-                  sector={etf.sector}
-                  industry={etf.industry}
-                  fundFamily={etf.fundFamily}
-                  category={etf.category}
-                  className="size-10 rounded-xl"
-                  markClassName="size-5"
-                />
-                <p className="text-lg font-semibold text-slate-900">
-                  {/* Name, then the ticker on its own line, so a long name never splits them. */}
-                  {etf.name ?? etf.symbol}
-                  <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
-                </p>
-              </div>
-              <div className="rise-in mt-2" style={{ animationDelay: "80ms" }}>
-                <HoldingsMap tree={tree} detail={picked?.symbol ?? null} />
-              </div>
-
-              {picked && history && (
-                // Keyed by symbol, so each newly clicked product plays its entrance.
-                <MapDetail
-                  key={`detail-${picked.symbol}`}
-                  name={picked.name ?? picked.symbol}
-                  symbol={picked.symbol}
-                  badge={
-                    <KindBadge
-                      sector={picked.sector}
-                      industry={picked.industry}
-                      fundFamily={picked.fundFamily}
-                      category={picked.category}
-                      className="size-10 rounded-xl"
-                      markClassName="size-5"
-                    />
-                  }
-                  closeHref={`/map?symbol=${encodeURIComponent(etf.symbol)}`}
-                >
-                  <div className="rise-in" style={{ animationDelay: "80ms" }}>
-                    <PriceChart history={history} currency={picked.currency} exchange={exchange} />
-                  </div>
-                  {stats && <KeyStats stats={stats} currency={picked.currency} />}
-                  {/* What it is, as the Search page says it: a fund's country, provider (which
-                      opens the company behind it) and category; a company's sector, base (by its
-                      flag), size, website and what it does. */}
-                  {profile && fund && <FundAbout profile={profile} />}
-                  {profile && !fund && <CompanyAbout name={picked.name ?? picked.symbol} profile={profile} />}
-                  {breakdown && (
-                    <div className="rise-in" style={{ animationDelay: "400ms" }}>
-                      <EtfBreakdown breakdown={breakdown} />
-                    </div>
-                  )}
-                </MapDetail>
-              )}
-            </div>
-          ) : (
-            <p className="rise-in mt-4 text-slate-600">
-              {!chosen
-                ? "Enter an ETF's symbol to map everything inside it."
-                : etf
-                  ? `${etf.symbol} has no composition to map: it is a company, or an ETF with no holdings list.`
-                  : `No ETF with the symbol ${chosen.toUpperCase()} in our database.`}
-            </p>
-          )}
+            <path d="M7.5 2.5 4 6l3.5 3.5" />
+          </svg>
+          Back to Search
+        </Link>
+        <h1 className="text-2xl font-bold text-slate-900">Holdings Map</h1>
+        <p className="mt-1 text-slate-600">
+          Explore an ETF&rsquo;s underlying holdings, level by level.
+        </p>
+        <div className="max-w-xl">
+          {/* Find an ETF by its ticker or by (part of) its name, with a switch. */}
+          <SearchBox
+            symbol={etf?.symbol ?? null}
+            name={etf?.name ?? null}
+            lead="Find an ETF by"
+            placeholders={{ symbol: "e.g. XEQT.TO", name: "e.g. iShares" }}
+            etfsOnly
+          />
         </div>
-      </section>
-    </main>
+
+        {etf && tree ? (
+          // Keyed by symbol, so each newly chosen ETF plays its entrance.
+          <div key={`map-${etf.symbol}`} className="mt-6 border-t border-slate-200 pt-6">
+            <div className="rise-in flex items-center gap-3">
+              {/* Its badge, as on the Search page: its sector's colour and its kind's mark. */}
+              <KindBadge
+                sector={etf.sector}
+                industry={etf.industry}
+                fundFamily={etf.fundFamily}
+                category={etf.category}
+                className="size-10 rounded-xl"
+                markClassName="size-5"
+              />
+              <p className="text-lg font-semibold text-slate-900">
+                {/* Name, then the ticker on its own line, so a long name never splits them. */}
+                {etf.name ?? etf.symbol}
+                <span className="block text-base font-normal text-slate-500">{etf.symbol}</span>
+              </p>
+            </div>
+            <div className="rise-in mt-2" style={{ animationDelay: "80ms" }}>
+              <HoldingsMap tree={tree} detail={picked?.symbol ?? null} />
+            </div>
+
+            {picked && history && (
+              // Keyed by symbol, so each newly clicked product plays its entrance.
+              <MapDetail
+                key={`detail-${picked.symbol}`}
+                name={picked.name ?? picked.symbol}
+                symbol={picked.symbol}
+                badge={
+                  <KindBadge
+                    sector={picked.sector}
+                    industry={picked.industry}
+                    fundFamily={picked.fundFamily}
+                    category={picked.category}
+                    className="size-10 rounded-xl"
+                    markClassName="size-5"
+                  />
+                }
+                closeHref={`/map?symbol=${encodeURIComponent(etf.symbol)}`}
+              >
+                <div className="rise-in" style={{ animationDelay: "80ms" }}>
+                  <PriceChart history={history} currency={picked.currency} exchange={exchange} />
+                </div>
+                {stats && <KeyStats stats={stats} currency={picked.currency} />}
+                {/* What it is, as the Search page says it: a fund's country, provider (which
+                    opens the company behind it) and category; a company's sector, base (by its
+                    flag), size, website and what it does. */}
+                {profile && fund && <FundAbout profile={profile} />}
+                {profile && !fund && <CompanyAbout name={picked.name ?? picked.symbol} profile={profile} />}
+                {breakdown && (
+                  <div className="rise-in" style={{ animationDelay: "400ms" }}>
+                    <EtfBreakdown breakdown={breakdown} />
+                  </div>
+                )}
+              </MapDetail>
+            )}
+          </div>
+        ) : (
+          <p className="rise-in mt-4 text-slate-600">
+            {!chosen
+              ? "Enter an ETF's symbol to map everything inside it."
+              : etf
+                ? `${etf.symbol} has no composition to map: it is a company, or an ETF with no holdings list.`
+                : `No ETF with the symbol ${chosen.toUpperCase()} in our database.`}
+          </p>
+        )}
+      </div>
+    </Page>
   );
 }

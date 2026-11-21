@@ -1,9 +1,10 @@
 import OnboardingQuiz from "@/components/OnboardingQuiz";
+import Page from "@/components/Page";
 
 export default function Onboarding() {
   return (
-    <main className="flex flex-1 items-center justify-center">
+    <Page width="md">
       <OnboardingQuiz />
-    </main>
+    </Page>
   );
 }

@@ -233,6 +233,38 @@ export async function findCompaniesByName(
   return (matches ?? []).map(({ symbol, name }) => ({ symbol, name }));
 }
 
+// Exchange rates (USDCAD=X, "US Dollar to Canadian Dollar (USD/CAD)") matching `text`: by
+// their two codes, written together or apart ("usdcad", "USD/CAD", "usd cad"), or by (part
+// of) a currency's name ("dollar"). Codes that start with it first, then names that start
+// with it, then the rest; within each, by symbol.
+export async function findRates(text: string, limit = 10): Promise<CompanyMatch[]> {
+  const escaped = text.replace(/[!%_]/g, (ch) => `!${ch}`);
+  const letters = text.toUpperCase().replace(/[^A-Z]/g, "");
+  const matches = await withDb(
+    (db) =>
+      db
+        .prepare(
+          `SELECT symbol, name FROM companies
+           WHERE category = 'Currency'
+             AND ((:code != '' AND symbol LIKE :code) OR name LIKE :contains ESCAPE '!')
+           ORDER BY CASE
+                      WHEN :code != '' AND symbol LIKE :code THEN 0
+                      WHEN name LIKE :starts ESCAPE '!' THEN 1
+                      ELSE 2
+                    END,
+                    symbol
+           LIMIT :limit`,
+        )
+        .all({
+          code: letters ? `${letters}%` : "",
+          contains: `%${escaped}%`,
+          starts: `${escaped}%`,
+          limit,
+        }) as CompanyMatch[],
+  );
+  return (matches ?? []).map(({ symbol, name }) => ({ symbol, name }));
+}
+
 export type PricePoint = { t: string; close: number };
 
 export type PriceHistory = {
