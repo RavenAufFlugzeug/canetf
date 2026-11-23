@@ -158,11 +158,18 @@ const BOOKMARKS: { side: 0 | 1; family: PaletteName; d: string }[] = [
 // the open cover's do (the right one the left's mirrored). In the book's drawing.
 const CLASP_TABS = ["M-28.4 17.6-23.6 18.9V25.3L-28.4 24Z", "M28.4 17.6 23.6 18.9V25.3L28.4 24Z"];
 const GOLD = "oklch(0.8 0.15 75)";
-// The book's glow, by night: tiny warm-gold motes of light rising round it while it glows, each
+// The book's glow, by night: tiny warm-gold motes of light (diamonds, a little taller than wide)
+// rising round it while it glows, each
 // drifting up and a little aside, twinkling, and fading away, over and over, out of step
 // (.magic-mote): where each starts, its radius, how long after the others it sets off (s), and
 // how far aside it drifts, in the book's drawing.
 const MOTE = "oklch(0.93 0.14 95)";
+// A mote's diamond about (x, y), about as big as a circle of radius r would be.
+const moteDiamond = (x: number, y: number, r: number) => {
+  const w = r * 1.05;
+  const h = r * 1.45;
+  return `M${x} ${y - h}L${x + w} ${y}L${x} ${y + h}L${x - w} ${y}Z`;
+};
 // A fish floating in front of the book, low on its right, after the user's drawing, facing left:
 // its mouth open, a line behind its head and a keyhole for an eye; a long fin along its back, one
 // under its belly, one on its side and a crescent tail; pale blue, its head deeper, its fins
@@ -493,8 +500,9 @@ export default function MagicCardBack({ color }: { color: string }) {
   };
   const toDay = pick((now) => (now === "day" ? "dawn" : "day"));
   const toNight = pick((now) => (now === "night-red" ? "night-teal" : "night-red"));
-  // Whether the fish is glowing (clicked on and off; like the sun and moon, not opening the deck).
-  const [fishGlow, setFishGlow] = useState(false);
+  // Whether the fish is glowing (from the start; clicked off and on again, like the sun and moon,
+  // not opening the deck).
+  const [fishGlow, setFishGlow] = useState(true);
   const toggleFish = (event: MouseEvent) => {
     event.stopPropagation();
     event.preventDefault();
@@ -615,14 +623,12 @@ export default function MagicCardBack({ color }: { color: string }) {
                 />
               </g>
             </g>
-            {/* Motes of light rising round the book while it glows, by night. */}
+            {/* Motes of light (little diamonds) rising round the book while it glows, by night. */}
             <g style={{ opacity: nightTime ? 1 : 0, transition: SKY_FADE }}>
               {MOTES.map(([x, y, r, delay, drift]) => (
-                <circle
+                <path
                   key={`${x}-${y}`}
-                  cx={x}
-                  cy={y}
-                  r={r * 1.5}
+                  d={moteDiamond(x, y, r * 1.5)}
                   fill={MOTE}
                   className="magic-mote"
                   style={{ animationDelay: `${delay}s`, ["--drift" as string]: `${drift}px` }}

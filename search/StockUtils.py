@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS prices (             -- one row per company per day
     volume INTEGER,
     PRIMARY KEY (symbol, date)
 );
+CREATE TABLE IF NOT EXISTS dividends (          -- cash dividends, one row per payment
+    symbol TEXT NOT NULL REFERENCES companies(symbol),
+    date   TEXT NOT NULL,                       -- the ex-dividend date: shares held at the
+                                                --   close of the trading day before it get it
+    amount REAL NOT NULL,                       -- per share, in the listing's currency (and
+                                                --   unit, as prices: pence for GBp), adjusted
+                                                --   for splits as Yahoo adjusts prices
+    PRIMARY KEY (symbol, date)
+);
 CREATE TABLE IF NOT EXISTS intraday (           -- 5-minute bars for the last few trading days
     symbol TEXT NOT NULL REFERENCES companies(symbol),
     ts     TEXT NOT NULL,                       -- bar start in exchange time, with UTC offset
@@ -128,6 +137,11 @@ ABOUT_EXTRAS = ["hq_state", "website", "employees", "description"]
 # How much daily price history every company gets: everything Yahoo has (the website's
 # "All" chart range shows it).
 HISTORY_PERIOD = "max"
+# When a download includes a split, this much recent history is compared with what is stored:
+# prices saved before the split was applied differ from Yahoo's adjusted ones by more than
+# SPLIT_MISMATCH, and the listing's whole history is then downloaded again.
+SPLIT_CHECK_PERIOD = "3mo"
+SPLIT_MISMATCH = 0.02
 
 # (max days since the last stored price, yfinance period to download).
 # Each limit is a bit shorter than its period, so the download always overlaps the data we already have.
@@ -289,7 +303,38 @@ def get_history(symbol, period="1y", interval="1d", start=None, end=None):
         df = t.history(period=period, interval=interval, auto_adjust=False)
     if df.empty:
         raise ValueError(f"No history found for '{symbol}'. Check the ticker.")
-    return df[["Open", "High", "Low", "Close", "Volume"]]
+    # "Stock Splits" (the split ratio on a split day, else 0) is kept for _history_is_stale
+    # (not stored); "Dividends" (the cash dividend per share on its ex-dividend date, else 0) is
+    # stored by save_prices.
+    return df[[c for c in ("Open", "High", "Low", "Close", "Volume", "Dividends", "Stock Splits")
+               if c in df]]
+
+
+def _stored_prices_differ(conn, symbol, history):
+    """True when a stored close differs from `history`'s close on the same day by more than
+    SPLIT_MISMATCH (stored prices not adjusted for a later split)."""
+    start = history.index[0].strftime("%Y-%m-%d")
+    stored = dict(conn.execute("SELECT date, close FROM prices WHERE symbol = ? AND date >= ?",
+                               (symbol.upper(), start)).fetchall())
+    for day, close in history["Close"].items():
+        old = stored.get(day.strftime("%Y-%m-%d"))
+        if old and close and abs(old / close - 1) > SPLIT_MISMATCH:
+            return True
+    return False
+
+
+def _history_is_stale(conn, symbol, history):
+    """True when `history` (a short update download) includes a split that the stored prices
+    were saved before.
+
+    Yahoo adjusts all earlier prices for a split, but an update only downloads the latest days,
+    so the stored ones would stay unadjusted (an overnight jump on the chart). Yahoo can date
+    the split days after the prices changed (MTUM's 4-for-1: prices from 2026-10-30, the split
+    on 2026-11-05), so the last SPLIT_CHECK_PERIOD is compared rather than the day before it.
+    """
+    if "Stock Splits" not in history or not (history["Stock Splits"] > 0).any():
+        return False
+    return _stored_prices_differ(conn, symbol, get_history(symbol, period=SPLIT_CHECK_PERIOD))
 
 
 # Yahoo's bond credit-quality keys, best first ('us_government' is left out: it overlaps
@@ -427,7 +472,8 @@ def save_quote(conn, symbol, price, avg_volume=None):
 
 
 def save_prices(conn, symbol, df):
-    """Save daily bars. Re-running replaces existing days, so no duplicates."""
+    """Save daily bars, and any cash dividends among them (the "Dividends" column, when the
+    download has one). Re-running replaces existing days, so no duplicates."""
     symbol = symbol.upper()
     rows = [(symbol, r.Index.strftime("%Y-%m-%d"), _num(r.Open), _num(r.High),
              _num(r.Low), _num(r.Close), _num(r.Volume, int))
@@ -435,6 +481,17 @@ def save_prices(conn, symbol, df):
     conn.executemany(
         "INSERT OR REPLACE INTO prices (symbol, date, open, high, low, close, volume) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+    if "Dividends" in df:
+        save_dividends(conn, symbol, df["Dividends"])
+    return len(rows)
+
+
+def save_dividends(conn, symbol, dividends):
+    """Save cash dividends: a Series of amounts per share by ex-dividend date (zeros skipped)."""
+    rows = [(symbol.upper(), day.strftime("%Y-%m-%d"), float(amount))
+            for day, amount in dividends.items() if amount and amount > 0]
+    conn.executemany(
+        "INSERT OR REPLACE INTO dividends (symbol, date, amount) VALUES (?, ?, ?)", rows)
     return len(rows)
 
 
@@ -512,6 +569,11 @@ def _refresh_company(conn, symbol, period, replace_prices=False, profile=True):
     build_database and update_database use it.
     """
     history = get_history(symbol, period=period, interval="1d")
+    # A split since the prices were stored: download them all again, adjusted.
+    if not replace_prices and _history_is_stale(conn, symbol, history):
+        print(f"↻ {symbol}: split found, downloading its full price history again")
+        history = get_history(symbol, period=HISTORY_PERIOD, interval="1d")
+        replace_prices = True
     intraday = _get_intraday(symbol)
     raw_info = _get_info(yf.Ticker(symbol)) if profile else {}
     info = get_company_info(symbol, raw_info) if profile else None
@@ -528,6 +590,7 @@ def _refresh_company(conn, symbol, period, replace_prices=False, profile=True):
     try:
         if replace_prices:
             conn.execute("DELETE FROM prices WHERE symbol = ?", (symbol,))
+            conn.execute("DELETE FROM dividends WHERE symbol = ?", (symbol.upper(),))
         if info:
             save_company(conn, info)      # company row first
         save_quote(conn, symbol, price, avg_volume)
@@ -899,6 +962,69 @@ def extend_history(db_path=DB_PATH, period=HISTORY_PERIOD, starting_after=None):
     finally:
         conn.close()
     print("\nDone." + (f" Failed: {failed}" if failed else ""))
+    return failed
+
+
+def repair_split_history(db_path=DB_PATH, period="1y", symbols=None):
+    """Download the full price history again for stored listings whose prices were saved
+    before a split and never adjusted for it (one-off: the update now catches new splits).
+
+    Compares `period` of Yahoo's history with what is stored, one request per listing
+    (`symbols`, default all stored ones), and refreshes those that differ. Returns the
+    symbols refreshed.
+    """
+    conn = init_db(db_path)
+    todo = symbols or [r[0] for r in conn.execute("SELECT DISTINCT symbol FROM prices ORDER BY symbol")]
+    print(f"Checking {len(todo)} price histories for splits not applied\n")
+    repaired = []
+    try:
+        for symbol in todo:
+            try:
+                if _stored_prices_differ(conn, symbol, get_history(symbol, period=period)):
+                    history = get_history(symbol, period=HISTORY_PERIOD)
+                    conn.execute("DELETE FROM prices WHERE symbol = ?", (symbol,))
+                    conn.execute("DELETE FROM dividends WHERE symbol = ?", (symbol,))
+                    n = save_prices(conn, symbol, history)
+                    conn.commit()
+                    repaired.append(symbol)
+                    print(f"↻ {symbol}: prices differed from Yahoo's; {n} daily rows downloaded again")
+            except Exception as e:
+                conn.rollback()
+                print(f"✗ {symbol}: {e}")
+            time.sleep(UPDATE_PAUSE_SECONDS)
+    finally:
+        conn.close()
+    print(f"\nDone. Downloaded again: {repaired or 'none'}")
+    return repaired
+
+
+def fill_dividends(db_path=DB_PATH, symbols=None):
+    """Download every stored listing's full cash-dividend history (one-off, for databases built
+    before dividends were kept; the update saves new ones with the prices). One request per
+    listing (`symbols`, default all with prices); each listing's dividends are replaced.
+    Returns the symbols that failed."""
+    conn = init_db(db_path)
+    todo = symbols or [r[0] for r in conn.execute("SELECT DISTINCT symbol FROM prices ORDER BY symbol")]
+    print(f"Downloading the dividends of {len(todo)} listings\n")
+    failed, paying = [], 0
+    try:
+        for symbol in todo:
+            try:
+                dividends = yf.Ticker(symbol).dividends
+                conn.execute("DELETE FROM dividends WHERE symbol = ?", (symbol.upper(),))
+                n = save_dividends(conn, symbol, dividends)
+                conn.commit()
+                paying += n > 0
+                if n:
+                    print(f"✓ {symbol}: {n} dividends, from {dividends.index[0]:%Y-%m-%d}")
+            except Exception as e:
+                conn.rollback()
+                failed.append(symbol)
+                print(f"✗ {symbol}: {e}")
+            time.sleep(UPDATE_PAUSE_SECONDS)
+    finally:
+        conn.close()
+    print(f"\nDone. {paying} of {len(todo)} pay dividends." + (f" Failed: {failed}" if failed else ""))
     return failed
 
 

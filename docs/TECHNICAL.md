@@ -149,6 +149,8 @@ Useful functions in `search/StockUtils.py` (import with `from StockUtils import 
 | `add_missing_holdings(limit=None)` | add them now instead of 15 per update (`recheck=True` also retries holdings that had no listing) |
 | `fill_company_details()` | look up where each company trades and is based, a fund's provider and category, and a company's state or province, website, employee count and description, for those without them (one-off for older databases; the update also fills them as profiles refresh) |
 | `fill_company_financials()` | look up each company's revenue and latest balance sheet (total assets and liabilities) for those not yet checked (one-off for older databases; the update also looks them up, at most weekly per company) |
+| `fill_dividends()` | download every stored listing's full dividend history (one-off for databases built before dividends were kept; the update saves new ones from the same download as the prices) |
+| `repair_split_history()` | find stored listings whose prices predate a split (compares a year with Yahoo's) and download their full history again; one-off, the update catches new splits |
 | `extend_history()` | download every stored company's full daily price history (one-off, for databases built when less was kept; about 30 minutes) |
 
 To add a company or ETF: `build_database(["TICKER"])`. TSX listings need `.TO`
@@ -215,6 +217,8 @@ components/
   KeyStats.tsx            stats table under the chart
   CompanyAbout.tsx        a company's About section: NAICS sector, where it's based, size, website, description
   EtfBreakdown.tsx        ETF treemap + holdings list
+  RiskRating.tsx          a fund's risk rating: scale, figure, Methodology (and the map's chip)
+  RiskMethodology.tsx     the Methodology pop-up: the calculation step by step (Back/Next), interactive charts and worked formulas
   HoldingsMap.tsx         tree of an ETF's holdings, and their holdings (lib/db.ts getEtfTree), coloured by NAICS
   WatchlistTable.tsx      watch list table (add/remove animations)
   Navbar.tsx, AuthForm.tsx, ChangePasswordForm.tsx, OnboardingQuiz.tsx
@@ -223,6 +227,7 @@ lib/
   appDb.ts                app.db (accounts, sessions, profiles, watch lists) + schema
   session.ts, password.ts login sessions, scrypt password hashing
   money.ts                currency formatting
+  risk.ts                 a fund's risk rating from its daily closes (see §9.2)
   questions.ts            onboarding questionnaire
 search/                   Python data pipeline
   StockUtils.py           everything: fetching, schema, build/update
@@ -243,6 +248,7 @@ next.config.ts            redirects, experimental view transitions
 | `companies` | company/ETF | `symbol` (PK), `name`, `sector`, `industry`, `currency`, `market_cap`, `pe_trailing`, `pe_forward`, `week52_high`, `week52_low`, `updated_at` (when the profile was last refreshed), `exchange` (Yahoo's code for where it trades, e.g. `TOR`, `NMS`; named in `lib/exchanges.ts`), `hq_city`, `hq_state`, `hq_country` (where a company is based), `fund_family`, `category` (a fund's provider and Yahoo category), `website`, `employees`, `description` (a company's website, full-time staff and Yahoo's business summary, for the Search page's About section), `revenue` (last 12 months), `financial_currency` (the currency it reports in, which can differ from the one it trades in), `total_assets`, `total_liabilities`, `balance_date` (from its latest balance sheet, quarterly else yearly), `balance_checked_at` (balance sheets are looked up at most weekly, `BALANCE_MAX_AGE`) |
 | `quotes` | company (latest only) | `symbol` (PK), `fetched_at`, `price`, `avg_volume` |
 | `prices` | company per trading day | `symbol`, `date`, `open`, `high`, `low`, `close`, `volume` |
+| `dividends` | cash dividend | `symbol`, `date` (ex-dividend date: shares held at the previous close get it), `amount` (per share, the listing's currency and unit, split-adjusted as prices are) |
 | `intraday` | 5-minute bar, last 5 trading days | `symbol`, `ts` (exchange-local time with offset), `date`, OHLC, `volume` |
 | `etf_breakdown` | ETF part | `etf`, `kind` (`holding` or `rating`), `rank`, `label`, `symbol`, `weight` (0–1) |
 | `holding_symbols` | ETF holding ticker | `holding` (as the ETF lists it), `symbol` (where it's stored here, NULL = no listing), `checked_at`, `reason` (why there's no listing: `cash`, `stopped`, `unlisted`), `last_trade` (for `stopped`) |
@@ -309,6 +315,22 @@ never commit it.
 
 - **Data access** is in `lib/db.ts` (server only). Pages are server components; interactive
   parts (`CompanyPicker`, `PriceChart`, `EtfBreakdown`, `WatchlistTable`) are client components.
+- **Dividends** (`dividends` table): Search shows the last 12 months' total and yield and the
+  latest ex-dividend in the key figures, with a History pop-up (`DividendHistory`: totals by
+  calendar year, each year's payments and yield). In the Sandbox, moving on credits each pick's
+  dividends whose ex-dividend date falls in the days passed, for the shares held at the close
+  before it (holdings don't change while days pass), as cash in the pick's currency
+  (`getSandboxSetPrices` returns `dividends` per day, amounts only, so the test stays blind);
+  they count in the account value, the recap, the trade record and the results.
+- **Risk ratings** (`lib/risk.ts`, worked out by the website from `prices`, nothing stored):
+  the CSA risk classification method fund companies use in ETF Facts (NI 81-102 Appendix F).
+  Month-end closes, the last 10 years of monthly returns (the unfinished month left out), their
+  sample standard deviation × √12, then the bands Low < 6% ≤ Low to medium < 11% ≤ Medium < 16%
+  ≤ Medium to high < 20% ≤ High. Funds only (a composition or a provider); under 36 monthly
+  returns it says "Not rated". Differences from the official figure: shorter histories are used
+  as they are (no reference index), and price returns rather than total returns. Shown on the
+  Search page (`#risk`, with the Methodology walkthrough pop-up), and on the Holdings
+  Map's heading chip, hover card and detail panel.
 - **Mutations** use server actions in `app/actions/` and call `refresh()` from `next/cache`.
 - **Auth:** scrypt password hashes; a random session token in an httpOnly cookie, stored only
   as a SHA-256 hash; sessions last 7 days.
@@ -343,6 +365,11 @@ and `docs/Token.txt`.
   stopped trading such as QRVO, bought by Skyworks in Oct 2026); `missing_holdings()` lists
   them, the Holdings Map explains why on hover, and they're looked up again monthly. Yahoo's
   holdings lists can lag behind mergers.
+- **Splits.** Yahoo adjusts all earlier prices for a split, but the update only downloads the
+  latest days. When a download includes a split, the update compares the last 3 months with what
+  is stored and, if they differ, downloads the listing's full history again (`_history_is_stale`;
+  Yahoo can date the split after the prices changed, as with MTUM's 4-for-1 in Oct–Nov 2026).
+  `repair_split_history()` checks every stored listing once (one request each).
 - **Prices are in each listing's own currency** (USD, EUR, ¥, …); there is no conversion to CAD.
 - **The 1D chart assumes a 6.5-hour session** (TSX/NYSE hours) when drawing a partial day.
 

@@ -8,6 +8,7 @@ import KindBadge from "@/components/KindBadge";
 import MapMark from "@/components/MapMark";
 import PriceChart from "@/components/PriceChart";
 import RateAbout from "@/components/RateAbout";
+import RiskRating from "@/components/RiskRating";
 import { pairOf } from "@/lib/fx";
 import { naicsOf } from "@/lib/naics";
 import { kindOf } from "@/lib/sandbox";
@@ -20,6 +21,7 @@ import {
   getExchange,
   getKeyStats,
   getPriceHistory,
+  getRisk,
 } from "@/lib/db";
 import Page from "@/components/Page";
 
@@ -41,6 +43,9 @@ export default async function SearchPage({
   // The same pair the other way round (CADUSD=X for USDCAD=X), when the database has it.
   const pair = rate && company ? pairOf(company.symbol) : null;
   const reverse = pair ? await getCompany(`${pair.quote}${pair.base}=X`) : null;
+  // A fund's risk rating, from its price history (lib/risk.ts).
+  const fund = Boolean(breakdown || profile?.fundFamily);
+  const risk = company && fund && !rate ? await getRisk(company.symbol) : null;
 
   return (
     <Page width="md">
@@ -84,7 +89,7 @@ export default async function SearchPage({
             <div className="rise-in" style={{ animationDelay: "80ms" }}>
               <PriceChart history={history} currency={company.currency} exchange={exchange} rate={rate} />
             </div>
-            {stats && <KeyStats stats={stats} currency={company.currency} rate={rate} />}
+            {stats && <KeyStats stats={stats} currency={company.currency} rate={rate} symbol={company.symbol} />}
             {/* An exchange rate gets an About section of its own: what each currency buys of
                 the other, how it moved over the year, and an example. */}
             {rate && history.daily.length > 0 && (
@@ -100,6 +105,8 @@ export default async function SearchPage({
             {/* A fund gets one of its own: which country it is from (where it is listed, by
                 that country's flag), who runs it and what kind of fund it is. */}
             {profile && !rate && (breakdown || profile.fundFamily) && <FundAbout profile={profile} />}
+            {/* A fund's risk rating, and how it is worked out. */}
+            {risk && !rate && <RiskRating risk={risk} symbol={company.symbol} />}
             {profile && !rate && !breakdown && !profile.fundFamily && (
               <CompanyAbout name={company.name ?? company.symbol} profile={profile} />
             )}
