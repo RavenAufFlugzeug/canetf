@@ -263,7 +263,7 @@ export default function HoldingsDeck({
               className={`text-fade-in absolute left-0 top-3 p-3 text-[11px] leading-snug ${CARD_SLOT}`}
               style={{ width: CARD_W, height: CARD_H }}
             >
-              No shares yet. Buy some, and they&apos;re dealt here.
+              No shares held
             </div>
           )}
           {handCards.map((card, i) => {

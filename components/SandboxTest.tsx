@@ -43,8 +43,23 @@ import { currencyName, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
 import { POPUP_OUT_MS } from "@/lib/popup";
 import Popup from "@/components/Popup";
-import { newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
+import { addedBy, newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
+import { loadDecks, type Strategy } from "@/lib/strategy";
+import {
+  addMoney,
+  checksOn,
+  decide,
+  nextCheck,
+  nothingToTrade,
+  runnable,
+  startRun,
+  unfinished,
+  type Order,
+  type RunPick,
+  type RunState,
+} from "@/lib/strategyRun";
+import { dateOf, dateText, useSandboxOpen } from "@/components/SandboxOpen";
 import { button as buttonLook, field, LABEL, PANEL_TITLE, FOCUS_RING, SECTION_TITLE } from "@/lib/ui";
 
 // The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
@@ -84,6 +99,9 @@ type Pick = {
   sector: string | null; // its NAICS group's name
   currency: string | null; // what it trades in
   figures: Figures;
+  // In a custom set, one not listed yet on Day 1: how many days pass before its first (its
+  // `from`); until then it can't be traded, and its chart starts there. 0 for any other.
+  offset: number;
 };
 type Side = "Bought" | "Sold";
 // A trade: its price per share in the currency the pick trades in, and `rate`, how many
@@ -127,6 +145,8 @@ type Recap = {
   from: number;
   to: number;
   values: number[];
+  // The monthly contributions added over the days (in the values, but not a gain).
+  added?: number;
   // Each pick held: its shares, how its worth in CAD moved over the days (its price and its
   // currency's rate together), and what that made or lost.
   // `pricePct`: its price's change alone; `pct`: its worth in CAD (the same for a CAD pick).
@@ -150,6 +170,8 @@ type Recap = {
 
 // How long a recap takes to fade away (.recap-out in globals.css).
 const RECAP_OUT_MS = POPUP_OUT_MS;
+// How long a strategy considers each day before it decides.
+const THINK_MS = 4000;
 // The walk through new days: how long the test takes to fade out; how long the page then takes
 // to move up to its top, unseen; how long the days passed show on their own; how long the test
 // takes to fade back in, on the new day; how long the page takes to glide to a holding's chart,
@@ -346,12 +368,15 @@ export default function SandboxTest({
   picks,
   days,
   amount,
+  monthly = 0,
   setKey,
   choices,
 }: {
   picks: Pick[];
   days: number;
   amount: number;
+  // What is added to the cash (in CAD) at the end of each month (21 trading days), if anything.
+  monthly?: number;
   // The key of the Sandbox's area this test is in (the set's: see SandboxSwap), and the
   // choices it was made with, for trying again (a new set) or leaving (no set).
   setKey: string;
@@ -433,6 +458,25 @@ export default function SandboxTest({
   // (trades and dividends together).
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [ledger, setLedger] = useState<LoggedTrade[]>([]);
+  // Each pick's cash dividend per share on each day before Day 1 and since (else 0), for a
+  // strategy's yields.
+  const [divHistory, setDivHistory] = useState<Record<string, number[]>>({});
+  const [divs, setDivs] = useState<Record<string, number[]>>({});
+  // A strategy from the Strategies page (lib/strategy.ts, read once the page is up): the one
+  // chosen to bring in (none: the player trades), whether it is on (deciding each day, then
+  // moving on) or the player has taken over, what it keeps from day to day (and up to which day
+  // it has counted the money come in), the day it last decided, and what it did then.
+  const [decks, setDecks] = useState<Strategy[]>([]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setDecks(loadDecks()));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const [strategyId, setStrategyId] = useState<number | null>(null);
+  const [auto, setAuto] = useState(false);
+  const [run, setRun] = useState<{ state: RunState; seen: number; paid: number } | null>(null);
+  const [decidedDay, setDecidedDay] = useState(0);
+  const [decision, setDecision] = useState<{ day: number; notes: string[]; key: string } | null>(null);
+  const strategy = decks.find((d) => d.id === strategyId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // The start button's ripple (where it was clicked, keyed so each click starts a new one),
@@ -470,7 +514,15 @@ export default function SandboxTest({
   // Stops the page's glide under way (easeTo), if any.
   const stopEase = useRef(() => {});
 
-  const entries = picks.map(({ symbol, from }) => ({ symbol, from }));
+  const entries = picks.map(({ symbol, from, offset }) => ({ symbol, from, ...(offset ? { offset } : {}) }));
+  // A pick listed late: its days in the test from its first (a list of the test's days, or
+  // where years begin among its history's and the test's).
+  const offsetOf = (symbol: string) => picks.find((p) => p.symbol === symbol)?.offset ?? 0;
+  const ownDays = <T,>(symbol: string, list: T[]) => list.slice(offsetOf(symbol));
+  const ownYears = (symbol: string, starts: number[], before: number) => {
+    const off = offsetOf(symbol);
+    return starts.filter((i) => i < before || i >= before + off).map((i) => (i >= before ? i - off : i));
+  };
   // Once the test is over: the stretch of time it ran over, and each pick's real name.
   // The pick opened in the result's table, to see its price over the test (and before).
   const [resultPick, setResultPick] = useState<string | null>(null);
@@ -494,6 +546,12 @@ export default function SandboxTest({
   const nameOf = (symbol: string) =>
     aliases[symbol] ?? picks.find((p) => p.symbol === symbol)?.name ?? symbol;
   const day = prices[picks[0].symbol]?.length ?? 0;
+  // A set chosen by hand hides nothing: each day's date (by the first pick's days), when known.
+  const { dates: openDates } = useSandboxOpen();
+  const dateOn = (d: number) => {
+    const date = dateOf(openDates?.[(picks.find((p) => !p.offset) ?? picks[0]).symbol], d);
+    return date ? dateText(date) : null;
+  };
   // Being traded right now, for leaving the page to ask first (LeaveGuard); no longer once it
   // is finished or left, or this test goes.
   useEffect(() => {
@@ -533,10 +591,16 @@ export default function SandboxTest({
   // The cash, all of it, in CAD at today's rates.
   const cashCad = Object.entries(wallet).reduce((sum, [c, v]) => sum + v * fxNow(c), 0);
   const value = cents(cashCad + invested);
-  const sinceStart = ((value - amount) / amount) * 100;
+  // What has been put in by Day `d`: the starting amount, and each month's added at the end of
+  // it (so in the cash from the next day on); the return is on all of it.
+  const addedOn = (d: number) => addedBy(monthly, d - 1);
+  const putIn = amount + addedOn(day);
+  const sinceStart = ((value - putIn) / putIn) * 100;
 
   // The pick shown, and its figures.
   const pick = picks.find((p) => p.symbol === selected) ?? picks[0];
+  // Not listed yet today: it can't be traded until it is.
+  const unlisted = pick.offset >= day;
   const price = priceOf(pick.symbol);
   const rate = rateOf(pick.symbol);
   const foreign = Boolean(pick.currency && pick.currency !== "CAD");
@@ -546,14 +610,14 @@ export default function SandboxTest({
   // How `n` shares of `symbol` would be paid for today: from the cash already in its currency,
   // then, for one not in CAD, the rest exchanged from CAD (rounded up to the cent); null when the
   // cash doesn't stretch to it.
-  function paymentFor(symbol: string, n: number): Payment | null {
+  function paymentFor(symbol: string, n: number, w: Wallet = wallet): Payment | null {
     const cur = currencyOf(symbol);
     const cost = cents(n * priceOf(symbol));
-    const fromHeld = Math.min(wallet[cur] ?? 0, cost);
+    const fromHeld = Math.min(w[cur] ?? 0, cost);
     const short = cents(cost - fromHeld);
     if (cur === "CAD") return short > 0 ? null : { cost, fromHeld, short: 0, cadPaid: 0 };
     const cadPaid = Math.ceil(short * rateOf(symbol) * 100 - 1e-6) / 100;
-    return cadPaid <= (wallet.CAD ?? 0) + 1e-9 ? { cost, fromHeld, short, cadPaid } : null;
+    return cadPaid <= (w.CAD ?? 0) + 1e-9 ? { cost, fromHeld, short, cadPaid } : null;
   }
   // As many shares as the cash pays for: the cash in the share's currency, and for one not in
   // CAD, the CAD it can be exchanged for too.
@@ -617,6 +681,13 @@ export default function SandboxTest({
       );
       setBefore({ day: 0, value: amount });
       setPrices(each((s) => dayOne[s].closes));
+      setDivHistory(each((s) => past[s].dividends));
+      setDivs(each((s) => dayOne[s].dividends));
+      // The strategy brought in, if any, starts trading at once.
+      setAuto(strategyId !== null);
+      setRun(null);
+      setDecidedDay(0);
+      setDecision(null);
       setRates(each((s) => dayOne[s].rates));
       setOrders({});
       setStatus("trading");
@@ -654,7 +725,7 @@ export default function SandboxTest({
   // recap over the panel: how the account went, how the picks moved, and how each position
   // did); then, as it fades, they come in (moveOn), the chart sliding on and the figures
   // counting.
-  function goTo(next: number) {
+  function goTo(next: number, quiet = false) {
     setError(null);
     startTransition(async () => {
       const loaded = await getSandboxSetPrices(entries, day + 1, next);
@@ -688,6 +759,9 @@ export default function SandboxTest({
       });
       const values = Array.from({ length: steps + 1 }, (_, k) =>
         cents(
+          // Each month's contribution, from the day after it ends.
+          addedOn(day + k) -
+            addedOn(day) +
           // The cash, each currency at that day's rate, then the shares.
           Object.entries(wallet).reduce(
             (sum, [c, v]) =>
@@ -715,10 +789,11 @@ export default function SandboxTest({
       );
       // A share's worth in CAD at the end of the days.
       const endOf = (s: string) => loaded[s].closes[steps - 1] * loaded[s].rates[steps - 1];
-      play({
+      const done: Recap = {
         from: day,
         to: next,
         values,
+        added: addedOn(next) - addedOn(day),
         positions: picks
           .filter((p) => heldOf(p.symbol).shares > 0)
           .map((p) => ({
@@ -735,7 +810,10 @@ export default function SandboxTest({
           })),
         days: loaded,
         payouts: paid,
-      }, trades.at(-1)?.symbol);
+      };
+      // (Moved on by a strategy: the days come in at once, without the walk or the recap.)
+      if (quiet) bringIn(done);
+      else play(done, trades.at(-1)?.symbol);
     });
   }
 
@@ -883,6 +961,12 @@ export default function SandboxTest({
   // chart sliding on and the figures counting.
   function bringIn(done: Recap) {
     setBefore({ day: done.from, value: done.values[0] });
+    // Each month ended since: its contribution, in the cash.
+    const extra = addedOn(done.to) - addedOn(done.from);
+    if (extra > 0) {
+      setWallet((w) => ({ ...w, CAD: cents((w.CAD ?? 0) + extra) }));
+      setMoneyNote({ key: Date.now(), text: `Monthly contribution: ${money.format(extra)} CAD added.` });
+    }
     if (done.payouts.length) {
       // Paid into the cash in each pick's currency (kept there, as a sale's is).
       setWallet((w) => {
@@ -904,9 +988,11 @@ export default function SandboxTest({
       setMoneyNote({
         key: Date.now(),
         dividend: true,
-        text: one
+        text:
+          (one
           ? `Dividend received: +${nativeText(payoutAmount(one), one.currency)} from ${one.name} (${one.perShare.toLocaleString("en-CA", { minimumFractionDigits: one.perShare < 1 ? 4 : 2, maximumFractionDigits: one.perShare < 1 ? 4 : 2 })} × ${one.shares.toLocaleString("en-CA")} ${sharesWord(one.shares)}), into your ${one.currency} cash.`
-          : `${done.payouts.length} dividends received: +${money.format(total)} in all, into your cash.`,
+          : `${done.payouts.length} dividends received: +${money.format(total)} in all, into your cash.`) +
+          (extra > 0 ? ` Monthly contribution: ${money.format(extra)} CAD added.` : ""),
       });
       setLedger((all) => [
         ...all,
@@ -915,6 +1001,9 @@ export default function SandboxTest({
     }
     setPrices((all) =>
       Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].closes]])),
+    );
+    setDivs((all) =>
+      Object.fromEntries(picks.map((p) => [p.symbol, [...(all[p.symbol] ?? []), ...done.days[p.symbol].dividends]])),
     );
     setRates((all) =>
       Object.fromEntries(picks.map((p) => [p.symbol, [...all[p.symbol], ...done.days[p.symbol].rates]])),
@@ -1109,6 +1198,7 @@ export default function SandboxTest({
   // Asks to buy or sell `n` shares of the pick shown at today's price: if it can be done, the
   // confirming card comes up; if not, why not.
   function request(side: Side, n: number) {
+    if (unlisted) return fail(`It isn't listed until ${longDay(pick.from)}.`);
     if (!Number.isInteger(n) || n < 1) return fail("Enter a whole number of shares.");
     if (side === "Bought" && n > affordable)
       return fail(`Your cash stretches to at most ${affordable} ${sharesWord(affordable)} on Day ${day}.`);
@@ -1213,6 +1303,113 @@ export default function SandboxTest({
     }, RECAP_OUT_MS + (toHand ? HAND_GLIDE_MS : 0));
   }
 
+  // Makes a strategy's orders at today's prices, one after another, as the player's are made
+  // (a purchase paid from the cash in its currency, the rest exchanged from CAD; a sale's money
+  // kept in its currency), each cut to what the cash still stretches to.
+  function applyOrders(orders: Order[]) {
+    const w: Wallet = { ...wallet };
+    const h: Record<string, Holding> = { ...holdings };
+    const made: Trade[] = [];
+    const swaps: Exchange[] = [];
+    for (const o of orders) {
+      const at = priceOf(o.symbol);
+      const fx = rateOf(o.symbol);
+      const cur = currencyOf(o.symbol);
+      const was = h[o.symbol] ?? { shares: 0, cost: 0 };
+      let n = o.shares;
+      if (o.side === "Bought") {
+        while (n > 0 && !paymentFor(o.symbol, n, w)) n--;
+        const pay = n > 0 ? paymentFor(o.symbol, n, w) : null;
+        if (!pay) continue;
+        if (pay.short > 0) {
+          w.CAD = cents((w.CAD ?? 0) - pay.cadPaid);
+          w[cur] = cents((w[cur] ?? 0) + pay.short);
+          swaps.push({ day, from: "CAD", to: cur, paid: pay.cadPaid, got: pay.short, auto: true });
+        }
+        w[cur] = cents((w[cur] ?? 0) - pay.cost);
+        h[o.symbol] = { shares: was.shares + n, cost: was.cost + cents(n * at * fx) };
+      } else {
+        n = Math.min(n, was.shares);
+        if (n < 1) continue;
+        w[cur] = cents((w[cur] ?? 0) + cents(n * at));
+        h[o.symbol] = {
+          shares: was.shares - n,
+          cost: was.shares === n ? 0 : was.cost - n * (was.cost / was.shares),
+        };
+      }
+      made.push({ symbol: o.symbol, name: nameOf(o.symbol), day, side: o.side, shares: n, price: at, rate: fx });
+    }
+    if (!made.length) return;
+    setWallet(w);
+    setHoldings(h);
+    setTrades((t) => [...t, ...made]);
+    setLedger((l) => [...l, ...made.map(({ symbol, day: d, side, shares: n, price: at, rate: fx }) => ({ symbol, day: d, side, shares: n, price: at, rate: fx }))]);
+    if (swaps.length) setExchanges((e) => [...e, ...swaps]);
+  }
+
+  // The strategy's decision for today: the money come in since it last decided shared out (all
+  // the cash, as it starts), then what to buy and sell, made at once.
+  function act() {
+    if (!strategy) return;
+    const reinvest = strategy.plan?.dividends !== "cash";
+    const fresh = run
+      ? addedOn(day) -
+        addedOn(run.seen) +
+        (reinvest ? payouts.slice(run.paid).reduce((sum, x) => sum + payoutCad(x), 0) : 0)
+      : cashCad;
+    const state = addMoney(strategy, run?.state ?? startRun(day), fresh);
+    const market: RunPick[] = picks.map((p) => {
+      const past = history[p.symbol] ?? [];
+      const pastRates = rateHistory[p.symbol]?.rates ?? [];
+      return {
+        symbol: p.symbol,
+        name: nameOf(p.symbol),
+        kind: p.kind,
+        currency: p.currency,
+        offset: p.offset,
+        start: past.length,
+        closes: [...past, ...(prices[p.symbol] ?? [])],
+        dividends: [...(divHistory[p.symbol] ?? past.map(() => 0)), ...(divs[p.symbol] ?? [])],
+        rates: [
+          ...past.map((_, i) => pastRates[i - (past.length - pastRates.length)] ?? (p.currency === "CAD" ? 1 : null)),
+          ...(rates[p.symbol] ?? []),
+        ],
+      };
+    });
+    const { orders, state: after, notes } = decide(strategy, { day, picks: market, held: holdings, cash: cashCad }, state);
+    applyOrders(orders);
+    setRun({ state: after, seen: day, paid: payouts.length });
+    setDecidedDay(day);
+    setDecision({ day, notes, key: `${strategy.id}-${day}` });
+  }
+
+  // While a strategy is on: each day, it considers for a while (THINK_MS, a card saying so),
+  // decides, and then the next day comes in; on the last day it decides and hands back. Not
+  // while anything else is going on (days loading or walking through, a card up).
+  const busy = pending || recap !== null || tour !== null || ask !== null || quitting || finishing;
+  // (Considering only on a day one of its cards looks; on the others it decides at once.)
+  const looks = strategy !== null && checksOn(strategy, day);
+  const considering = status === "trading" && auto && strategy !== null && !busy && decidedDay !== day && looks;
+  useEffect(() => {
+    if (status !== "trading" || !auto || !strategy || busy) return;
+    // Today not yet decided: decide (after considering, on a day it looks). Decided (with the
+    // trades made by now): on at once to the next day it looks (the days between come in
+    // together: nothing to decide on them); on the last, the strategy hands back.
+    const timer = window.setTimeout(
+      () => {
+        if (decidedDay !== day) act();
+        // (With no finished card it has nothing to look at, so it hands back rather than
+        // running to the end.)
+        else if (day < days && runnable(strategy)) goTo(nextCheck(strategy, day, days), true);
+        else setAuto(false);
+      },
+      decidedDay !== day && looks ? THINK_MS : 0,
+    );
+    return () => window.clearTimeout(timer);
+    // (`act` and `goTo` read the day's state as it is when this runs.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, auto, strategy, busy, decidedDay, day, looks]);
+
   // The panel, by stage. It is the same box throughout, easing to each stage's height
   // (EaseHeight) as that stage's parts rise in one after another.
   return (
@@ -1226,8 +1423,34 @@ export default function SandboxTest({
       return (
         <div
           data-hidden={leaving || ending ? "" : undefined}
-          className="tour-panel result-in rise-in mt-5 rounded-xl bg-slate-50 p-5"
+          className="tour-panel result-in rise-in mt-5"
         >
+          {/* A strategy to bring in (from the Strategies page): it trades each day for you, until
+              you take over. */}
+          <label className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span className={LABEL}>Strategy</span>
+            <select
+              value={strategyId ?? ""}
+              onChange={(e) => setStrategyId(e.target.value ? Number(e.target.value) : null)}
+              disabled={pending}
+              className={field("sm")}
+            >
+              <option value="">None (trade by hand)</option>
+              {decks.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name.trim() || "Untitled strategy"}
+                </option>
+              ))}
+            </select>
+            {/* (Said if it would have nothing to trade here.) */}
+            {strategy && (nothingToTrade(strategy, picks) || unfinished(strategy) > 0) && (
+              <span className="flex items-center gap-1.5 text-amber-800">
+                <WarnMark className="size-4 shrink-0" />
+                {nothingToTrade(strategy, picks) ??
+                  `${unfinished(strategy)} of its cards ${unfinished(strategy) === 1 ? "is" : "are"} unfinished and will be skipped.`}
+              </span>
+            )}
+          </label>
           <div className="flex flex-wrap items-center gap-4">
             <button type="button" onClick={start} disabled={pending} aria-busy={pending} className={START}>
               {ripple && (
@@ -1300,7 +1523,7 @@ export default function SandboxTest({
       const valueByDay = Array.from({ length: days }, (_, k) => {
         // The cash by currency then, from the trades (in each share's currency) and exchanges
         // made by then, each at that day's rate; and the shares then, at that day's prices.
-        const walletThen: Wallet = { CAD: amount };
+        const walletThen: Wallet = { CAD: amount + addedOn(k + 1) };
         const owned: Record<string, number> = {};
         for (const t of trades) {
           if (t.day > k + 1) continue;
@@ -1337,7 +1560,7 @@ export default function SandboxTest({
         <div
           ref={panelTop}
           data-hidden={ending ? "" : undefined}
-          className="tour-panel result-in rise-in mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5"
+          className="tour-panel result-in rise-in mt-5 scroll-mt-24"
         >
           {/* The grade, marked in red as on a test paper: a paper with a tick beside the result,
               and the letter on a tile, which opens what the grades mean. */}
@@ -1465,14 +1688,17 @@ export default function SandboxTest({
           </div>
           <dl
             {...enterSlow(0)}
-            className={`rise-in mt-4 grid grid-cols-2 gap-4 text-sm ${payouts.length ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
+            className={`rise-in mt-4 grid grid-cols-2 gap-4 text-sm ${
+              ["sm:grid-cols-3", "sm:grid-cols-4", "sm:grid-cols-5"][(payouts.length ? 1 : 0) + (monthly ? 1 : 0)]
+            }`}
           >
             <Stat label="Started with" value={money.format(amount)} />
+            {monthly > 0 && <Stat label="Added monthly" value={money.format(addedOn(days))} />}
             <Stat label={`Worth on Day ${days}`} value={<Tween value={value} format={moneyText} />} />
             <Stat
               label="Return"
               value={<span className={tone(sinceStart)}>{pctText(sinceStart)}</span>}
-              note={signed(value - amount, money.format(Math.abs(value - amount)))}
+              note={signed(value - putIn, money.format(Math.abs(value - putIn)))}
             />
             {/* The cash dividends the shares earned while held (part of the return). */}
             {payouts.length > 0 && (
@@ -1680,7 +1906,8 @@ export default function SandboxTest({
       );
     }
 
-    const sinceBefore = cents(value - before.value);
+    // (Less what was added since: a contribution isn't a gain.)
+    const sinceBefore = cents(value - before.value - (addedOn(day) - addedOn(before.day)));
     const left = days - day;
     const canTrade = !pending && !recap && !ask;
     // Moving on: a day, a week or a month, each while that many days are left (all kept drawn,
@@ -1714,7 +1941,7 @@ export default function SandboxTest({
           ending || arriving || (tour && (tour.stage === "out" || tour.stage === "day")) ? "" : undefined
         }
         data-touring={tour ? "" : undefined}
-        className="tour-panel rise-in relative mt-5 scroll-mt-24 rounded-xl bg-slate-50 p-5"
+        className="tour-panel rise-in relative mt-5 scroll-mt-24"
       >
         <div {...enter(0)}>
           <div className="flex items-baseline justify-between gap-4">
@@ -1737,7 +1964,10 @@ export default function SandboxTest({
               </span>
               <span>
                 Day <Tween value={day} format={dayText} />{" "}
-                <span className="font-normal text-slate-500">of {days}</span>
+                <span className="font-normal text-slate-500">
+                  of {days}
+                  {dateOn(day) && <span key={day} className="text-fade-in">{` · ${dateOn(day)}`}</span>}
+                </span>
               </span>
             </p>
             <p className="text-sm text-slate-500">
@@ -1754,6 +1984,58 @@ export default function SandboxTest({
               style={{ width: `${(day / days) * 100}%` }}
             />
           </div>
+          {/* The strategy: which one, on (trading for you) or off (you trade), and what it did
+              last. Switching starts the new one afresh, with all the cash to invest. */}
+          {decks.length > 0 && (
+            <div className="mt-4 rounded-lg bg-white px-3 py-2.5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`${LABEL} mr-1`}>Strategy</span>
+                <select
+                  aria-label="Strategy"
+                  value={strategyId ?? ""}
+                  onChange={(e) => {
+                    const id = e.target.value ? Number(e.target.value) : null;
+                    setStrategyId(id);
+                    setRun(null);
+                    setDecidedDay(0);
+                    setDecision(null);
+                    if (id === null) setAuto(false);
+                  }}
+                  className={field("xs")}
+                >
+                  <option value="">None</option>
+                  {decks.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name.trim() || "Untitled strategy"}
+                    </option>
+                  ))}
+                </select>
+                {strategy && (
+                  <button
+                    type="button"
+                    onClick={() => setAuto(!auto)}
+                    aria-pressed={auto}
+                    className={`${auto ? LIGHT : DARK} ${ACTION} ml-auto`}
+                  >
+                    {auto ? "Take control" : "Let it trade"}
+                  </button>
+                )}
+              </div>
+              {strategy && (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {auto ? "On: it decides each day, then moves on." : "Off: you're trading."}
+                </p>
+              )}
+              {decision && strategy && (
+                <ul key={decision.key} className="text-fade-in mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-700">
+                  <li className="text-slate-500">Day {decision.day}:</li>
+                  {decision.notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         {/* The picks: each one's price, the day's change and the shares held; choosing one
@@ -1818,18 +2100,24 @@ export default function SandboxTest({
                   className="text-base font-semibold text-slate-900"
                 />
                 {/* Its price, in the currency it trades in, with its symbol as Search has it ("US$67.40"),
-                    its code beside it. */}
-                <p className="text-sm text-slate-500">
-                  Price{" "}
-                  <span className="text-lg font-semibold tabular-nums text-slate-900">
-                    <Tween value={price} format={priceText} />
-                  </span>
-                  {pick.currency && (
-                    <span className="ml-1 rounded-sm bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
-                      {pick.currency}
+                    its code beside it; never squeezed onto more lines, even with the alias box open. */}
+                {unlisted ? (
+                  <p className="shrink-0 whitespace-nowrap rounded-md bg-amber-50 px-2 py-0.5 text-sm font-semibold text-amber-800">
+                    Listed {longDay(pick.from)}
+                  </p>
+                ) : (
+                  <p className="shrink-0 whitespace-nowrap text-sm text-slate-500">
+                    Price{" "}
+                    <span className="text-lg font-semibold tabular-nums text-slate-900">
+                      <Tween value={price} format={priceText} />
                     </span>
-                  )}
-                </p>
+                    {pick.currency && (
+                      <span className="ml-1 rounded-sm bg-slate-200 px-1 py-px text-[10px] font-bold text-slate-700">
+                        {pick.currency}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               {/* Its general info, as the Search page's About has it (but with its name hidden):
                 folded to begin with, a line saying it opens. */}
@@ -1844,20 +2132,27 @@ export default function SandboxTest({
                 }}
               />
               <div ref={chartTop} className="scroll-mt-24" />
-              <SandboxChart
-                symbol={pick.symbol}
-                replay={replay}
-                history={history[pick.symbol] ?? []}
-                prices={prices[pick.symbol] ?? []}
-                yearStarts={yearStarts[pick.symbol] ?? []}
-                trades={trades.filter((t) => t.symbol === pick.symbol)}
-                // A price in another currency, as its figure alone (its currency is named above).
-                format={foreign ? (x) => plainText(x, pick.currency) : undefined}
-                range={chartRange}
-                onRange={setChartRange}
-                scope={chartScope}
-                onScope={setChartScope}
-              />
+              {/* (Listed late: its chart from its first day, once it has one.) */}
+              {unlisted ? (
+                <p className="mt-4 rounded-lg bg-white px-3 py-6 text-center text-sm text-slate-500 shadow-sm">
+                  {`Not listed yet. It can be traded from ${longDay(pick.from)} (Day ${pick.offset + 1}).`}
+                </p>
+              ) : (
+                <SandboxChart
+                  symbol={pick.symbol}
+                  replay={replay}
+                  history={history[pick.symbol] ?? []}
+                  prices={ownDays(pick.symbol, prices[pick.symbol] ?? [])}
+                  yearStarts={ownYears(pick.symbol, yearStarts[pick.symbol] ?? [], history[pick.symbol]?.length ?? 0)}
+                  trades={trades.filter((t) => t.symbol === pick.symbol)}
+                  // A price in another currency, as its figure alone (its currency is named above).
+                  format={foreign ? (x) => plainText(x, pick.currency) : undefined}
+                  range={chartRange}
+                  onRange={setChartRange}
+                  scope={chartScope}
+                  onScope={setChartScope}
+                />
+              )}
             </div>
           </EaseHeight>
         </div>
@@ -1984,18 +2279,18 @@ export default function SandboxTest({
                 )}
                 {/* In another currency than CAD: its rate to CAD over the same days, folded to
                 begin with. */}
-                {foreign && rateHistory[pick.symbol] && (
+                {foreign && !unlisted && rateHistory[pick.symbol] && (
                   <FxChart
                     symbol={pick.symbol}
                     day={day}
                     currency={pick.currency}
                     history={rateHistory[pick.symbol].rates}
-                    rates={rates[pick.symbol] ?? []}
+                    rates={ownDays(pick.symbol, rates[pick.symbol] ?? [])}
                     // Where years begin: the history's, then the test's (as the price chart has
                     // them, moved to the rate's history's length).
                     yearStarts={[
                       ...rateHistory[pick.symbol].yearStarts,
-                      ...(yearStarts[pick.symbol] ?? [])
+                      ...ownYears(pick.symbol, yearStarts[pick.symbol] ?? [], history[pick.symbol]?.length ?? 0)
                         .filter((i) => i >= (history[pick.symbol]?.length ?? 0))
                         .map(
                           (i) =>
@@ -2061,7 +2356,7 @@ export default function SandboxTest({
                       setWorking(side);
                       setError(null);
                     }}
-                    usable={canTrade}
+                    usable={canTrade && !unlisted}
                     onText={(text) => {
                       setOrders((o) => ({
                         ...o,
@@ -2119,7 +2414,7 @@ export default function SandboxTest({
               <button
                 type="button"
                 onClick={() => goTo(day + s.days)}
-                disabled={s.days > left || pending || recap !== null || tour !== null || ask !== null}
+                disabled={s.days > left || pending || recap !== null || tour !== null || ask !== null || auto}
                 className={`${i === 0 ? DARK : LIGHT} ${ACTION}`}
               >
                 <s.Mark className="size-4" />
@@ -2142,6 +2437,9 @@ export default function SandboxTest({
         {tour && (tour.stage === "day" || tour.stage === "in") && (
           <DaysPassed recap={tour.recap} leaving={tour.stage === "in"} />
         )}
+        {considering && strategy && (
+          <Considering key={day} name={strategy.name.trim() || "Your strategy"} day={day} onStop={() => setAuto(false)} />
+        )}
         {tour?.stage === "walk" && (
           <TourGuide
             recap={tour.recap}
@@ -2152,7 +2450,7 @@ export default function SandboxTest({
         )}
         {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} />}
         {finishing && (
-          <FinishCard days={days} start={amount} end={value} leaving={finishLeaving} onDone={finish} />
+          <FinishCard days={days} start={putIn} end={value} leaving={finishLeaving} onDone={finish} />
         )}
         {quitting && <QuitCard day={day} trades={trades.length} leaving={quitLeaving} onDone={quit} />}
         {ask && (
@@ -2540,6 +2838,32 @@ function DaysPassed({ recap, leaving }: { recap: Recap; leaving: boolean }) {
 // that made or lost, with a dot for each holding and a Skip button (or Escape) to go straight to
 // the recap. It rises in, its words fade from one holding to the next, and it sinks away as the
 // recap comes up.
+// While a strategy considers the day (THINK_MS): a card at the foot of the screen saying so, a
+// bar filling as it does, and a button to take over (the strategy goes off, and you trade).
+function Considering({ name, day, onStop }: { name: string; day: number; onStop: () => void }) {
+  return createPortal(
+    <div
+      role="status"
+      className="tour-guide fixed inset-x-0 bottom-5 z-40 mx-auto w-[min(26rem,calc(100%-2rem))] rounded-xl border border-slate-200 bg-white/95 p-3 pl-4 shadow-xl shadow-slate-900/10 backdrop-blur"
+    >
+      <div className="flex items-center gap-3">
+        <DiamondLoader className="size-4 shrink-0" />
+        <p className="min-w-0 flex-1 text-sm">
+          <span className="block truncate font-semibold text-slate-900">{name}</span>
+          <span className="text-slate-500">Considering Day {day}…</span>
+        </p>
+        <button type="button" onClick={onStop} className={`${LIGHT} ${ACTION} shrink-0`}>
+          Take control
+        </button>
+      </div>
+      <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="considering-bar h-full rounded-full bg-slate-900" style={{ animationDuration: `${THINK_MS}ms` }} />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function TourGuide({
   recap,
   at,
@@ -2615,7 +2939,7 @@ function TourGuide({
 // to where they ended as the little chart draws itself. Pointing along the little chart shows
 // each day's value. Continue (or a click outside it, or Escape) closes it.
 function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
-  const { from, to, values, positions, payouts } = recap;
+  const { from, to, values, positions, payouts, added = 0 } = recap;
   // The dividends received over the days, in CAD (each at its day's rate).
   const dividendTotal = payouts.reduce((sum, x) => sum + payoutCad(x), 0);
   const button = useRef<HTMLButtonElement>(null);
@@ -2627,7 +2951,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   const passed = to - from;
   const start = values[0];
   const end = values[values.length - 1];
-  const move = end - start;
+  const move = end - start - added;
   const pct = start ? (move / start) * 100 : 0;
   const Mark = passed === 1 ? MoonMark : passed <= 5 ? WeekMark : MonthMark;
   // The positions, biggest gain first; past SHOWN of them, the list scrolls.
@@ -2982,6 +3306,12 @@ function ExchangePanel({
   onExchange: (from: string, to: string, paid: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // A set chosen by hand hides nothing: each exchange by its date (the first pick's days).
+  const { dates: openDates } = useSandboxOpen();
+  const dateOn = (d: number) => {
+    const date = dateOf(openDates ? Object.values(openDates)[0] : null, d);
+    return date ? dateText(date) : null;
+  };
   // Whether it is open and done opening: only then may what is in it reach past its edges.
   const [settled, setSettled] = useState(false);
   const firstHeld = currencies.find((c) => c !== "CAD" && (wallet[c] ?? 0) > 0);
@@ -3182,7 +3512,7 @@ function ExchangePanel({
                   key={exchanges.length - i}
                   className={`flex justify-between gap-3 tabular-nums ${i === 0 ? "fx-row-in" : ""}`}
                 >
-                  <span>{`Day ${e.day}: ${nativeText(e.paid, e.from)} → ${nativeText(e.got, e.to)}`}</span>
+                  <span>{`${dateOn(e.day) ?? `Day ${e.day}`}: ${nativeText(e.paid, e.from)} → ${nativeText(e.got, e.to)}`}</span>
                   <span className="text-slate-400">{e.auto ? "Share Purchase" : "Currency Exchange"}</span>
                 </li>
               ))}

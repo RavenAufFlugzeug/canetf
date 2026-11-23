@@ -605,6 +605,19 @@ body:has(> main.bg-slate-50) {
   }
 }
 
+/* A strategy considering the day (Considering in components/SandboxTest.tsx): its bar fills
+   from left to right over the time it takes. */
+.considering-bar {
+  transform-origin: left;
+  animation: considering linear both;
+}
+
+@keyframes considering {
+  from {
+    transform: scaleX(0);
+  }
+}
+
 /* The Sandbox test's guide while it walks through new days (TourGuide in
    components/SandboxTest.tsx): it rises in from the foot of the screen and sinks back away. */
 .tour-guide {
@@ -975,12 +988,73 @@ html[data-company-leaving] .company-view {
 .step-slot > div {
   min-width: 0;
   overflow: clip;
-  overflow-clip-margin: 8px;
+  /* Room for a button's shadow when pointed at (it reaches about 22px below it), so it is never
+     cut off in a hard edge. */
+  overflow-clip-margin: 24px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .step-slot,
   .step-slot[data-on="true"] {
+    transition: none;
+  }
+}
+
+/* The Sandbox's companies and ETFs chosen by hand (components/SandboxChooser.tsx): a row
+   added rises in as its room opens; one taken out fades and folds its room away. The preview
+   of one found rises in, and sinks and fades as it is cleared. */
+.chosen-row {
+  grid-template-rows: 1fr;
+  animation: chosen-row-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 220ms ease-in;
+}
+
+.chosen-row[data-out] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+@keyframes chosen-row-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.chosen-preview {
+  animation: chosen-preview-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition:
+    opacity 300ms ease-in,
+    translate 300ms ease-in,
+    filter 300ms ease-in;
+}
+
+.chosen-preview[data-out] {
+  opacity: 0;
+  translate: 0 6px;
+  filter: blur(2px);
+}
+
+@keyframes chosen-preview-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    filter: blur(3px);
+  }
+}
+
+/* A note on a custom set's start (a pick not yet listed then), rising in after the others. */
+.start-note {
+  animation: chosen-preview-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chosen-row,
+  .chosen-preview,
+  .start-note {
+    animation: none;
     transition: none;
   }
 }
@@ -2232,17 +2306,20 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 1;
 }
 
-/* The cat and her book, floating up and down together while pointed at. */
+/* The cat and her book, floating up and down together. A plain translation would be snapped to
+   whole px (Firefox does, to keep it crisp), so the small move would step; a turn too slight to
+   see stops that, and it glides. */
 .magic-float {
+  will-change: transform;
   animation: magic-float 2.4s ease-in-out infinite alternate;
 }
 
 @keyframes magic-float {
   from {
-    transform: translateY(1px);
+    transform: translateY(1px) rotate(0.05deg);
   }
   to {
-    transform: translateY(-2.5px);
+    transform: translateY(-2.5px) rotate(0.05deg);
   }
 }
 
@@ -2655,15 +2732,9 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 
 /* The pen, while pointed at: floating, slowly, rising a little and leaning back and forth about
    its middle. Otherwise still. */
-/* The fish (in front of the book, at its foot): swimming gently, turning a little; from the start,
-   glowing warm gold (from the glow's own colours, clear, so it never darkens on its way) with
-   motes of light rising off it, until clicked (and again once clicked again). */
+/* The fish (in front of the book, at its foot): swimming gently, turning a little, and always
+   glowing warm gold with motes of light rising off it. */
 .magic-fish {
-  filter: drop-shadow(0 0 0 oklch(0.97 0.09 95 / 0)) drop-shadow(0 0 0 oklch(0.9 0.13 85 / 0));
-  transition: filter 1s ease-in-out;
-}
-
-.magic-fish[data-glow] {
   filter: drop-shadow(0 0 2.5px oklch(0.97 0.09 95 / 1)) drop-shadow(0 0 8px oklch(0.9 0.13 85 / 0.85));
 }
 
@@ -2692,7 +2763,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   opacity: 0;
 }
 
-.magic-fish[data-glow] .magic-fish-mote {
+.magic-fish-mote {
   animation: magic-fish-mote 2.4s ease-out infinite backwards;
 }
 
@@ -2766,7 +2837,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 
   :is(.deck-pile:hover, .deck-pile[data-happy]) :is(.magic-mote, .magic-light),
-  .magic-fish[data-glow] .magic-fish-mote,
+  .magic-fish-mote,
   :is(.magic-hat, .magic-bird, .magic-fish-swim, .magic-pansy, .magic-sun-rays, .magic-sun-disc, .magic-quill, .magic-float, .magic-half, .magic-twinkle, .magic-moon-body, .magic-moon-star, .magic-page-fill, .magic-page-edge),
   .deck-pile:hover :is(.magic-sun-body, .magic-moon-body),
   .deck-pile[data-happy] .magic-rising {

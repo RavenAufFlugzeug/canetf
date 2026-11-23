@@ -338,6 +338,9 @@ export type SandboxPick = {
   category: string | null;
   currency: string | null; // what it trades in (any currency with an exchange rate to CAD)
   from: string;
+  // In a set chosen by hand, one not yet listed on Day 1: how many of the test's days pass
+  // before its first (its `from`), when it can first be traded.
+  offset?: number;
 };
 
 // The exchange rate that turns `currency` (its main unit) into Canadian dollars: the pair
@@ -429,7 +432,9 @@ export async function getLatestCadRate(currency: string | null): Promise<number 
 
 // Every Sandbox listing's first and last day of prices, read once in a while: looking up
 // each listing's ends through the index is quick, but not something to do on every pick.
-type Span = Omit<SandboxPick, "from"> & { first: string; last: string };
+// (`first`: from when it can be traded here, once it has prices and its rate to CAD has begun;
+// `listed`: its first price.)
+type Span = Omit<SandboxPick, "from"> & { first: string; last: string; listed: string };
 let spans: { at: number; list: Span[] } | null = null;
 const SPANS_TTL = 60 * 60 * 1000;
 
@@ -452,6 +457,45 @@ const addDays = (date: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+// Every Sandbox listing's span, read again once SPANS_TTL has passed.
+function sandboxSpans(db: DatabaseSync): Span[] {
+  if (!spans || Date.now() - spans.at > SPANS_TTL) {
+    const list = db
+      .prepare(
+        `SELECT c.symbol, c.name, c.sector, c.industry,
+                ${hasColumn(db, "fund_family") ? "c.fund_family" : "NULL"} AS fundFamily,
+                ${hasColumn(db, "category") ? "c.category" : "NULL"} AS category, c.currency,
+                (SELECT MIN(date) FROM prices p WHERE p.symbol = c.symbol) AS first,
+                (SELECT MAX(date) FROM prices p WHERE p.symbol = c.symbol) AS last
+         FROM companies c WHERE c.currency IS NOT NULL AND c.symbol NOT LIKE '%=X'`,
+      )
+      .all() as (Span & { first: string | null; last: string | null })[];
+    // When each currency's CAD rate begins: a listing in another currency can be picked only
+    // for a test its rate covers (the cash is in Canadian dollars).
+    const rateFrom: Record<string, string | null> = { CAD: "0000-01-01" };
+    for (const s of list) {
+      const major = s.currency ? majorOf(s.currency) : "CAD";
+      if (major in rateFrom) continue;
+      const pair = cadPair(db, major);
+      rateFrom[major] = pair
+        ? ((db.prepare("SELECT MIN(date) AS d FROM prices WHERE symbol = ?").get(pair.symbol) as { d: string | null })
+            .d ?? null)
+        : null;
+    }
+    spans = {
+      at: Date.now(),
+      list: list.flatMap((s) => {
+        if (!s.first || !s.last) return [];
+        const from = rateFrom[s.currency ? majorOf(s.currency) : "CAD"];
+        if (!from) return [];
+        // From when it can be traded here: once it has prices and its rate has begun.
+        return [{ ...s, first: s.first > from ? s.first : from, listed: s.first } as Span];
+      }),
+    };
+  }
+  return spans!.list;
+}
+
 // `count` listings for the Sandbox, picked at random (by `seed`) from those trading through
 // the same stretch of time: a start date is picked first, from the months when at least
 // `count` listings have prices from two months before it until well after it, then listings that have
@@ -464,41 +508,7 @@ export async function pickSandboxSet(
   seed: number,
 ): Promise<{ start: string; picks: SandboxPick[] } | null> {
   const picked = await withDb((db) => {
-    if (!spans || Date.now() - spans.at > SPANS_TTL) {
-      const list = db
-        .prepare(
-          `SELECT c.symbol, c.name, c.sector, c.industry,
-                  ${hasColumn(db, "fund_family") ? "c.fund_family" : "NULL"} AS fundFamily,
-                  ${hasColumn(db, "category") ? "c.category" : "NULL"} AS category, c.currency,
-                  (SELECT MIN(date) FROM prices p WHERE p.symbol = c.symbol) AS first,
-                  (SELECT MAX(date) FROM prices p WHERE p.symbol = c.symbol) AS last
-           FROM companies c WHERE c.currency IS NOT NULL AND c.symbol NOT LIKE '%=X'`,
-        )
-        .all() as (Span & { first: string | null; last: string | null })[];
-      // When each currency's CAD rate begins: a listing in another currency can be picked only
-      // for a test its rate covers (the cash is in Canadian dollars).
-      const rateFrom: Record<string, string | null> = { CAD: "0000-01-01" };
-      for (const s of list) {
-        const major = s.currency ? majorOf(s.currency) : "CAD";
-        if (major in rateFrom) continue;
-        const pair = cadPair(db, major);
-        rateFrom[major] = pair
-          ? ((db.prepare("SELECT MIN(date) AS d FROM prices WHERE symbol = ?").get(pair.symbol) as { d: string | null })
-              .d ?? null)
-          : null;
-      }
-      spans = {
-        at: Date.now(),
-        list: list.flatMap((s) => {
-          if (!s.first || !s.last) return [];
-          const from = rateFrom[s.currency ? majorOf(s.currency) : "CAD"];
-          if (!from) return [];
-          // From when it can be traded here: once it has prices and its rate has begun.
-          return [{ ...s, first: s.first > from ? s.first : from } as Span];
-        }),
-      };
-    }
-    const list = spans.list;
+    const list = sandboxSpans(db);
     const random = seeded(seed);
     // About how many calendar days `days` trading days take, with room for holidays; and how
     // long before the start each listing must have prices, so its chart has a past to show.
@@ -536,14 +546,76 @@ export async function pickSandboxSet(
         if (!lastOf.get(s.symbol, start, days - 1)) continue;
         const first = startOf.get(s.symbol, start) as { date: string } | undefined;
         if (!first) continue;
-        const { first: _f, last: _l, ...about } = s;
+        const { first: _f, last: _l, listed: _d, ...about } = s;
         void _f;
         void _l;
+        void _d;
         picks.push({ ...about, from: first.date });
       }
       if (picks.length === count) return { start, picks };
     }
     return null;
+  });
+  return picked ?? null;
+}
+
+// From when each of `symbols` can be traded in the Sandbox (its first price, or later if its
+// rate to CAD begins later: `byRate`), for a set chosen by hand; missing for one that can't be.
+export async function getTradableFrom(
+  symbols: string[],
+): Promise<Record<string, { from: string; byRate: boolean }>> {
+  const out = await withDb((db) => {
+    const all = sandboxSpans(db);
+    return Object.fromEntries(
+      symbols.flatMap((symbol) => {
+        const s = all.find((x) => x.symbol === symbol);
+        return s ? [[symbol, { from: s.first, byRate: s.first > s.listed }]] : [];
+      }),
+    );
+  });
+  return out ?? {};
+}
+
+// A set of listings chosen by hand, for a test of `days` trading days from `start`. The test's
+// days are those of the first listed by then (in the order chosen): each listed by then starts
+// on its own first trading day on or after `start`; one listed later (or whose rate to CAD
+// begins later) joins on its first trading day, `offset` days in (`offset` may reach `days`:
+// listed only after the test). One that doesn't trade through all of its days is left out
+// (`missing`), as is one with no prices to trade on. `problem`: none of them listed by `start`
+// ("none"), or not `days` trading days after it ("short").
+export type ChosenSet =
+  | { start: string; picks: SandboxPick[]; missing: string[]; problem?: undefined }
+  | { problem: "none" | "short"; missing: string[] };
+export async function pickChosenSet(symbols: string[], days: number, start: string): Promise<ChosenSet | null> {
+  const picked = await withDb((db): ChosenSet => {
+    const all = sandboxSpans(db);
+    const found = symbols.flatMap((symbol) => all.filter((s) => s.symbol === symbol));
+    const missing = symbols.filter((symbol) => !found.some((s) => s.symbol === symbol));
+    const listed = found.filter((s) => s.first <= start && s.last >= start);
+    if (!listed.length) return { problem: "none", missing };
+    const datesFrom = db.prepare(
+      "SELECT date FROM prices WHERE symbol = ? AND date >= ? AND close IS NOT NULL ORDER BY date LIMIT ?",
+    );
+    // The test's days, by the first listed.
+    const calendar = (datesFrom.all(listed[0].symbol, start, days) as { date: string }[]).map((r) => r.date);
+    if (calendar.length < days) return { problem: "short", missing };
+    const picks: SandboxPick[] = [];
+    for (const s of found) {
+      const late = s.first > start;
+      const run = (datesFrom.all(s.symbol, late ? s.first : start, days) as { date: string }[]).map((r) => r.date);
+      const offset = late ? calendar.filter((d) => d < (run[0] ?? "9999-12-31")).length : 0;
+      // Every day it is in the test (a late one's first may fall after it: listed too late).
+      if (!run.length || (offset < days && run.length < days - offset)) {
+        missing.push(s.symbol);
+        continue;
+      }
+      const { first: _f, last: _l, listed: _d, ...about } = s;
+      void _f;
+      void _l;
+      void _d;
+      picks.push({ ...about, from: run[0], ...(offset ? { offset } : {}) });
+    }
+    return { start, picks, missing };
   });
   return picked ?? null;
 }

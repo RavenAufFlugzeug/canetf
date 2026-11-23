@@ -7,11 +7,23 @@ export const TIMEFRAMES = [
   { key: "1m", label: "1 month", days: 21 },
   { key: "3m", label: "3 months", days: 63 },
   { key: "6m", label: "6 months", days: 126 },
-  { key: "12m", label: "12 months", days: 252 },
+  { key: "12m", label: "1 year", days: 252 },
+  { key: "2y", label: "2 years", days: 504 },
+  { key: "4y", label: "4 years", days: 1008 },
 ];
 
 // What the test can start with, in Canadian dollars.
-export const AMOUNTS = [500, 1_000, 2_000, 5_000, 10_000];
+export const AMOUNTS = [500, 1_000, 2_000, 5_000];
+
+// What can be added each month, in Canadian dollars (0: nothing), for a test longer than
+// MONTHLY_AFTER trading days (3 months). A month is 21 trading days (as the test's Next month),
+// and it comes in at the end of each: on Day 21, 42, 63 and so on.
+export const MONTHLY = [0, 50, 100, 500, 1_000];
+export const DEFAULT_MONTHLY = 0;
+export const MONTH_DAYS = 21;
+export const MONTHLY_AFTER = 63;
+// How much has been added by the end of Day `day`, at `monthly` a month.
+export const addedBy = (monthly: number, day: number) => monthly * Math.floor(Math.max(day, 0) / MONTH_DAYS);
 
 // How many companies and ETFs a test can have.
 export const COUNTS = [4, 12, 24];
@@ -26,16 +38,35 @@ export const DEFAULT_COUNT = 4;
 export const SEEDS = 1_000_000;
 export const newSeed = () => Math.floor(Math.random() * SEEDS);
 
-export type Choices = { range?: string; amount?: number; count?: number; seed?: number };
+// The most listings a set chosen by hand can have (as many as the largest random one).
+export const MOST_CHOSEN = Math.max(...COUNTS);
+
+// (`custom`: the listings are chosen by hand, `symbols`, and the test starts on `start`, rather
+// than a random set at a random time.)
+export type Choices = {
+  range?: string;
+  amount?: number;
+  monthly?: number;
+  count?: number;
+  seed?: number;
+  custom?: boolean;
+  symbols?: string[];
+  start?: string;
+};
 
 // The Sandbox's address for these choices; those left out aren't made yet (no seed: nothing
-// picked yet).
-export function sandboxHref({ range, amount, count, seed }: Choices) {
+// picked yet; no start: no custom set yet).
+export function sandboxHref({ range, amount, monthly, count, seed, custom, symbols, start }: Choices) {
   const params = new URLSearchParams();
+  if (custom) params.set("mode", "custom");
   if (amount) params.set("amount", String(amount));
+  if (monthly) params.set("monthly", String(monthly));
   if (range) params.set("range", range);
-  if (count) params.set("count", String(count));
-  if (seed !== undefined) params.set("seed", String(seed));
+  if (custom) {
+    if (symbols?.length) params.set("symbols", symbols.join(","));
+    if (start) params.set("start", start);
+  } else if (count) params.set("count", String(count));
+  if (seed !== undefined && !custom) params.set("seed", String(seed));
   const query = params.toString();
   return query ? `/sandbox?${query}` : "/sandbox";
 }

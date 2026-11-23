@@ -6,8 +6,8 @@ import { CARD, PAGE_TITLE } from "@/lib/ui";
 export const metadata: Metadata = { title: "Strategies" };
 
 // Strategies: each strategy a deck (what it applies to: a sector, all ETFs, or one firm or ETF)
-// and each of its rules a card (a few conditions, and how many shares to buy or sell once they
-// all hold), written out in plain words as they are made. Then how it works, in three steps.
+// and each of its rules a card (a few conditions, and what to do once all or any of them hold),
+// with how its money comes in and is kept; written out in plain words as they are made. Then how it works, in three steps.
 export default function StrategyPage() {
   return (
     <Page width="2xl">
@@ -19,8 +19,8 @@ export default function StrategyPage() {
         <ol className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           {[
             ["Applies to", "The deck covers a whole sector, every ETF, or one firm or ETF."],
-            ["When", "Each card's conditions on the price, its trend, or what you hold. All must hold."],
-            ["Then", "The card buys or sells a number of shares."],
+            ["When", "Each card's conditions on the price, its trend, its dividends, or what you hold."],
+            ["Then", "The card buys, sells, moves money to another fund, or holds back."],
           ].map(([title, text], i) => (
             <li key={title} className="flex gap-3 rounded-xl bg-slate-50 p-4">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">

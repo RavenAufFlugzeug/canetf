@@ -43,8 +43,12 @@ export function SandboxSwapProvider({ children }: { children: React.ReactNode })
     });
   }
 
+  // (Only while a change is under way: once the page has caught up, nothing is being left, even
+  // where the change didn't alter what an area shows, which would otherwise stay faded.)
   return (
-    <SwapContext.Provider value={{ pending, leaving, changed, change }}>{children}</SwapContext.Provider>
+    <SwapContext.Provider value={{ pending, leaving: pending ? leaving : null, changed, change }}>
+      {children}
+    </SwapContext.Provider>
   );
 }
 

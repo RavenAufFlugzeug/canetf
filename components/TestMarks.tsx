@@ -219,3 +219,64 @@ export function FinishMark(props: Props) {
     </Mark>
   );
 }
+
+// The Strategies page's card marks, in the same style, one for each thing a card can do (buying
+// and selling shares have the box marks above; buying with the month's money, the calendar):
+//  - buying an amount: a coin with a dollar sign;
+//  - buying with the pot: a jar with a coin dropping into it;
+//  - moving part to another fund: an arrow from one box across to another;
+//  - sending part of new money elsewhere: an arrow that forks in two;
+//  - pausing buying: two bars;
+//  - stopping buying: a stop sign.
+export function AmountMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M12.3 7.4c-.5-.7-1.3-1-2.3-1-1.3 0-2.3.7-2.3 1.7 0 2.4 4.8 1.3 4.8 3.8 0 1-1 1.8-2.5 1.8-1.1 0-2-.4-2.5-1.2M10 5v1.4M10 13.7V15" />
+    </Mark>
+  );
+}
+
+export function PotMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M6 7.5h8M5.5 7.5c-1 1.2-1.5 2.6-1.5 4.2C4 15 6.3 17 10 17s6-2 6-5.3c0-1.6-.5-3-1.5-4.2" />
+      <circle className="test-mark-drop" cx="10" cy="3.5" r="1.6" />
+    </Mark>
+  );
+}
+
+export function MoveMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M2.5 6.5h4v7h-4zM13.5 6.5h4v7h-4z" />
+      <path className="test-mark-rise" d="M7.5 10h5M10.5 8l2 2-2 2" />
+    </Mark>
+  );
+}
+
+export function SplitMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M3 10h5.5M8.5 10c2 0 3-4.5 6.5-4.5M8.5 10c2 0 3 4.5 6.5 4.5" />
+      <path d="m13.5 3.8 1.7 1.7-1.7 1.7M13.5 12.8l1.7 1.7-1.7 1.7" />
+    </Mark>
+  );
+}
+
+export function PauseMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M7 4.5v11M13 4.5v11" strokeWidth="2.4" />
+    </Mark>
+  );
+}
+
+export function StopMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M7.1 2.5h5.8l4.6 4.6v5.8l-4.6 4.6H7.1l-4.6-4.6V7.1Z" />
+      <path d="M7.5 10h5" />
+    </Mark>
+  );
+}

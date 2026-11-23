@@ -7,6 +7,7 @@ import RangeTabs from "@/components/RangeTabs";
 import SlideTabs from "@/components/SlideTabs";
 import { blend, easeOut, linePath, MORPH_MS, resample, type Shape } from "@/lib/chartMorph";
 import { testDayName } from "@/lib/tradingTime";
+import { dateOf, dateText, useSandboxOpen, type PickDates } from "@/components/SandboxOpen";
 
 // The Sandbox test's price chart: the pick's history before the test (`history`, in grey)
 // and every day of the test so far (`prices`, Day 1 to today), drawn like the Search
@@ -103,8 +104,13 @@ export default function SandboxChart({
   scope: scopeShared,
   onScope,
   replay,
+  dates: datesGiven,
 }: {
   symbol: string;
+  // The days' dates, for a set chosen by hand (where nothing is hidden): given (an ETF's
+  // holding's), or else its pick's (by `symbol`, less a "-fx" or "-before" of its own charts').
+  // Without them, days go by their number.
+  dates?: PickDates;
   history: number[];
   prices: number[];
   yearStarts: number[];
@@ -128,6 +134,8 @@ export default function SandboxChart({
   // are seen coming in (as the test walks through the days just passed).
   replay?: { key: number; days: number; hold: boolean };
 }) {
+  const { dates: openDates } = useSandboxOpen();
+  const dates = datesGiven ?? openDates?.[symbol.replace(/-(fx|before)$/, "")];
   const [ownRange, setOwnRange] = useState<Range>("1M");
   const range = rangeShared ?? ownRange;
   const setRange = (r: Range) => {
@@ -181,6 +189,11 @@ export default function SandboxChart({
   // The day an index into `slice` is (Day 1 is the test's first), and where the test's
   // days begin in it (0 when the range shows none of the days before).
   const dayOf = (i: number) => first + i - history.length + 1;
+  // A day's name: its date when known (shorter on the axis, `step` days apart), else its number.
+  const dayText = (d: number, step = 1) => {
+    const date = dateOf(dates, d);
+    return date ? dateText(date, step) : dayName(d);
+  };
   const testFrom = Math.max(history.length - first, 0);
 
   const plotW = Math.max(width - MARGIN.left - MARGIN.right, 1);
@@ -385,7 +398,7 @@ export default function SandboxChart({
   const tone = (i: number) => (i >= testFrom ? color : PAST);
   // The tooltip's text, and about how wide it is, to keep it within the chart's edges.
   const tipPrice = at !== null ? format(slice[at]) : "";
-  const tipDay = at !== null ? dayName(dayOf(at)) : "";
+  const tipDay = at !== null ? dayText(dayOf(at)) : "";
   const tipWidth = (tipPrice.length + tipDay.length + 1) * 7.6 + TIP_PAD;
   const tipLeft = at !== null ? Math.min(Math.max(sx(at), tipWidth / 2), width - tipWidth / 2) : 0;
   const markerRight = startX > MARGIN.left + plotW - 70;
@@ -483,7 +496,7 @@ export default function SandboxChart({
               width={width}
               height={HEIGHT}
               role="img"
-              aria-label={`Closing price from ${dayName(dayOf(0))} to ${dayName(dayOf(last))}: ${format(slice[0])} to ${format(slice[last])}`}
+              aria-label={`Closing price from ${dayText(dayOf(0))} to ${dayText(dayOf(last))}: ${format(slice[0])} to ${format(slice[last])}`}
               className="block"
             >
               <defs>
@@ -519,7 +532,7 @@ export default function SandboxChart({
                     fill={INK}
                     textAnchor={labelAnchor(sx(i))}
                   >
-                    {dayName(dayOf(i))}
+                    {dayText(dayOf(i), labelStep)}
                   </text>
                 ))}
               </g>

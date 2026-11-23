@@ -197,7 +197,7 @@ const FISH_SIDE_FIN = "M-7.7-5.4H4.8L-1 6-8.4-2Z";
 const FISH_GILL = "M-13-18C-11.5-11-13-1-18.5 8";
 const FISH_EYE =
   "M-22-15.6C-20.3-15.6-19-14.3-19-12.6-19-11.6-19.5-10.8-20.2-10.2L-19.6-8C-19.4-6.8-20.4-5.8-21.6-5.8-22.8-5.8-23.8-6.8-23.6-8L-23.4-10.4C-24.4-11-25-11.7-25-12.6-25-14.3-23.7-15.6-22-15.6Z";
-// The motes rising off it while it glows: where each starts (in the fish's drawing), its radius,
+// The motes rising off it as it glows: where each starts (in the fish's drawing), its radius,
 // how long after the others it sets off (s), and how far aside it drifts.
 const FISH_MOTES: [number, number, number, number, number][] = [
   [-30, -12, 2.6, 0, -5],
@@ -500,14 +500,6 @@ export default function MagicCardBack({ color }: { color: string }) {
   };
   const toDay = pick((now) => (now === "day" ? "dawn" : "day"));
   const toNight = pick((now) => (now === "night-red" ? "night-teal" : "night-red"));
-  // Whether the fish is glowing (from the start; clicked off and on again, like the sun and moon,
-  // not opening the deck).
-  const [fishGlow, setFishGlow] = useState(true);
-  const toggleFish = (event: MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    setFishGlow((on) => !on);
-  };
   // A darker shade of the deck's colour (for the book's covers and the pen's barbs).
   const cover = (share: number) => `color-mix(in oklch, ${color} ${share}%, black)`;
   // The book's covers and spine: as dark by night; by day a little lighter, easing as it changes.
@@ -745,10 +737,9 @@ export default function MagicCardBack({ color }: { color: string }) {
         </span>
 
         {/* The fish, in front of the book, low on its right (over its right cover's foot, by the spine), gently
-            bobbing while pointed at (.magic-fish-swim); drawn with room round it for its glow and motes. */}
+            bobbing (.magic-fish-swim) and always glowing; drawn with room round it for its glow and motes. */}
         <span className="magic-float pointer-events-none absolute inset-0 -translate-y-1">
           <span
-            data-glow={fishGlow ? "" : undefined}
             className="magic-fish absolute -translate-x-1/2 -translate-y-1/2"
             style={{ left: "calc(50% + 14px)", top: "calc(50% + 42px)", width: 40, height: 26.2 }}
           >
@@ -766,8 +757,6 @@ export default function MagicCardBack({ color }: { color: string }) {
                   />
                 ))}
                 <g
-                  className="pointer-events-auto cursor-pointer"
-                  onClick={toggleFish}
                   strokeLinejoin="round"
                   strokeLinecap="round"
                 >

@@ -16,11 +16,13 @@ export default function PickButton({
   current,
   range,
   amount,
+  monthly,
   count,
 }: {
   current?: string;
   range: string;
   amount: number;
+  monthly: number;
   count: number;
 }) {
   const { pending, leaving, change } = useSandboxSwap();
@@ -29,7 +31,7 @@ export default function PickButton({
   return (
     <button
       type="button"
-      onClick={() => change(current ?? "none", () => sandboxHref({ range, amount, count, seed: newSeed() }))}
+      onClick={() => change(current ?? "none", () => sandboxHref({ range, amount, monthly, count, seed: newSeed() }))}
       disabled={pending}
       aria-busy={picking}
       className={`group shrink-0 disabled:cursor-wait ${button(current ? "secondary" : "primary")}`}

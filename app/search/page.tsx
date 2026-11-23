@@ -131,7 +131,7 @@ export default async function SearchPage({
           <p className="rise-in mt-4 text-slate-600">
             {typeof symbol === "string" && symbol
               ? `Nothing with the symbol ${symbol.toUpperCase()} in our database.`
-              : "Search for a company, ETF or exchange rate."}
+              : "Search for a company, ETF, or exchange rate."}
           </p>
         )}
       </div>

@@ -54,7 +54,7 @@ export default function SearchBox({
   // Which side the new box slides in from: the side the pill moved to.
   const [from, setFrom] = useState<"left" | "right">("right");
   const leadId = useId();
-  const what = etfsOnly ? "an ETF" : "a company, ETF or exchange rate";
+  const what = etfsOnly ? "an ETF" : "a company, ETF, or exchange rate";
 
   return (
     <div className={heading ? undefined : "mt-4"}>

@@ -106,7 +106,9 @@ export function AliasName({
           setAlias(symbol, draft);
           setEditing(false);
         }}
-        className={`text-fade-in w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-slate-900 outline-none focus:border-slate-500 ${className}`}
+        // (Its padding and border pulled back out of the line, so it takes the name's height and
+        // nothing below it moves.)
+        className={`text-fade-in -my-[3px] w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-slate-900 outline-none focus:border-slate-500 ${className}`}
       />
     );
   }

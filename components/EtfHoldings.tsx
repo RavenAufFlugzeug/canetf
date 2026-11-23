@@ -6,6 +6,7 @@ import DiamondLoader from "@/components/DiamondLoader";
 import HoldingsMap from "@/components/HoldingsMap";
 import KindMark from "@/components/KindMark";
 import SandboxChart from "@/components/SandboxChart";
+import { useSandboxOpen } from "@/components/SandboxOpen";
 import type { EtfTreeNode } from "@/lib/db";
 import Popup, { usePopupClose } from "@/components/Popup";
 import { LABEL, SECTION_TITLE } from "@/lib/ui";
@@ -36,18 +37,20 @@ export default function EtfHoldings({
   replay?: number; // changed to play the map's entrance again (as the info opens)
 }) {
   const [data, setData] = useState<Holdings | "loading">("loading");
+  // (Chosen by hand, the holdings are named as they are.)
+  const { open: named } = useSandboxOpen();
   const [open, setOpen] = useState<EtfHolding | null>(null);
 
   useEffect(() => {
     let live = true;
-    getSandboxEtfHoldings(entry, day).then(
+    getSandboxEtfHoldings(entry, day, named).then(
       (d) => live && setData(d),
       () => live && setData(null),
     );
     return () => {
       live = false;
     };
-  }, [entry.symbol, entry.from, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entry.symbol, entry.from, day, named]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (data === "loading")
     return (
@@ -191,18 +194,19 @@ function HoldingChart({
 }) {
   const { leaving, close } = usePopupClose(onClose);
   const [chart, setChart] = useState<Chart | "loading">("loading");
+  const { open: named } = useSandboxOpen();
   const button = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let live = true;
-    getSandboxEtfHoldingChart(entry, day, holding.id).then(
+    getSandboxEtfHoldingChart(entry, day, holding.id, named).then(
       (c) => live && setChart(c),
       () => live && setChart(null),
     );
     return () => {
       live = false;
     };
-  }, [entry.symbol, entry.from, day, holding.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entry.symbol, entry.from, day, holding.id, named]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Popup
@@ -242,6 +246,7 @@ function HoldingChart({
               history={chart.history}
               prices={chart.prices}
               yearStarts={chart.yearStarts}
+              dates={chart.dates}
             />
           </div>
         ) : (
