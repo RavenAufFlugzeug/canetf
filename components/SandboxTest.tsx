@@ -9,6 +9,9 @@ import { NAICS_GROUPS } from "@/lib/naics";
 import EtfHoldings from "@/components/EtfHoldings";
 import { Flag, Place } from "@/components/FlagPair";
 import FoldButton from "@/components/FoldButton";
+import DeckPile, { deckColor } from "@/components/DeckPile";
+import { RuleCardFace } from "@/components/StrategyBuilder";
+import SlideTabs from "@/components/SlideTabs";
 import HoldingsDeck from "@/components/HoldingsDeck";
 import KindMark from "@/components/KindMark";
 import PickBoard, { FilterMenu, type MenuOption } from "@/components/PickBoard";
@@ -26,6 +29,7 @@ import { EaseHeight, useSandboxSwap } from "@/components/SandboxSwap";
 import StartMark from "@/components/StartMark";
 import {
   BuyMark,
+  ChipMark,
   DayMark,
   DividendMark,
   ExitMark,
@@ -45,10 +49,11 @@ import { POPUP_OUT_MS } from "@/lib/popup";
 import Popup from "@/components/Popup";
 import { addedBy, newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
-import { loadDecks, type Strategy } from "@/lib/strategy";
+import { actionText, conditionText, loadDecks, type Rule, type Strategy } from "@/lib/strategy";
 import {
+  type Note,
+  type Why,
   addMoney,
-  checksOn,
   decide,
   nextCheck,
   nothingToTrade,
@@ -60,7 +65,16 @@ import {
   type RunState,
 } from "@/lib/strategyRun";
 import { dateOf, dateText, useSandboxOpen } from "@/components/SandboxOpen";
-import { button as buttonLook, field, LABEL, PANEL_TITLE, FOCUS_RING, SECTION_TITLE } from "@/lib/ui";
+import {
+  button as buttonLook,
+  field,
+  LABEL,
+  PANEL_TITLE,
+  FOCUS_RING,
+  SECTION_TITLE,
+  TAG,
+  TAG_SHAPE,
+} from "@/lib/ui";
 
 // The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
 // not their names) all trading through the same stretch of time. Starting with `amount`
@@ -115,6 +129,9 @@ type Trade = {
   shares: number;
   price: number;
   rate: number;
+  // Made by the strategy (else by the player), and why.
+  auto?: boolean;
+  why?: Why;
 };
 // The cash, by currency: CAD to begin with, and any other a share was sold for or bought with,
 // or exchanged into.
@@ -145,8 +162,14 @@ type Recap = {
   from: number;
   to: number;
   values: number[];
-  // The monthly contributions added over the days (in the values, but not a gain).
+  // The monthly contributions added over the days (in the values, but not a gain): in all, and
+  // by each day of `values`, counted from `from` (so the little chart can leave them out).
   added?: number;
+  contrib?: number[];
+  // What a strategy did over the days (each with why, where it says).
+  actions?: StrategyAct[];
+  // Come up while a strategy trades: it goes by itself after a while, with no Continue.
+  timed?: boolean;
   // Each pick held: its shares, how its worth in CAD moved over the days (its price and its
   // currency's rate together), and what that made or lost.
   // `pricePct`: its price's change alone; `pct`: its worth in CAD (the same for a CAD pick).
@@ -167,6 +190,60 @@ type Recap = {
   // The cash dividends the shares held earned over the days (each on its ex-dividend date).
   payouts: (Payout & { name: string; currency: string })[];
 };
+
+// Something a strategy did on a day, with why (lib/strategyRun.ts).
+type StrategyAct = Note & { day: number };
+
+// How often a strategy's summary comes up while it trades: after each move, or once a week or a
+// month of trading days has passed (in which case it sums up the moves since).
+type SummaryEvery = "day" | "week" | "month";
+const SUMMARY_DAYS: Record<SummaryEvery, number> = {
+  day: 1,
+  week: 5,
+  month: 21,
+};
+const SUMMARY_OPTIONS = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+] as const;
+
+// Recaps one after another as one: the days end to end, the money added and dividends together,
+// and each holding's moves compounded, what it made added up (its shares as last held).
+function mergeRecaps(a: Recap, b: Recap): Recap {
+  const added = a.added ?? 0;
+  const positions = [...a.positions];
+  for (const q of b.positions) {
+    const i = positions.findIndex((p) => p.symbol === q.symbol);
+    if (i < 0) positions.push(q);
+    else {
+      const p = positions[i];
+      positions[i] = {
+        ...q,
+        startPrice: p.startPrice,
+        pricePct: ((1 + p.pricePct / 100) * (1 + q.pricePct / 100) - 1) * 100,
+        pct: ((1 + p.pct / 100) * (1 + q.pct / 100) - 1) * 100,
+        gain: cents(p.gain + q.gain),
+      };
+    }
+  }
+  return {
+    from: a.from,
+    to: b.to,
+    values: [...a.values, ...b.values.slice(1)],
+    added: added + (b.added ?? 0),
+    contrib: [
+      ...(a.contrib ?? a.values.map(() => 0)),
+      ...(b.contrib ?? b.values.map(() => 0)).slice(1).map((c) => c + added),
+    ],
+    positions,
+    days: b.days,
+    payouts: [...a.payouts, ...b.payouts],
+  };
+}
+
+// How long a strategy's summary stays up before it goes by itself.
+const TIMED_RECAP_MS = 5000;
 
 // How long a recap takes to fade away (.recap-out in globals.css).
 const RECAP_OUT_MS = POPUP_OUT_MS;
@@ -475,7 +552,23 @@ export default function SandboxTest({
   const [auto, setAuto] = useState(false);
   const [run, setRun] = useState<{ state: RunState; seen: number; paid: number } | null>(null);
   const [decidedDay, setDecidedDay] = useState(0);
-  const [decision, setDecision] = useState<{ day: number; notes: string[]; key: string } | null>(null);
+  const [decision, setDecision] = useState<{
+    day: number;
+    notes: Note[];
+    key: string;
+  } | null>(null);
+  // How often its summary comes up; the days moved on since the last one (summed up), and what
+  // it did over them.
+  const [summaryEvery, setSummaryEvery] = useState<SummaryEvery>("day");
+  const pendingRecap = useRef<Recap | null>(null);
+  const [periodActs, setPeriodActs] = useState<StrategyAct[]>([]);
+  // A full backtest: the strategy runs on to the last day at once (no pauses, no summaries),
+  // and the test finishes. The days left are loaded once, from Day `from` on, and taken from
+  // there as it goes.
+  const [rushing, setRushing] = useState(false);
+  const rushDays = useRef<{ from: number; days: Recap["days"] } | null>(null);
+  // The strategy's trade opened among the results' actions, to show why it was made.
+  const [openTrade, setOpenTrade] = useState<number | null>(null);
   const strategy = decks.find((d) => d.id === strategyId) ?? null;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -488,6 +581,12 @@ export default function SandboxTest({
   // The days just loaded, summed up before they come in, and whether that summary is fading.
   const [recap, setRecap] = useState<Recap | null>(null);
   const [recapLeaving, setRecapLeaving] = useState(false);
+  // The last recap shown, to see again.
+  const [lastRecap, setLastRecap] = useState<Recap | null>(null);
+  const openRecap = (r: Recap) => {
+    setRecap(r);
+    setLastRecap(r);
+  };
   // The walk through days just come in: the test fading out ("out"), the days passed shown on
   // their own ("day"), the test fading back in on the new day ("in"), then each holding's chart
   // in turn ("walk", `at` its place among the recap's positions), before the recap sums them up.
@@ -683,11 +782,18 @@ export default function SandboxTest({
       setPrices(each((s) => dayOne[s].closes));
       setDivHistory(each((s) => past[s].dividends));
       setDivs(each((s) => dayOne[s].dividends));
-      // The strategy brought in, if any, starts trading at once.
-      setAuto(strategyId !== null);
+      // The strategy brought in, if any, waits for the player to let it trade.
+      setAuto(false);
       setRun(null);
       setDecidedDay(0);
       setDecision(null);
+      pendingRecap.current = null;
+      setPeriodActs([]);
+      setRushing(false);
+      rushDays.current = null;
+      setSummaryEvery("day");
+      setOpenTrade(null);
+      setLastRecap(null);
       setRates(each((s) => dayOne[s].rates));
       setOrders({});
       setStatus("trading");
@@ -728,7 +834,9 @@ export default function SandboxTest({
   function goTo(next: number, quiet = false) {
     setError(null);
     startTransition(async () => {
-      const loaded = await getSandboxSetPrices(entries, day + 1, next);
+      const loaded = rushing
+        ? await rushPrices(day + 1, next)
+        : await getSandboxSetPrices(entries, day + 1, next);
       if (loaded === null) {
         setError("Those days' prices couldn't be loaded. Try again.");
         return;
@@ -794,6 +902,10 @@ export default function SandboxTest({
         to: next,
         values,
         added: addedOn(next) - addedOn(day),
+        contrib: Array.from(
+          { length: steps + 1 },
+          (_, k) => addedOn(day + k) - addedOn(day),
+        ),
         positions: picks
           .filter((p) => heldOf(p.symbol).shares > 0)
           .map((p) => ({
@@ -811,10 +923,51 @@ export default function SandboxTest({
         days: loaded,
         payouts: paid,
       };
-      // (Moved on by a strategy: the days come in at once, without the walk or the recap.)
-      if (quiet) bringIn(done);
-      else play(done, trades.at(-1)?.symbol);
+      // (Moved on by a strategy: the days come in at once, without the walk through each
+      // holding's chart; the recap sums them up once its summary's period has passed, or the
+      // test's last day has come.)
+      if (quiet && rushing) bringIn(done);
+      else if (quiet) {
+        bringIn(done);
+        const sum = pendingRecap.current
+          ? mergeRecaps(pendingRecap.current, done)
+          : done;
+        pendingRecap.current = sum;
+        if (sum.to - sum.from >= SUMMARY_DAYS[summaryEvery] || next >= days)
+          showPending(true);
+      } else play(done, trades.at(-1)?.symbol);
     });
+  }
+
+  // Days `first` to `last`, in a full backtest: from the days left, loaded once.
+  async function rushPrices(first: number, last: number) {
+    if (!rushDays.current) {
+      const all = await getSandboxSetPrices(entries, first, days);
+      if (!all) return null;
+      rushDays.current = { from: first, days: all };
+    }
+    const { from, days: all } = rushDays.current;
+    const a = first - from;
+    const b = last - from + 1;
+    return Object.fromEntries(
+      Object.entries(all).map(([symbol, d]) => [
+        symbol,
+        {
+          closes: d.closes.slice(a, b),
+          rates: d.rates.slice(a, b),
+          dividends: d.dividends.slice(a, b),
+          yearStarts: d.yearStarts.filter((y) => y >= first && y <= last),
+        },
+      ]),
+    );
+  }
+
+  // The strategy's days moved on since its last summary, summed up (with what it did), if any.
+  function showPending(timed = false) {
+    const sum = pendingRecap.current;
+    pendingRecap.current = null;
+    setPeriodActs([]);
+    if (sum) openRecap({ ...sum, actions: periodActs, timed });
   }
 
   // Brings the days in and walks through them. The test fades out; then the page moves up to its
@@ -827,7 +980,7 @@ export default function SandboxTest({
   function play(done: Recap, last?: string) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       bringIn(done);
-      setRecap(done);
+      openRecap(done);
       return;
     }
     const at = (stage: "out" | "day" | "in" | "walk", i = -1) =>
@@ -936,7 +1089,7 @@ export default function SandboxTest({
     setReplay((r) => (r.hold ? { ...r, hold: false } : r));
     tourTimer.current = window.setTimeout(() => {
       setTour(null);
-      setRecap(done);
+      openRecap(done);
     }, TOUR_OUT_MS);
   }
 
@@ -1337,7 +1490,17 @@ export default function SandboxTest({
           cost: was.shares === n ? 0 : was.cost - n * (was.cost / was.shares),
         };
       }
-      made.push({ symbol: o.symbol, name: nameOf(o.symbol), day, side: o.side, shares: n, price: at, rate: fx });
+      made.push({
+        symbol: o.symbol,
+        name: nameOf(o.symbol),
+        day,
+        side: o.side,
+        shares: n,
+        price: at,
+        rate: fx,
+        auto: true,
+        why: o.why,
+      });
     }
     if (!made.length) return;
     setWallet(w);
@@ -1379,6 +1542,8 @@ export default function SandboxTest({
     const { orders, state: after, notes } = decide(strategy, { day, picks: market, held: holdings, cash: cashCad }, state);
     applyOrders(orders);
     setRun({ state: after, seen: day, paid: payouts.length });
+    const acts = notes.filter((n) => n.acted).map((n) => ({ ...n, day }));
+    if (acts.length && !rushing) setPeriodActs((all) => [...all, ...acts]);
     setDecidedDay(day);
     setDecision({ day, notes, key: `${strategy.id}-${day}` });
   }
@@ -1386,10 +1551,24 @@ export default function SandboxTest({
   // While a strategy is on: each day, it considers for a while (THINK_MS, a card saying so),
   // decides, and then the next day comes in; on the last day it decides and hands back. Not
   // while anything else is going on (days loading or walking through, a card up).
-  const busy = pending || recap !== null || tour !== null || ask !== null || quitting || finishing;
-  // (Considering only on a day one of its cards looks; on the others it decides at once.)
-  const looks = strategy !== null && checksOn(strategy, day);
-  const considering = status === "trading" && auto && strategy !== null && !busy && decidedDay !== day && looks;
+  const busy =
+    pending ||
+    recap !== null ||
+    tour !== null ||
+    ask !== null ||
+    quitting ||
+    finishing;
+  // (It considers every day, its cards' checks or not, so there is always a moment to step in
+  // between one day and the next.)
+  const looks = strategy !== null;
+  const considering =
+    status === "trading" &&
+    auto &&
+    !rushing &&
+    strategy !== null &&
+    !busy &&
+    decidedDay !== day &&
+    looks;
   useEffect(() => {
     if (status !== "trading" || !auto || !strategy || busy) return;
     // Today not yet decided: decide (after considering, on a day it looks). Decided (with the
@@ -1400,15 +1579,53 @@ export default function SandboxTest({
         if (decidedDay !== day) act();
         // (With no finished card it has nothing to look at, so it hands back rather than
         // running to the end.)
-        else if (day < days && runnable(strategy)) goTo(nextCheck(strategy, day, days), true);
-        else setAuto(false);
+        // (On to the next day it checks, but no further than its summary's period goes: a day
+        // at a time with a summary each day.)
+        // (A full backtest: on to the next day it checks, and at the end, the results.)
+        else if (rushing) {
+          if (day < days) goTo(nextCheck(strategy, day, days), true);
+          else {
+            setRushing(false);
+            setAuto(false);
+            rushDays.current = null;
+            finish();
+          }
+        } else if (day < days && runnable(strategy))
+          goTo(
+            Math.min(
+              nextCheck(strategy, day, days),
+              (pendingRecap.current?.from ?? day) + SUMMARY_DAYS[summaryEvery],
+            ),
+            true,
+          );
+        else {
+          setAuto(false);
+          showPending();
+        }
       },
-      decidedDay !== day && looks ? THINK_MS : 0,
+      decidedDay !== day && looks && !rushing ? THINK_MS : 0,
     );
     return () => window.clearTimeout(timer);
     // (`act` and `goTo` read the day's state as it is when this runs.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, auto, strategy, busy, decidedDay, day, looks]);
+  }, [
+    status,
+    auto,
+    strategy,
+    busy,
+    decidedDay,
+    day,
+    looks,
+    summaryEvery,
+    rushing,
+  ]);
+
+  // The strategy off (taken over, or handed back) with days moved on since its last summary
+  // (some still loading as it went off): they're summed up once they're in.
+  useEffect(() => {
+    if (!auto && !busy && pendingRecap.current) showPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, busy]);
 
   // The panel, by stage. It is the same box throughout, easing to each stage's height
   // (EaseHeight) as that stage's parts rise in one after another.
@@ -1425,32 +1642,38 @@ export default function SandboxTest({
           data-hidden={leaving || ending ? "" : undefined}
           className="tour-panel result-in rise-in mt-5"
         >
-          {/* A strategy to bring in (from the Strategies page): it trades each day for you, until
-              you take over. */}
-          <label className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <span className={LABEL}>Strategy</span>
-            <select
-              value={strategyId ?? ""}
-              onChange={(e) => setStrategyId(e.target.value ? Number(e.target.value) : null)}
-              disabled={pending}
-              className={field("sm")}
-            >
-              <option value="">None (trade by hand)</option>
-              {decks.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name.trim() || "Untitled strategy"}
-                </option>
-              ))}
-            </select>
-            {/* (Said if it would have nothing to trade here.) */}
-            {strategy && (nothingToTrade(strategy, picks) || unfinished(strategy) > 0) && (
-              <span className="flex items-center gap-1.5 text-amber-800">
-                <WarnMark className="size-4 shrink-0" />
-                {nothingToTrade(strategy, picks) ??
-                  `${unfinished(strategy)} of its cards ${unfinished(strategy) === 1 ? "is" : "are"} unfinished and will be skipped.`}
-              </span>
-            )}
-          </label>
+          {/* A strategy to bring in (from the Strategies page), as its deck: one at most, chosen
+              by clicking it (clicking it again puts it back, to trade by hand). It trades each
+              day for you, until you take over. */}
+          {decks.length > 0 && (
+            <div className="mb-5">
+              <p className={LABEL}>Strategy</p>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-5">
+                {decks.map((d) => (
+                  <DeckPile
+                    key={d.id}
+                    deck={d}
+                    open={d.id === strategyId}
+                    tag="Chosen"
+                    disabled={pending}
+                    onOpen={() =>
+                      setStrategyId(d.id === strategyId ? null : d.id)
+                    }
+                  />
+                ))}
+              </div>
+              {/* (Said if it would have nothing to trade here.) */}
+              {strategy &&
+                (nothingToTrade(strategy, picks) ||
+                  unfinished(strategy) > 0) && (
+                  <p className="mt-3 flex items-center gap-1.5 text-sm text-amber-800">
+                    <WarnMark className="size-4 shrink-0" />
+                    {nothingToTrade(strategy, picks) ??
+                      `${unfinished(strategy)} of its cards ${unfinished(strategy) === 1 ? "is" : "are"} unfinished and will be skipped.`}
+                  </p>
+                )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-4">
             <button type="button" onClick={start} disabled={pending} aria-busy={pending} className={START}>
               {ripple && (
@@ -1587,8 +1810,8 @@ export default function SandboxTest({
               </svg>
             </span>
             <div className="min-w-0 flex-1">
-              <p className={`${LABEL}`}>
-                Result · your grade
+              <p className="result-pop text-2xl font-bold text-slate-900">
+                {result.label}
               </p>
               <p className="result-pop mt-0.5 text-2xl font-bold text-slate-900">{result.label}</p>
               <p className="text-sm text-slate-600">{result.note}</p>
@@ -1673,7 +1896,6 @@ export default function SandboxTest({
           </div>
           {/* The stretch of time it ran over, now that it can be told. */}
           <div className="mt-3 flex min-h-9 flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
-            <span className={`${LABEL}`}>The period</span>
             {reveal ? (
               <span key="period" className="text-fade-in font-semibold text-slate-900">
                 {`${longDay(reveal.first)} to ${longDay(reveal.last)}`}
@@ -1692,9 +1914,17 @@ export default function SandboxTest({
               ["sm:grid-cols-3", "sm:grid-cols-4", "sm:grid-cols-5"][(payouts.length ? 1 : 0) + (monthly ? 1 : 0)]
             }`}
           >
-            <Stat label="Started with" value={money.format(amount)} />
-            {monthly > 0 && <Stat label="Added monthly" value={money.format(addedOn(days))} />}
-            <Stat label={`Worth on Day ${days}`} value={<Tween value={value} format={moneyText} />} />
+            <Stat label="Initial Amount" value={money.format(amount)} />
+            {monthly > 0 && (
+              <Stat
+                label="Monthly Contribution"
+                value={money.format(addedOn(days))}
+              />
+            )}
+            <Stat
+              label="Final Amount"
+              value={<Tween value={value} format={moneyText} />}
+            />
             <Stat
               label="Return"
               value={<span className={tone(sinceStart)}>{pctText(sinceStart)}</span>}
@@ -1703,7 +1933,7 @@ export default function SandboxTest({
             {/* The cash dividends the shares earned while held (part of the return). */}
             {payouts.length > 0 && (
               <Stat
-                label="Dividends received"
+                label="Dividends"
                 value={
                   <span className="text-green-700">
                     +{money.format(payouts.reduce((sum, x) => sum + payoutCad(x), 0))}
@@ -1714,15 +1944,22 @@ export default function SandboxTest({
             )}
           </dl>
           {/* What the account was worth each day: gains above the starting line, losses below. */}
-          <div {...enterSlow(1)} className="rise-in mt-5 rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-sm font-semibold text-slate-900">Your account over the test</p>
+          <div
+            {...enterSlow(1)}
+            className="rise-in mt-5 rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <p className="text-sm font-semibold text-slate-900">Results</p>
             <p className="text-xs text-slate-500">
               Its value at each day&apos;s close, with your buys (▲) and sales (▼) marked under it. Point
               along it for any day.
             </p>
             <div className="mt-3">
               <ResultChart
-                values={valueByDay}
+                values={
+                  monthly > 0
+                    ? valueByDay.map((v, k) => v - addedOn(k + 1))
+                    : valueByDay
+                }
                 format={moneyText}
                 dayLabel={dayName}
                 markers={trades.map((t) => ({ i: t.day - 1, side: t.side }))}
@@ -1891,6 +2128,114 @@ export default function SandboxTest({
               </tbody>
             </table>
           </div>
+          {/* Every trade made, in order: its day, what was done, how many shares at what price,
+              what it came to in CAD, and whether the strategy made it or the player did. A
+              strategy's trade opens (as the summaries' actions do) to show why it was made. */}
+          {trades.length > 0 && (
+            <div
+              {...enterSlow(1)}
+              className="rise-in mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white"
+            >
+              <p className="border-b border-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-900">
+                Actions · {trades.length}
+              </p>
+              <div className={trades.length > 12 ? "max-h-96 overflow-y-auto" : ""}>
+                <table className="w-full text-sm tabular-nums">
+                  <thead className="sticky top-0 bg-slate-50 text-xs text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Day</th>
+                      <th className="px-3 py-2 text-left font-medium">Action</th>
+                      <th className="px-3 py-2 text-left font-medium">Pick</th>
+                      <th className="px-3 py-2 text-right font-medium">Shares</th>
+                      <th className="px-3 py-2 text-right font-medium">Price</th>
+                      <th className="px-3 py-2 text-right font-medium">Amount (CAD)</th>
+                      <th className="px-3 py-2 text-right font-medium">By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trades.map((t, i) => {
+                      const cur = currencyOf(t.symbol);
+                      const Mark = t.side === "Bought" ? BuyMark : SellMark;
+                      const shown = openTrade === i;
+                      const toggle = () => setOpenTrade(shown ? null : i);
+                      return (
+                        <Fragment key={i}>
+                          <tr
+                            onClick={t.why ? toggle : undefined}
+                            className={`border-t border-slate-100 ${t.why ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                          >
+                            <td className="whitespace-nowrap px-3 py-2 text-slate-500">{dayName(t.day - 1)}</td>
+                            <td className="px-3 py-2">
+                              <span className="flex items-center gap-1.5 text-slate-900">
+                                <Mark className="size-3.5 shrink-0 text-slate-500" />
+                                {t.side === "Bought" ? "Buy" : "Sell"}
+                              </span>
+                            </td>
+                            <td className="max-w-48 truncate px-3 py-2 text-slate-900">
+                              {reveal?.names[t.symbol] ?? t.name}
+                            </td>
+                            <td className="px-3 py-2 text-right">{t.shares.toLocaleString("en-CA")}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-right">
+                              {cur === "CAD"
+                                ? money.format(t.price)
+                                : `${t.price.toLocaleString("en-CA", {
+                                    minimumFractionDigits: moneyFormatter(cur).decimals,
+                                    maximumFractionDigits: moneyFormatter(cur).decimals,
+                                  })} ${cur}`}
+                            </td>
+                            <td className="px-3 py-2 text-right">{money.format(cents(t.shares * t.price * t.rate))}</td>
+                            <td className="px-3 py-2 text-right">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className={t.auto ? TAG : `${TAG_SHAPE} bg-slate-100 text-slate-600`}>
+                                  {t.auto ? "Strategy" : "Manual"}
+                                </span>
+                                {t.why && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggle();
+                                    }}
+                                    aria-expanded={shown}
+                                    aria-label="Why it was made"
+                                    className="rounded-sm text-slate-400"
+                                  >
+                                    <svg
+                                      aria-hidden
+                                      viewBox="0 0 16 16"
+                                      className={`size-3 transition-transform duration-200 ${shown ? "rotate-180" : ""}`}
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="m4 6 4 4 4-4" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </span>
+                            </td>
+                          </tr>
+                          {t.why && (
+                            <tr aria-hidden={!shown}>
+                              <td colSpan={7} className="p-0">
+                                <div className="legend-fold" data-closed={shown ? undefined : ""} inert={!shown}>
+                                  <div>
+                                    <WhyDetail why={t.why} deck={strategy} className="mx-3 mb-2.5" />
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {/* What next: a new set with the same choices, or out, back to before any set. */}
           <div {...enterSlow(2)} className="rise-in mt-5 flex flex-wrap items-center gap-2">
             <button type="button" onClick={tryAgain} className={`${DARK} ${ACTION}`}>
@@ -1984,53 +2329,68 @@ export default function SandboxTest({
               style={{ width: `${(day / days) * 100}%` }}
             />
           </div>
-          {/* The strategy: which one, on (trading for you) or off (you trade), and what it did
-              last. Switching starts the new one afresh, with all the cash to invest. */}
-          {decks.length > 0 && (
+          {/* The strategy brought in (kept for the whole test): on (trading for you) or off (you
+              trade), how often its summary comes up, and what it did last. */}
+          {strategy && (
             <div className="mt-4 rounded-lg bg-white px-3 py-2.5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`${LABEL} mr-1`}>Strategy</span>
-                <select
-                  aria-label="Strategy"
-                  value={strategyId ?? ""}
-                  onChange={(e) => {
-                    const id = e.target.value ? Number(e.target.value) : null;
-                    setStrategyId(id);
-                    setRun(null);
-                    setDecidedDay(0);
-                    setDecision(null);
-                    if (id === null) setAuto(false);
-                  }}
-                  className={field("xs")}
-                >
-                  <option value="">None</option>
-                  {decks.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name.trim() || "Untitled strategy"}
-                    </option>
-                  ))}
-                </select>
-                {strategy && (
+                <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                  {strategy.name.trim() || "Untitled strategy"}
+                </span>
+                <span id="summary-every-test" className={`${LABEL} ml-auto`}>
+                  Summary
+                </span>
+                <SlideTabs
+                  options={SUMMARY_OPTIONS}
+                  value={summaryEvery}
+                  onChange={setSummaryEvery}
+                  labelledBy="summary-every-test"
+                  size="xs"
+                />
+                <div className="flex flex-col items-stretch gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setAuto(!auto)}
+                    onClick={() => {
+                      if (auto) showPending();
+                      setAuto(!auto);
+                    }}
+                    disabled={rushing}
                     aria-pressed={auto}
-                    className={`${auto ? LIGHT : DARK} ${ACTION} ml-auto`}
+                    className={`${auto ? LIGHT : DARK} ${ACTION} justify-center`}
                   >
-                    {auto ? "Take control" : "Let it trade"}
+                    {auto ? "Stop auto-trading" : "Start auto-trading"}
                   </button>
-                )}
+                  {/* The strategy trades every day left at once, and the test finishes. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pendingRecap.current = null;
+                      setPeriodActs([]);
+                      setRushing(true);
+                      setAuto(true);
+                    }}
+                    disabled={rushing || busy || day >= days}
+                    className={`${LIGHT} ${ACTION} justify-center`}
+                  >
+                    <ChipMark className="size-4" />
+                    Run Strategy to Completion
+                  </button>
+                </div>
               </div>
-              {strategy && (
-                <p className="mt-1.5 text-xs text-slate-500">
-                  {auto ? "On: it decides each day, then moves on." : "Off: you're trading."}
-                </p>
-              )}
-              {decision && strategy && (
-                <ul key={decision.key} className="text-fade-in mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-700">
+              <p className="mt-1.5 text-xs text-slate-500">
+                {auto
+                  ? "Auto-trading is on: the strategy trades each day and advances the test."
+                  : "Manual trading. Select Start auto-trading to have the strategy trade for you."}
+              </p>
+              {decision && (
+                <ul
+                  key={decision.key}
+                  className="text-fade-in mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-700"
+                >
                   <li className="text-slate-500">Day {decision.day}:</li>
-                  {decision.notes.map((n) => (
-                    <li key={n}>{n}</li>
+                  {decision.notes.map((n, i) => (
+                    <li key={i}>{n.text}</li>
                   ))}
                 </ul>
               )}
@@ -2397,12 +2757,27 @@ export default function SandboxTest({
           <button
             type="button"
             onClick={() => setQuitting(true)}
-            disabled={pending || recap !== null || tour !== null || ask !== null}
-            className={`${LIGHT} ${ACTION} mr-auto`}
+            disabled={
+              pending || recap !== null || tour !== null || ask !== null
+            }
+            className={`${LIGHT} ${ACTION} ${lastRecap ? "" : "mr-auto"}`}
           >
             <ExitMark className="size-4" />
             Exit
           </button>
+          {lastRecap && (
+            <button
+              type="button"
+              onClick={() => setRecap({ ...lastRecap, timed: false })}
+              disabled={
+                pending || recap !== null || tour !== null || ask !== null
+              }
+              className={`${LIGHT} ${ACTION} mr-auto`}
+            >
+              <MoonMark className="size-4" />
+              Last summary
+            </button>
+          )}
           {pending && (
             <span className="ml-2 flex items-center gap-2 text-sm text-slate-500">
               <DiamondLoader className="size-3.5" />
@@ -2437,8 +2812,28 @@ export default function SandboxTest({
         {tour && (tour.stage === "day" || tour.stage === "in") && (
           <DaysPassed recap={tour.recap} leaving={tour.stage === "in"} />
         )}
+        {rushing && strategy && (
+          <Backtesting
+            name={strategy.name.trim() || "Your strategy"}
+            day={day}
+            days={days}
+            onStop={() => {
+              setRushing(false);
+              setAuto(false);
+              rushDays.current = null;
+            }}
+          />
+        )}
         {considering && strategy && (
-          <Considering key={day} name={strategy.name.trim() || "Your strategy"} day={day} onStop={() => setAuto(false)} />
+          <Considering
+            key={day}
+            name={strategy.name.trim() || "Your strategy"}
+            day={day}
+            onStop={() => {
+              showPending();
+              setAuto(false);
+            }}
+          />
         )}
         {tour?.stage === "walk" && (
           <TourGuide
@@ -2448,7 +2843,7 @@ export default function SandboxTest({
             onSkip={() => endTour(tour.recap)}
           />
         )}
-        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} />}
+        {recap && <RecapCard recap={recap} leaving={recapLeaving} onDone={moveOn} deck={strategy} />}
         {finishing && (
           <FinishCard days={days} start={putIn} end={value} leaving={finishLeaving} onDone={finish} />
         )}
@@ -2838,6 +3233,54 @@ function DaysPassed({ recap, leaving }: { recap: Recap; leaving: boolean }) {
 // that made or lost, with a dot for each holding and a Skip button (or Escape) to go straight to
 // the recap. It rises in, its words fade from one holding to the next, and it sinks away as the
 // recap comes up.
+// While the strategy runs to completion: a pop-up with the chip at work (ChipMark), how far it has got, and a button to stop it (you trade from there).
+function Backtesting({
+  name,
+  day,
+  days,
+  onStop,
+}: {
+  name: string;
+  day: number;
+  days: number;
+  onStop: () => void;
+}) {
+  const stop = useRef<HTMLButtonElement>(null);
+  return (
+    <Popup
+      label="Running strategy to completion"
+      onClose={onStop}
+      initialFocus={stop}
+      className="max-w-xs p-6 text-center"
+    >
+      <div role="status" className="flex flex-col items-center">
+        <ChipMark className="test-mark-busy size-14 text-slate-900" />
+        <p className="mt-5 font-semibold text-slate-900">
+          Running strategy to completion
+        </p>
+        <p className="mt-0.5 truncate text-sm text-slate-500">{name}</p>
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-slate-900 transition-[width] duration-300 ease-out"
+            style={{ width: `${(day / days) * 100}%` }}
+          />
+        </div>
+        <p className="mt-2 text-xs tabular-nums text-slate-500">
+          Day {day} of {days}
+        </p>
+        <button
+          ref={stop}
+          type="button"
+          onClick={onStop}
+          className={`${LIGHT} ${ACTION} mt-4`}
+        >
+          Stop
+        </button>
+      </div>
+    </Popup>
+  );
+}
+
 // While a strategy considers the day (THINK_MS): a card at the foot of the screen saying so, a
 // bar filling as it does, and a button to take over (the strategy goes off, and you trade).
 function Considering({ name, day, onStop }: { name: string; day: number; onStop: () => void }) {
@@ -2852,8 +3295,12 @@ function Considering({ name, day, onStop }: { name: string; day: number; onStop:
           <span className="block truncate font-semibold text-slate-900">{name}</span>
           <span className="text-slate-500">Considering Day {day}…</span>
         </p>
-        <button type="button" onClick={onStop} className={`${LIGHT} ${ACTION} shrink-0`}>
-          Take control
+        <button
+          type="button"
+          onClick={onStop}
+          className={`${LIGHT} ${ACTION} shrink-0`}
+        >
+          Stop auto-trading
         </button>
       </div>
       <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-slate-100">
@@ -2931,6 +3378,206 @@ function TourGuide({
   );
 }
 
+// Why a strategy did something (lib/strategyRun.ts): the card that did it and how often that card
+// checks, then each of its conditions, ticked or crossed, with its figure that day, and why
+// that pick was chosen.
+function WhyDetail({ why, deck, className = "" }: { why: Why; deck?: Strategy | null; className?: string }) {
+  // The card shown below the row: the one that did it, until another is clicked.
+  const [picked, setPicked] = useState(why.number !== undefined ? why.number - 1 : -1);
+  const cards = deck && why.number !== undefined ? deck.rules : [];
+  const other = picked >= 0 && picked + 1 !== why.number ? cards[picked] : undefined;
+  return (
+    <div className={`rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-600 ${className}`}>
+      {/* The strategy's cards, as on the Strategies page (smaller): the one that did it lifted,
+          ringed and tagged, the others greyed out. Clicking one shows its rule below. */}
+      {deck && cards.length > 0 && (
+        <div className="-mx-1 mb-2 flex gap-2.5 overflow-x-auto px-1 pb-2 pt-4">
+          {cards.map((r, i) => {
+            const used = i + 1 === why.number;
+            const shown = i === picked;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setPicked(i)}
+                aria-pressed={shown}
+                aria-label={`Card ${i + 1}: ${r.name.trim() || "Untitled card"}`}
+                className={`relative shrink-0 rounded-xl transition-[opacity,filter] duration-200 ${
+                  used || shown ? "" : "opacity-45 grayscale hover:opacity-80"
+                } ${shown && !used ? "ring-2 ring-slate-400 ring-offset-2" : ""}`}
+                style={{ width: MINI_W, height: MINI_H }}
+              >
+                <span
+                  className="pointer-events-none absolute left-0 top-0 block origin-top-left"
+                  style={{ width: 116, height: 150, transform: `scale(${MINI_W / 116})` }}
+                >
+                  <RuleCardFace rule={r} n={i} color={deckColor(deck)} on={used} tag="Used" />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {other && deck ? (
+        <CardRule rule={other} n={picked} deck={deck} />
+      ) : (
+        <>
+          {/* The card: its place in the deck and its name; then what it does, and how often it checks. */}
+          <p className="flex items-center gap-1.5">
+            {why.number !== undefined && (
+              <span className={`${TAG_SHAPE} bg-slate-200 text-slate-700`}>
+                Card {why.number} of {why.of}
+              </span>
+            )}
+            <span className="min-w-0 truncate font-semibold text-slate-900">{why.card}</span>
+          </p>
+          {(why.does || why.check) && (
+            <p className="mt-0.5 text-slate-500">{[why.does, why.check].filter(Boolean).join(" · ")}</p>
+          )}
+          {why.conditions.length > 0 ? (
+            <>
+              {why.conditions.length > 1 && (
+                <p className="mt-1 text-slate-500">
+                  {why.match === "any" ? "Any of these" : "All of these"}
+                  {why.pick ? ` for ${why.pick}` : ""}:
+                </p>
+              )}
+              <ul className="mt-1 space-y-0.5">
+                {why.conditions.map((c, j) => (
+                  <li key={j} className="flex gap-1.5">
+                    <span aria-label={c.met ? "Held" : "Didn't hold"} className={c.met ? "text-green-700" : "text-slate-400"}>
+                      {c.met ? "✓" : "✗"}
+                    </span>
+                    <span>
+                      {capital(c.text)}
+                      {c.now !== null && <span className="tabular-nums text-slate-500"> (it was {c.now})</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            why.card !== "The plan" && (
+              <p className="mt-1 text-slate-500">It has no conditions, so it acts every time it checks.</p>
+            )
+          )}
+          {why.chosen && <p className="mt-1 text-slate-500">{why.chosen}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Another card of the strategy's, clicked among them: its place and name, what it does and how
+// often it checks, and its conditions (as the Strategies page words them). It didn't do this.
+function CardRule({ rule, n, deck }: { rule: Rule; n: number; deck: Strategy }) {
+  const conditions = rule.conditions.map(conditionText);
+  return (
+    <>
+      <p className="flex items-center gap-1.5">
+        <span className={`${TAG_SHAPE} bg-slate-200 text-slate-700`}>
+          Card {n + 1} of {deck.rules.length}
+        </span>
+        <span className="min-w-0 truncate font-semibold text-slate-900">{rule.name.trim() || "Untitled card"}</span>
+      </p>
+      <p className="mt-0.5 text-slate-500">
+        {capital(actionText(rule, deck))} · Checks every {rule.check ?? "day"}
+      </p>
+      {conditions.length > 0 ? (
+        <>
+          {conditions.length > 1 && (
+            <p className="mt-1 text-slate-500">{rule.match === "any" ? "When any of these hold:" : "When all of these hold:"}</p>
+          )}
+          <ul className="mt-1 space-y-0.5">
+            {conditions.map((c, j) => (
+              <li key={j} className="flex gap-1.5">
+                <span aria-hidden className="text-slate-400">
+                  •
+                </span>
+                <span>{capital(c)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-1 text-slate-500">It has no conditions, so it acts every time it checks.</p>
+      )}
+      <p className="mt-1 text-slate-400">Not used for this action.</p>
+    </>
+  );
+}
+
+// A strategy's card, smaller, in the reasons for what it did (a Strategies card is 116 by 150).
+const MINI_W = 87;
+const MINI_H = 112;
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+// What a strategy did over a recap's days, a line each (its day and what it did). One with a
+// reason opens to show it: the card that did it and how often that card checks, then each of
+// its conditions, ticked or crossed, with its figure that day, and why that pick was chosen.
+function StrategyActs({ actions, deck }: { actions: StrategyAct[]; deck?: Strategy | null }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+      <p className="text-xs text-slate-500">What your strategy did</p>
+      <ul
+        className={`mt-1 space-y-0.5 ${actions.length > 5 ? "max-h-48 overflow-y-auto pr-1" : ""}`}
+      >
+        {actions.map((a, i) => {
+          const shown = open === i;
+          const Mark = a.text.startsWith("Bought")
+            ? BuyMark
+            : a.text.startsWith("Sold")
+              ? SellMark
+              : null;
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                disabled={!a.why}
+                onClick={() => setOpen(shown ? null : i)}
+                aria-expanded={a.why ? shown : undefined}
+                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-slate-50 disabled:hover:bg-transparent"
+              >
+                <span className="w-12 shrink-0 text-xs tabular-nums text-slate-400">
+                  Day {a.day}
+                </span>
+                {Mark && <Mark className="size-3.5 shrink-0 text-slate-500" />}
+                <span className="min-w-0 flex-1 text-slate-900">{a.text}</span>
+                {a.why && (
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    className={`size-3 shrink-0 text-slate-400 transition-transform duration-200 ${shown ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m4 6 4 4 4-4" />
+                  </svg>
+                )}
+              </button>
+              {a.why && (
+                <div
+                  className="legend-fold"
+                  data-closed={shown ? undefined : ""}
+                  inert={!shown}
+                >
+                  <div>
+                    <WhyDetail why={a.why} deck={deck} className="mb-1 mt-0.5" />
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // The recap of the days just passed, over the trading panel (which it dims): how long passed;
 // what the account was worth then and now, with a little chart of it over those days (over
 // more than one day, while anything was held); and how each of the shares held did, by how
@@ -2938,8 +3585,36 @@ function TourGuide({
 // plays, its rows rise in one after another, and its figures count from where the days began
 // to where they ended as the little chart draws itself. Pointing along the little chart shows
 // each day's value. Continue (or a click outside it, or Escape) closes it.
-function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean; onDone: () => void }) {
-  const { from, to, values, positions, payouts, added = 0 } = recap;
+function RecapCard({
+  recap,
+  leaving,
+  onDone,
+  deck,
+}: {
+  recap: Recap;
+  leaving: boolean;
+  onDone: () => void;
+  deck?: Strategy | null;
+}) {
+  const {
+    from,
+    to,
+    values,
+    positions,
+    payouts,
+    added = 0,
+    contrib,
+    actions = [],
+    timed = false,
+  } = recap;
+  // A timed one goes by itself (TIMED_RECAP_MS), its bar filling as the considering card's does.
+  useEffect(() => {
+    if (!timed) return;
+    const timer = window.setTimeout(onDone, TIMED_RECAP_MS);
+    return () => window.clearTimeout(timer);
+    // (`onDone` closes this recap whenever it is called.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timed]);
   // The dividends received over the days, in CAD (each at its day's rate).
   const dividendTotal = payouts.reduce((sum, x) => sum + payoutCad(x), 0);
   const button = useRef<HTMLButtonElement>(null);
@@ -2959,13 +3634,17 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
   const SHOWN = 5;
 
   // The little chart: the account's value on Day `from` and every day since, in a 100 by 36
-  // box.
-  const low = Math.min(...values);
-  const high = Math.max(...values);
+  // box, less the monthly contributions added over them (which would look like gains).
+  const net = values.map((v, i) => v - (contrib?.[i] ?? 0));
+  const low = Math.min(...net);
+  const high = Math.max(...net);
   const span = high - low || 1;
-  const px = (i: number) => (values.length === 1 ? 50 : (i / (values.length - 1)) * 100);
+  const px = (i: number) =>
+    net.length === 1 ? 50 : (i / (net.length - 1)) * 100;
   const py = (v: number) => 32 - ((v - low) / span) * 28;
-  const line = values.map((v, i) => `${i ? "L" : "M"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join("");
+  const line = net
+    .map((v, i) => `${i ? "L" : "M"}${px(i).toFixed(2)},${py(v).toFixed(2)}`)
+    .join("");
   const color = move >= 0 ? "#15803d" : "#dc2626";
   const shown = spot ?? values.length - 1;
 
@@ -2991,7 +3670,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
       label={`Day ${from} to Day ${to}`}
       leaving={leaving}
       onClose={onDone}
-      initialFocus={button}
+      initialFocus={timed ? undefined : button}
       className="max-w-sm overflow-hidden"
       overlayClassName="recap"
     >
@@ -3074,7 +3753,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
                 className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow transition-[left,top] duration-150 ease-out"
                 style={{
                   left: `${px(shown)}%`,
-                  top: `${(py(values[shown]) / 36) * 100}%`,
+                  top: `${(py(net[shown]) / 36) * 100}%`,
                   backgroundColor: color,
                 }}
               />
@@ -3084,7 +3763,7 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
                 }`}
                 style={{ left: `${Math.min(Math.max(px(shown), 14), 86)}%` }}
               >
-                Day {from + shown}: {money.format(values[shown])}
+                Day {from + shown}: {money.format(net[shown])}
               </span>
             </div>
           </div>
@@ -3141,11 +3820,18 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
           </div>
         </div>
 
+        {/* What the strategy did over the days; each with why, opened by clicking it. */}
+        {actions.length > 0 && (
+          <div {...row(3)}>
+            <StrategyActs actions={actions} deck={deck} />
+          </div>
+        )}
+
         {/* The cash dividends the shares held earned over the days: each payment (a share held
             at the close before its ex-dividend date gets it), paid into the cash in the
             share's currency, and in the account value above. */}
         {payouts.length > 0 && (
-          <div {...row(3)}>
+          <div {...row(4)}>
             <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
               <p className="flex items-center justify-between text-xs text-slate-500">
                 <span className="flex items-center gap-1.5">
@@ -3184,28 +3870,38 @@ function RecapCard({ recap, leaving, onDone }: { recap: Recap; leaving: boolean;
           </div>
         )}
 
-        <div {...row(4)} className="rise-in mt-4 flex gap-2">
-          <button
-            ref={button}
-            type="button"
-            onClick={onDone}
-            className={`${DARK} ${ACTION} flex-1 justify-center`}
-          >
-            Continue
-            <svg
-              aria-hidden
-              viewBox="0 0 16 16"
-              className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {/* Timed: the time it stays, filling up. Else: Continue. */}
+        {timed ? (
+          <div className="mt-4 h-1 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="considering-bar h-full rounded-full bg-slate-900"
+              style={{ animationDuration: `${TIMED_RECAP_MS}ms` }}
+            />
+          </div>
+        ) : (
+          <div {...row(5)} className="rise-in mt-4 flex gap-2">
+            <button
+              ref={button}
+              type="button"
+              onClick={onDone}
+              className={`${DARK} ${ACTION} flex-1 justify-center`}
             >
-              <path d="M3 8h10M9 4l4 4-4 4" />
-            </svg>
-          </button>
-        </div>
+              Continue
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                className="size-3.5 transition-transform duration-300 group-hover:translate-x-1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 8h10M9 4l4 4-4 4" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </Popup>
   );

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { isPaletteName, paletteColor, PalettePicker, type PaletteName } from "@/components/EtfBreakdown";
+import { PalettePicker } from "@/components/EtfBreakdown";
 import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
 import { ChevronDownIcon } from "@/components/Icons";
-import DeckBack, { Suit } from "@/components/DeckBack";
+import { Suit } from "@/components/DeckBack";
+import DeckPile, { DECK_H, DECK_W, deckColor, deckPalette } from "@/components/DeckPile";
 import {
   AmountMark,
   BuyMark,
@@ -21,10 +22,11 @@ import {
   actionDone,
   actionOf,
   complete,
+  actionText,
+  conditionText,
   EMPTY_PLAN,
   METRICS,
   num,
-  positive,
   STORE,
   wholeShares,
   type Action,
@@ -92,9 +94,6 @@ const DIVIDEND_ADDED = "canetf-strategy-dividend-added-v3";
 const CARD_W = 116;
 const CARD_H = 150;
 const GAP = 12;
-// A deck on the shelf: a little bigger than a card.
-const DECK_W = Math.round(CARD_W * 1.1);
-const DECK_H = Math.round(CARD_H * 1.1);
 
 let next = 1;
 const newCondition = (c: Partial<Condition> = {}): Condition => ({
@@ -243,10 +242,6 @@ function starting(): Saved {
   return { decks: [deck], open: deck.id, editing: { [deck.id]: deck.rules[0].id } };
 }
 
-// A deck's colour family (one of the Search charts', blue unless another is chosen), and its
-// colour: that family's main shade.
-const deckPalette = (s: Strategy): PaletteName => (isPaletteName(s.palette) ? s.palette : "blue");
-const deckColor = (s: Strategy) => paletteColor(deckPalette(s));
 
 const dollars = (n: number) => `$${n.toLocaleString("en-CA", { maximumFractionDigits: 2 })}`;
 const range = (a: number | null, b: number | null) =>
@@ -256,102 +251,13 @@ const buildYears = (s: Strategy) => {
   return n !== null && n > 0 ? Math.round(n) : null;
 };
 
-function valueText(metric: Metric, value: string) {
-  const n = Number(value);
-  const unit = METRICS[metric].unit;
-  if (unit === "$")
-    return `$${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (unit === "shares") return `${n.toLocaleString("en-CA")} ${n === 1 ? "share" : "shares"}`;
-  if (unit === "funds" || unit === "quarters" || unit === "months")
-    return `${n.toLocaleString("en-CA")} ${n === 1 ? unit.slice(0, -1) : unit}`;
-  if (unit === "pts") return `${n.toLocaleString("en-CA", { maximumFractionDigits: 2 }).replace("-", "−")} points`;
-  return `${n.toLocaleString("en-CA", { maximumFractionDigits: 2 }).replace("-", "−")}%`;
-}
-
 // What the strategy applies to, in words, and how a rule's shares are said of it.
 function scopeText(s: Strategy) {
   if (s.scope === "sector") return `every ${s.sector.toLowerCase()} firm, each on its own`;
   if (s.scope === "etfs") return "every ETF, each on its own";
   return s.symbol ? s.symbol : "the firm or ETF you choose";
 }
-const ofWhat = (s: Strategy) => (s.scope === "single" ? (s.symbol ? ` of ${s.symbol}` : "") : " of it");
 
-const OP_TEXT: Record<Op, string> = { above: "over", below: "under", atLeast: "at least", atMost: "at most" };
-
-// What each measure is called in a card's words: short, as one would say it.
-const SUBJECT: Record<Metric, string> = {
-  price: "the price",
-  dayChange: "today's move",
-  weekChange: "the 5-day move",
-  monthChange: "the 1-month move",
-  yearChange: "the 1-year move",
-  vsAvg50: "the price vs its 50-day average",
-  vsAvg200: "the price vs its 200-day average",
-  fromHigh: "the price vs its 52-week high",
-  fromLow: "the price vs its 52-week low",
-  yieldVsAvg: "the dividend yield vs usual",
-  dividendChange: "the dividend vs a year ago",
-  spreadVsAvg: "the yield's lead over bonds vs usual",
-  cadVsAvg: "the Canadian dollar vs usual",
-  navDiscount: "the discount to its holdings' value",
-  feeChange: "the fund's fee change",
-  policyChange: "a new tax or limit on foreign holdings",
-  gain: "your gain",
-  held: "shares held",
-  funds: "funds held",
-  quietQuarters: "quarters since the pot was used",
-  pausedMonths: "months buying has been paused",
-};
-
-// Counts read better said their own way ("the pot hasn't been used for at least 4 quarters").
-const COUNT_OP: Record<Op, string> = { above: "more than", below: "fewer than", atLeast: "at least", atMost: "at most" };
-const COUNTS: Partial<Record<Metric, (count: string) => string>> = {
-  quietQuarters: (n) => `the pot hasn't been used for ${n} quarters`,
-  pausedMonths: (n) => `buying has been paused for ${n} months`,
-  funds: (n) => `you hold ${n} funds`,
-  held: (n) => `you hold ${n} shares`,
-};
-
-function conditionText(c: Condition) {
-  const info = METRICS[c.metric];
-  if (info.unit === "event") return SUBJECT[c.metric];
-  const count = COUNTS[c.metric];
-  if (count) return count(`${COUNT_OP[c.op]} ${Number(c.value).toLocaleString("en-CA")}`);
-  const n = Number(c.lasting);
-  const lasting =
-    info.span && positive(c.lasting)
-      ? ` for ${n} ${n === 1 ? info.span.slice(0, -1) : info.span} in a row`
-      : "";
-  return `${SUBJECT[c.metric]} is ${OP_TEXT[c.op]} ${valueText(c.metric, c.value)}${lasting}`;
-}
-
-// What a card does, in words.
-function actionText(rule: Rule, s: Strategy) {
-  const n = Number(rule.shares);
-  const amount = Number(rule.amount);
-  const what = s.scope === "single" && s.symbol ? s.symbol : "it";
-  switch (actionOf(rule)) {
-    case "buy":
-    case "sell":
-      return `${actionOf(rule)} ${n.toLocaleString("en-CA")} ${n === 1 ? "share" : "shares"}${ofWhat(s)}`;
-    case "buyAmount":
-      return `buy ${dollars(amount)}${ofWhat(s)}`;
-    case "buyMonthly":
-      return `buy ${what} with this month's money`;
-    case "buyPot":
-      return `buy ${what} with the pot`;
-    case "move":
-      return amount >= 100
-        ? `move all of ${what} to ${rule.target?.trim()}`
-        : `move ${amount}% of ${what} to ${rule.target?.trim()}`;
-    case "split":
-      return `send ${amount}% of new money to ${rule.target?.trim()}`;
-    case "pause":
-      return `pause buying for ${amount} ${amount === 1 ? "month" : "months"}`;
-    case "stop":
-      return "stop buying";
-  }
-}
 
 const CHECK_TEXT: Record<Check, string> = { day: "Every day", month: "Every month", quarter: "Every quarter", year: "Every year" };
 const LIMIT_TEXT: Record<Limit, string> = { none: "", month: "a month", quarter: "a quarter", year: "a year" };
@@ -845,70 +751,6 @@ const TAG_WORD: Record<Action, string> = {
 };
 const buying = (a: Action) => a === "buy" || a === "buyAmount" || a === "buyMonthly" || a === "buyPot" || a === "split";
 
-// A deck on the shelf: up to three card backs in its colour (the cat hiding behind a cup of
-// coffee, surprised when the deck is pointed at, happy when it is clicked), stacked a little askew, the top one lifting
-// when pointed at; under it, its name and how many cards it holds. The one open is
-// ringed and tagged "Open".
-function DeckPile({ deck, open, onOpen }: { deck: Strategy; open: boolean; onOpen: () => void }) {
-  const color = deckColor(deck);
-  const layers = Math.min(deck.rules.length, 3);
-  const cards = `${deck.rules.length} ${deck.rules.length === 1 ? "card" : "cards"}`;
-  // Clicked, the cat on its cards is happy until the pointer leaves it.
-  const [happy, setHappy] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onOpen();
-        setHappy(true);
-      }}
-      data-happy={happy || undefined}
-      onPointerLeave={() => setHappy(false)}
-      aria-pressed={open}
-      aria-label={`${deck.name.trim() || "Untitled strategy"}: ${cards}`}
-      className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
-    >
-      <span className="relative block" style={{ width: DECK_W, height: DECK_H }}>
-        {Array.from({ length: layers }, (_, k) => layers - 1 - k).map((depth) => (
-          <span
-            key={depth}
-            className="absolute inset-0"
-            style={{ transform: `translate(${depth * 2.5}px, ${depth * 2.5}px) rotate(${depth * 1.5}deg)` }}
-          >
-            <span
-              className={`absolute inset-0 rounded-xl transition-[translate,rotate,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                depth === 0
-                  ? "motion-safe:group-hover:-translate-y-1.5 motion-safe:group-hover:-rotate-2"
-                  : ""
-              } ${depth === 0 && open ? "ring-2 ring-slate-900 ring-offset-2" : ""} ${
-                depth === 0
-                  ? "group-focus-visible:ring-2 group-focus-visible:ring-slate-400 group-focus-visible:ring-offset-2"
-                  : ""
-              }`}
-            >
-              <DeckBack color={color} />
-            </span>
-          </span>
-        ))}
-        <span
-          aria-hidden
-          className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
-            open ? "scale-100 opacity-100" : "scale-75 opacity-0"
-          }`}
-        >
-          Open
-        </span>
-      </span>
-      <span className="w-full text-center leading-tight">
-        <span className="block truncate text-xs font-semibold text-slate-900">
-          {deck.name.trim() || "Untitled strategy"}
-        </span>
-        <span className="text-[11px] text-slate-500">{cards}</span>
-      </span>
-    </button>
-  );
-}
-
 // The open deck's cards, face up in a row (overlapping when there are too many to fit side by
 // side), each sliding to its place as cards come and go, and a dashed slot after them to deal
 // a new one. Each card is dealt in turning face up, one after another as the deck opens.
@@ -988,7 +830,19 @@ function Hand({
 // shares it trades in two corners (its "rank") over its suit (a fish or clover, as the chosen back has); in its middle the
 // mark of what it does, whether it buys or sells, its name, and how many conditions it has (or that it
 // is unfinished). Being edited, it stands proud, ringed and tagged "Editing".
-function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: string; on: boolean }) {
+export function RuleCardFace({
+  rule,
+  n,
+  color,
+  on,
+  tag = "Editing",
+}: {
+  rule: Rule;
+  n: number;
+  color: string;
+  on: boolean;
+  tag?: string;
+}) {
   const rank = rankText(rule);
   const action = actionOf(rule);
   const corner = (flip?: boolean) => (
@@ -1049,7 +903,7 @@ function RuleCardFace({ rule, n, color, on }: { rule: Rule; n: number; color: st
           on ? "scale-100 opacity-100" : "scale-75 opacity-0"
         }`}
       >
-        Editing
+        {tag}
       </span>
     </span>
   );

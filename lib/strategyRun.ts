@@ -18,7 +18,19 @@
 // value, fees, policy changes) never hold.
 
 import { kindOf } from "@/lib/sandbox";
-import { actionOf, complete, METRICS, num, type Condition, type Metric, type Rule, type Strategy } from "@/lib/strategy";
+import {
+  actionOf,
+  actionText,
+  complete,
+  conditionText,
+  METRICS,
+  num,
+  valueText,
+  type Condition,
+  type Metric,
+  type Rule,
+  type Strategy,
+} from "@/lib/strategy";
 
 // A pick as the strategy sees it: its closes (the days before the test, then Day 1 to today),
 // each day's cash dividend per share (else 0) and its currency's rate to CAD (null where none is
@@ -59,7 +71,26 @@ export type RunState = {
   potClosed: boolean;
 };
 
-export type Order = { symbol: string; side: "Bought" | "Sold"; shares: number };
+export type Order = { symbol: string; side: "Bought" | "Sold"; shares: number; why?: Why };
+
+// Why something was done: the card that did it (or the plan), the pick it looked at, how often
+// the card checks, whether all or any of its conditions had to hold, and each condition with
+// its figure that day and whether it held; and, where a card buys with money and several picks
+// qualified, why this one was chosen.
+export type Why = {
+  card: string;
+  // Its place in the deck ("Card 2 of 5"), and what it does, in words.
+  number?: number;
+  of?: number;
+  does?: string;
+  pick: string | null;
+  check: string | null;
+  match: "all" | "any";
+  conditions: { text: string; now: string | null; met: boolean }[];
+  chosen?: string;
+};
+// What the strategy says of a day: each thing it did (`acted`, with why), or why it did nothing.
+export type Note = { text: string; acted: boolean; why?: Why };
 
 const MONTH = 21;
 const QUARTER = 63;
@@ -99,6 +130,7 @@ const holding = (deck: Strategy, day: number) => {
   return years !== null && years > 0 && day - 1 >= years * YEAR;
 };
 
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const BASIC = ["MiningCompany", "ChemicalCompany", "AgriCompany", "MaterialsCompany"];
 
@@ -143,7 +175,8 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
   const state: RunState = { ...start, lastFired: { ...start.lastFired } };
   if (state.pausedFrom !== null && day > state.pausedUntil) state.pausedFrom = null;
   const orders: Order[] = [];
-  const notes: string[] = [];
+  const notes: Note[] = [];
+  const say = (text: string, why?: Why) => notes.push({ text, acted: true, why });
   // What is held and the cash, as today's orders change them.
   const held: Record<string, { shares: number; cost: number }> = { ...market.held };
   let cash = market.cash;
@@ -262,6 +295,35 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
     rule.conditions.length === 0 ||
     (rule.match === "any" ? rule.conditions.some((c) => holds(c, p)) : rule.conditions.every((c) => holds(c, p)));
 
+  // Why `rule` acted on `p`: each of its conditions, with its figure today and whether it held.
+  // (`pool`: how many picks it chose `p` from, for a card that buys with money.)
+  let current: { rule: Rule; pool: number } | null = null;
+  const CHECKS = { day: "Checks every day", month: "Checks every month", quarter: "Checks every quarter", year: "Checks every year" };
+  function explain(p: RunPick | undefined): Why | undefined {
+    if (!current) return undefined;
+    const { rule, pool } = current;
+    const reason = p ? why(p) : "";
+    return {
+      card: rule.name.trim() || "Untitled card",
+      number: deck.rules.indexOf(rule) + 1,
+      of: deck.rules.length,
+      does: capital(actionText(rule, deck)),
+      pick: p?.name ?? null,
+      check: CHECKS[rule.check ?? "day"],
+      match: rule.match === "any" ? "any" : "all",
+      conditions: p
+        ? rule.conditions.map((c) => {
+            const v = value(c.metric, p, idx(p));
+            return { text: conditionText(c), now: v === null ? null : valueText(c.metric, String(v)), met: holds(c, p) };
+          })
+        : [],
+      chosen:
+        p && pool > 1
+          ? `Of the ${pool} that met them, it had the best outlook${reason ? ` (${reason})` : ""}.`
+          : undefined,
+    };
+  }
+
   // A pick's outlook: its price's change over 6 and 12 months, averaged, plus twice its yield.
   const outlook = (p: RunPick) => {
     const i = idx(p);
@@ -290,26 +352,35 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
   // Buys as many whole shares of `p` as `amount` (in CAD) and the cash stretch to; what it spent.
   function buy(p: RunPick, amount: number, what: string) {
     const each = perShare(p);
-    const n = each > 0 ? Math.floor(Math.min(amount, cash) / each) : 0;
+    // (A hair over, so 5 shares' worth buys 5 despite rounding.)
+    const n = each > 0 ? Math.floor(Math.min(amount, cash) / each + 1e-9) : 0;
     if (n < 1) return 0;
-    orders.push({ symbol: p.symbol, side: "Bought", shares: n });
+    const reason = explain(p) ?? {
+      card: "The plan",
+      pick: p.name,
+      check: null,
+      match: "all" as const,
+      conditions: [],
+      chosen: `Its building years are over, so the pot went to the pick with the best outlook${why(p) ? ` (${why(p)})` : ""}.`,
+    };
+    orders.push({ symbol: p.symbol, side: "Bought", shares: n, why: reason });
     const spent = n * each;
     cash -= spent;
     const h = held[p.symbol] ?? { shares: 0, cost: 0 };
     held[p.symbol] = { shares: h.shares + n, cost: h.cost + spent };
-    const reason = why(p);
-    notes.push(`Bought ${n} ${p.name} ${what}${reason ? ` (${reason})` : ""}.`);
+    say(`Bought ${n} ${p.name}${what ? ` ${what}` : ""}.`, reason);
     return spent;
   }
   function sell(p: RunPick, n: number, what: string) {
     const h = held[p.symbol];
     const shares = Math.min(n, h?.shares ?? 0);
     if (shares < 1) return 0;
-    orders.push({ symbol: p.symbol, side: "Sold", shares });
+    const reason = explain(p);
+    orders.push({ symbol: p.symbol, side: "Sold", shares, why: reason });
     const got = shares * perShare(p);
     cash += got;
     held[p.symbol] = { shares: h.shares - shares, cost: h.shares === shares ? 0 : (h.cost * (h.shares - shares)) / h.shares };
-    notes.push(`Sold ${shares} ${p.name}${what}.`);
+    say(`Sold ${shares} ${p.name}${what}.`, reason);
     return got;
   }
 
@@ -339,6 +410,8 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
     const action = actionOf(rule);
     const amount = Number(rule.amount);
     const matching = scope.filter((p) => meets(rule, p));
+    // (Cards that buy with money choose among the picks that qualify.)
+    current = { rule, pool: ["buyAmount", "buyMonthly", "buyPot"].includes(action) ? matching.length : 0 };
     let fired = false;
     switch (action) {
       case "buy":
@@ -390,7 +463,7 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
       case "split":
         if (matching.length && state.split !== amount) {
           state.split = amount;
-          notes.push(`From now on, ${amount}% of new money goes to a second fund.`);
+          say(`From now on, ${amount}% of new money goes to a second fund.`, explain(matching[0]));
           fired = true;
         }
         break;
@@ -399,7 +472,10 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
           if (day >= state.pausedUntil) {
             state.pausedFrom = state.pausedFrom ?? day;
             state.pausedUntil = day + amount * MONTH;
-            notes.push(`Paused buying for ${amount} ${amount === 1 ? "month" : "months"} (${rule.name || "a card"}).`);
+            say(
+              `Paused buying for ${amount} ${amount === 1 ? "month" : "months"}.`,
+              explain(matching.find((p) => sharesOf(p) > 0) ?? matching[0]),
+            );
             fired = true;
           }
         }
@@ -407,13 +483,14 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
       case "stop":
         if (matching.length && !state.stopped) {
           state.stopped = true;
-          notes.push("Stopped buying.");
+          say("Stopped buying.", explain(matching[0]));
           fired = true;
         }
         break;
     }
     if (fired) state.lastFired[rule.id] = day;
   }
+  current = null;
 
   // Nothing done: why (nothing to trade, buying held back, or its cards next look later).
   if (!notes.length) {
@@ -425,7 +502,9 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
         return day + every - ((day - 1) % every);
       })
       .reduce((a, b) => Math.min(a, b), Infinity);
-    notes.push(
+    notes.push({
+      acted: false,
+      text:
       why ??
         (!scope.length
           ? "None of what it trades is listed yet."
@@ -436,11 +515,11 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
               : Number.isFinite(next) && next > day + 1
                 ? `Nothing to do today. Its next check is on Day ${next}.`
                 : "Nothing to do today."),
-    );
+    });
   }
   // (Some cards skipped for missing a figure: said, so their silence isn't a mystery.)
   const skipped = unfinished(deck);
   if (skipped && runnable(deck))
-    notes.push(`${skipped} unfinished ${skipped === 1 ? "card is" : "cards are"} skipped.`);
+    notes.push({ acted: false, text: `${skipped} unfinished ${skipped === 1 ? "card is" : "cards are"} skipped.` });
   return { orders, state, notes };
 }

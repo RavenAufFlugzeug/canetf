@@ -1348,6 +1348,35 @@ html[data-company-leaving] .company-view {
   }
 }
 
+/* The full backtest's chip (ChipMark): its pins light a side at a time round it and its core
+   glows, while pointed at or at work (.test-mark-busy). */
+.group:enabled:hover .test-mark-pin,
+.test-mark-busy .test-mark-pin {
+  animation: test-mark-pin 600ms ease-in-out infinite;
+}
+.group:enabled:hover .test-mark-core,
+.test-mark-busy .test-mark-core {
+  animation: test-mark-core 600ms ease-in-out infinite;
+}
+@keyframes test-mark-pin {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@keyframes test-mark-core {
+  0%,
+  100% {
+    fill-opacity: 0.25;
+  }
+  50% {
+    fill-opacity: 0.9;
+  }
+}
+
 /* The Sandbox test's warnings (components/SandboxTest.tsx). A warning under the trading
    controls (Notice) fades and slides in, each new attempt afresh; and the warning mark by a
    cost the cash can't cover pops up as it appears. */
@@ -3144,6 +3173,10 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .group:enabled:hover .test-mark-week,
   .group:enabled:hover .test-mark-date,
   .group:enabled:hover .test-mark-flag,
+  .group:enabled:hover .test-mark-pin,
+  .test-mark-busy .test-mark-pin,
+  .group:enabled:hover .test-mark-core,
+  .test-mark-busy .test-mark-core,
   .trade-row,
   .pick-swap-in,
   .grade-tile,

@@ -220,6 +220,31 @@ export function FinishMark(props: Props) {
   );
 }
 
+// Running a full backtest (the computer trading every day left): a chip, its pins along each
+// side, with a core in the middle. Pointed at, its pins light one side after another round it
+// and its core glows; at work (.test-mark-busy, the backtest's pop-up), they keep on.
+export function ChipMark(props: Props) {
+  const sides = [
+    ["M8 2.5v2", "M12 2.5v2"],
+    ["M15.5 8h2", "M15.5 12h2"],
+    ["M12 15.5v2", "M8 15.5v2"],
+    ["M2.5 12h2", "M2.5 8h2"],
+  ];
+  return (
+    <Mark {...props}>
+      <rect x="4.5" y="4.5" width="11" height="11" rx="2" />
+      <rect className="test-mark-core" x="7.75" y="7.75" width="4.5" height="4.5" rx="0.75" fill="currentColor" fillOpacity="0.25" />
+      {sides.map((pins, i) => (
+        <g key={i} className="test-mark-pin" style={{ animationDelay: `${i * 150}ms` }}>
+          {pins.map((d) => (
+            <path key={d} d={d} />
+          ))}
+        </g>
+      ))}
+    </Mark>
+  );
+}
+
 // The Strategies page's card marks, in the same style, one for each thing a card can do (buying
 // and selling shares have the box marks above; buying with the month's money, the calendar):
 //  - buying an amount: a coin with a dollar sign;

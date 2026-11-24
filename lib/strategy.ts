@@ -253,6 +253,101 @@ export const EMPTY_PLAN: Plan = {
 };
 
 // Where the decks are kept in this browser, with the one open and the card edited in each.
+
+// How a condition reads in words ("today's move is under −3%"), and a figure of a measure.
+export function valueText(metric: Metric, value: string) {
+  const n = Number(value);
+  const unit = METRICS[metric].unit;
+  if (unit === "$")
+    return `$${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (unit === "shares") return `${n.toLocaleString("en-CA")} ${n === 1 ? "share" : "shares"}`;
+  if (unit === "funds" || unit === "quarters" || unit === "months")
+    return `${n.toLocaleString("en-CA")} ${n === 1 ? unit.slice(0, -1) : unit}`;
+  if (unit === "pts") return `${n.toLocaleString("en-CA", { maximumFractionDigits: 2 }).replace("-", "−")} points`;
+  return `${n.toLocaleString("en-CA", { maximumFractionDigits: 2 }).replace("-", "−")}%`;
+}
+
+export const OP_TEXT: Record<Op, string> = { above: "over", below: "under", atLeast: "at least", atMost: "at most" };
+
+// What each measure is called in a card's words: short, as one would say it.
+export const SUBJECT: Record<Metric, string> = {
+  price: "the price",
+  dayChange: "today's move",
+  weekChange: "the 5-day move",
+  monthChange: "the 1-month move",
+  yearChange: "the 1-year move",
+  vsAvg50: "the price vs its 50-day average",
+  vsAvg200: "the price vs its 200-day average",
+  fromHigh: "the price vs its 52-week high",
+  fromLow: "the price vs its 52-week low",
+  yieldVsAvg: "the dividend yield vs usual",
+  dividendChange: "the dividend vs a year ago",
+  spreadVsAvg: "the yield's lead over bonds vs usual",
+  cadVsAvg: "the Canadian dollar vs usual",
+  navDiscount: "the discount to its holdings' value",
+  feeChange: "the fund's fee change",
+  policyChange: "a new tax or limit on foreign holdings",
+  gain: "your gain",
+  held: "shares held",
+  funds: "funds held",
+  quietQuarters: "quarters since the pot was used",
+  pausedMonths: "months buying has been paused",
+};
+
+// Counts read better said their own way ("the pot hasn't been used for at least 4 quarters").
+const COUNT_OP: Record<Op, string> = { above: "more than", below: "fewer than", atLeast: "at least", atMost: "at most" };
+const COUNTS: Partial<Record<Metric, (count: string) => string>> = {
+  quietQuarters: (n) => `the pot hasn't been used for ${n} quarters`,
+  pausedMonths: (n) => `buying has been paused for ${n} months`,
+  funds: (n) => `you hold ${n} funds`,
+  held: (n) => `you hold ${n} shares`,
+};
+
+export function conditionText(c: Condition) {
+  const info = METRICS[c.metric];
+  if (info.unit === "event") return SUBJECT[c.metric];
+  const count = COUNTS[c.metric];
+  if (count) return count(`${COUNT_OP[c.op]} ${Number(c.value).toLocaleString("en-CA")}`);
+  const n = Number(c.lasting);
+  const lasting =
+    info.span && positive(c.lasting)
+      ? ` for ${n} ${n === 1 ? info.span.slice(0, -1) : info.span} in a row`
+      : "";
+  return `${SUBJECT[c.metric]} is ${OP_TEXT[c.op]} ${valueText(c.metric, c.value)}${lasting}`;
+}
+
+// How a rule's shares are said of what the strategy applies to; a sum of money.
+const ofWhat = (s: Strategy) => (s.scope === "single" ? (s.symbol ? ` of ${s.symbol}` : "") : " of it");
+const dollars = (n: number) => `$${n.toLocaleString("en-CA", { maximumFractionDigits: 2 })}`;
+
+// What a card does, in words.
+export function actionText(rule: Rule, s: Strategy) {
+  const n = Number(rule.shares);
+  const amount = Number(rule.amount);
+  const what = s.scope === "single" && s.symbol ? s.symbol : "it";
+  switch (actionOf(rule)) {
+    case "buy":
+    case "sell":
+      return `${actionOf(rule)} ${n.toLocaleString("en-CA")} ${n === 1 ? "share" : "shares"}${ofWhat(s)}`;
+    case "buyAmount":
+      return `buy ${dollars(amount)}${ofWhat(s)}`;
+    case "buyMonthly":
+      return `buy ${what} with this month's money`;
+    case "buyPot":
+      return `buy ${what} with the pot`;
+    case "move":
+      return amount >= 100
+        ? `move all of ${what} to ${rule.target?.trim()}`
+        : `move ${amount}% of ${what} to ${rule.target?.trim()}`;
+    case "split":
+      return `send ${amount}% of new money to ${rule.target?.trim()}`;
+    case "pause":
+      return `pause buying for ${amount} ${amount === 1 ? "month" : "months"}`;
+    case "stop":
+      return "stop buying";
+  }
+}
+
 export const STORE = "canetf-strategy-decks";
 export type Saved = { decks: Strategy[]; open: number; editing: Record<number, number> };
 
