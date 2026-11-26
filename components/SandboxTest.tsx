@@ -9,8 +9,10 @@ import { NAICS_GROUPS } from "@/lib/naics";
 import EtfHoldings from "@/components/EtfHoldings";
 import { Flag, Place } from "@/components/FlagPair";
 import FoldButton from "@/components/FoldButton";
-import DeckPile, { deckColor } from "@/components/DeckPile";
-import { RuleCardFace } from "@/components/StrategyBuilder";
+import DeckPile, { cardColor, deckBack, deckColor } from "@/components/DeckPile";
+import { DeckDesign } from "@/components/DeckBack";
+import { DEFAULT_BACK } from "@/lib/deckBack";
+import { CARD_H, CARD_W, RuleCardFace } from "@/components/StrategyBuilder";
 import SlideTabs from "@/components/SlideTabs";
 import HoldingsDeck from "@/components/HoldingsDeck";
 import KindMark from "@/components/KindMark";
@@ -47,7 +49,7 @@ import { currencyName, usedIn } from "@/lib/fx";
 import { moneyFormatter, rateDecimals } from "@/lib/money";
 import { POPUP_OUT_MS } from "@/lib/popup";
 import Popup from "@/components/Popup";
-import { addedBy, newSeed, sandboxHref, type Choices } from "@/lib/sandbox";
+import { addedBy, MONTH_DAYS, monthlyAmounts, newSeed, sandboxHref, type Choices, type Monthly } from "@/lib/sandbox";
 import { tradingSpan } from "@/lib/tradingTime";
 import { actionText, conditionText, loadDecks, type Rule, type Strategy } from "@/lib/strategy";
 import {
@@ -75,6 +77,7 @@ import {
   TAG,
   TAG_SHAPE,
 } from "@/lib/ui";
+import { FADE_MS } from "@/lib/motion";
 
 // The Sandbox's trading test, over a set of companies and ETFs (`picks`, named by their kind,
 // not their names) all trading through the same stretch of time. Starting with `amount`
@@ -254,14 +257,14 @@ const THINK_MS = 4000;
 // takes to fade back in, on the new day; how long the page takes to glide to a holding's chart,
 // and how long after that its new days slide in again; how long it stays after; and how long
 // the walk's guide takes to go.
-const TOUR_FADE_MS = 780;
+const TOUR_FADE_MS = FADE_MS;
 const TOUR_UP_MS = 650;
 const TOUR_DAY_MS = 1700;
-const TOUR_IN_MS = 1100;
+const TOUR_IN_MS = FADE_MS;
 const TOUR_GLIDE_MS = 1100;
 const TOUR_REPLAY_MS = 450;
 const TOUR_HOLD_MS = 2600;
-const TOUR_OUT_MS = 280;
+const TOUR_OUT_MS = FADE_MS;
 // How long the page takes to glide to the holdings after a purchase, before it is dealt in.
 const HAND_GLIDE_MS = 1100;
 // How long passed, for a recap's heading: "A day passes", "A week passes", "3 days pass".
@@ -415,24 +418,24 @@ const START = `group relative overflow-hidden ${buttonLook("primary")}`;
 const LAUNCH_MS = 380;
 // Starting the test is unhurried: the loading mark shows for at least START_WAIT_MS from
 // the click, then the start panel fades away over LEAVE_MS; the trading panel takes its place
-// out of sight as the page settles on it, then fades in slowly, its parts rising in one by one.
+// out of sight as the page settles on it, then fades in, its parts rising in one by one.
 const START_WAIT_MS = 1100;
-const LEAVE_MS = 780;
+const LEAVE_MS = FADE_MS;
 // How long the shown pick's parts take to fade out when another is chosen (.pick-swap-out).
-const SWAP_OUT_MS = 260;
+const SWAP_OUT_MS = FADE_MS;
 const GROW_MS = 750;
 const pause = (ms: number) => new Promise((done) => window.setTimeout(done, ms));
 
 // One part of the trading panel rising in, `i` parts after the first, as the test starts.
 const enter = (i: number) => ({
   className: "rise-in",
-  style: { animationDelay: `${200 + i * 160}ms`, animationDuration: "1000ms" },
+  style: { animationDelay: `${200 + i * 160}ms` },
 });
 
-// The same, slower and further apart: the results coming in once the test has faded away.
+// The same, further apart: the results coming in once the test has faded away.
 const enterSlow = (i: number) => ({
   className: "rise-in",
-  style: { animationDelay: `${500 + i * 280}ms`, animationDuration: "1100ms" },
+  style: { animationDelay: `${500 + i * 280}ms` },
 });
 
 const NO_ORDERS: Record<Side, string> = { Bought: "", Sold: "" };
@@ -452,8 +455,9 @@ export default function SandboxTest({
   picks: Pick[];
   days: number;
   amount: number;
-  // What is added to the cash (in CAD) at the end of each month (21 trading days), if anything.
-  monthly?: number;
+  // What is added to the cash (in CAD) at the end of each month (21 trading days), if anything:
+  // a set amount, or a random one each month.
+  monthly?: Monthly;
   // The key of the Sandbox's area this test is in (the set's: see SandboxSwap), and the
   // choices it was made with, for trying again (a new set) or leaving (no set).
   setKey: string;
@@ -692,7 +696,10 @@ export default function SandboxTest({
   const value = cents(cashCad + invested);
   // What has been put in by Day `d`: the starting amount, and each month's added at the end of
   // it (so in the cash from the next day on); the return is on all of it.
-  const addedOn = (d: number) => addedBy(monthly, d - 1);
+  // Each month's amount (random ones, the same for this set every time), and whether any comes in.
+  const monthlyIn = monthlyAmounts(monthly, Math.ceil(days / MONTH_DAYS), setKey);
+  const contributes = monthlyIn.some((m) => m > 0);
+  const addedOn = (d: number) => addedBy(monthlyIn, d - 1);
   const putIn = amount + addedOn(day);
   const sinceStart = ((value - putIn) / putIn) * 100;
 
@@ -1583,7 +1590,7 @@ export default function SandboxTest({
         // at a time with a summary each day.)
         // (A full backtest: on to the next day it checks, and at the end, the results.)
         else if (rushing) {
-          if (day < days) goTo(nextCheck(strategy, day, days), true);
+          if (day < days) goTo(nextCheck(strategy, day, days, run?.state), true);
           else {
             setRushing(false);
             setAuto(false);
@@ -1593,7 +1600,7 @@ export default function SandboxTest({
         } else if (day < days && runnable(strategy))
           goTo(
             Math.min(
-              nextCheck(strategy, day, days),
+              nextCheck(strategy, day, days, run?.state),
               (pendingRecap.current?.from ?? day) + SUMMARY_DAYS[summaryEvery],
             ),
             true,
@@ -1810,10 +1817,7 @@ export default function SandboxTest({
               </svg>
             </span>
             <div className="min-w-0 flex-1">
-              <p className="result-pop text-2xl font-bold text-slate-900">
-                {result.label}
-              </p>
-              <p className="result-pop mt-0.5 text-2xl font-bold text-slate-900">{result.label}</p>
+              <p className="result-pop text-2xl font-bold text-slate-900">{result.label}</p>
               <p className="text-sm text-slate-600">{result.note}</p>
             </div>
             {/* The grade on its tile; under it, the button that folds the scale of grades. */}
@@ -1911,11 +1915,11 @@ export default function SandboxTest({
           <dl
             {...enterSlow(0)}
             className={`rise-in mt-4 grid grid-cols-2 gap-4 text-sm ${
-              ["sm:grid-cols-3", "sm:grid-cols-4", "sm:grid-cols-5"][(payouts.length ? 1 : 0) + (monthly ? 1 : 0)]
+              ["sm:grid-cols-3", "sm:grid-cols-4", "sm:grid-cols-5"][(payouts.length ? 1 : 0) + (contributes ? 1 : 0)]
             }`}
           >
             <Stat label="Initial Amount" value={money.format(amount)} />
-            {monthly > 0 && (
+            {contributes && (
               <Stat
                 label="Monthly Contribution"
                 value={money.format(addedOn(days))}
@@ -1956,7 +1960,7 @@ export default function SandboxTest({
             <div className="mt-3">
               <ResultChart
                 values={
-                  monthly > 0
+                  contributes
                     ? valueByDay.map((v, k) => v - addedOn(k + 1))
                     : valueByDay
                 }
@@ -2683,14 +2687,18 @@ export default function SandboxTest({
           {/* What is held, as a hand of cards, and the picks not held, as a deck to draw from
               (HoldingsDeck); clicking a card chooses its pick. */}
           <div ref={handTop} className="mt-5 scroll-mt-40">
-            <HoldingsDeck
-              cards={cards.filter((c) => c.shares > 0)}
-              pile={cards.filter((c) => c.shares === 0)}
-              selected={swapTo ?? pick.symbol}
-              // A card held or drawn, clicked: its pick shown, the page gliding up to it.
-              onSelect={(symbol) => choosePick(symbol, toShown())}
-              onView={(symbol) => choosePick(symbol, toShown())}
-            />
+            {/* In the design and colour of the strategy brought in, if any (else Classic, each
+                back in its pick's colour). */}
+            <DeckDesign value={strategy ? { back: deckBack(strategy), color: deckColor(strategy) } : { back: DEFAULT_BACK }}>
+              <HoldingsDeck
+                cards={cards.filter((c) => c.shares > 0)}
+                pile={cards.filter((c) => c.shares === 0)}
+                selected={swapTo ?? pick.symbol}
+                // A card held or drawn, clicked: its pick shown, the page gliding up to it.
+                onSelect={(symbol) => choosePick(symbol, toShown())}
+                onView={(symbol) => choosePick(symbol, toShown())}
+              />
+            </DeckDesign>
           </div>
         </div>
 
@@ -3388,10 +3396,10 @@ function WhyDetail({ why, deck, className = "" }: { why: Why; deck?: Strategy | 
   const other = picked >= 0 && picked + 1 !== why.number ? cards[picked] : undefined;
   return (
     <div className={`rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-600 ${className}`}>
-      {/* The strategy's cards, as on the Strategies page (smaller): the one that did it lifted,
+      {/* The strategy's cards, as on the Strategies page (the same size): the one that did it lifted,
           ringed and tagged, the others greyed out. Clicking one shows its rule below. */}
       {deck && cards.length > 0 && (
-        <div className="-mx-1 mb-2 flex gap-2.5 overflow-x-auto px-1 pb-2 pt-4">
+        <div className="-mx-1 mb-2 flex gap-2.5 overflow-x-auto px-1 pb-2 pt-5">
           {cards.map((r, i) => {
             const used = i + 1 === why.number;
             const shown = i === picked;
@@ -3405,13 +3413,12 @@ function WhyDetail({ why, deck, className = "" }: { why: Why; deck?: Strategy | 
                 className={`relative shrink-0 rounded-xl transition-[opacity,filter] duration-200 ${
                   used || shown ? "" : "opacity-45 grayscale hover:opacity-80"
                 } ${shown && !used ? "ring-2 ring-slate-400 ring-offset-2" : ""}`}
-                style={{ width: MINI_W, height: MINI_H }}
+                style={{ width: CARD_W, height: CARD_H }}
               >
-                <span
-                  className="pointer-events-none absolute left-0 top-0 block origin-top-left"
-                  style={{ width: 116, height: 150, transform: `scale(${MINI_W / 116})` }}
-                >
-                  <RuleCardFace rule={r} n={i} color={deckColor(deck)} on={used} tag="Used" />
+                <span className="pointer-events-none block size-full">
+                  <DeckDesign value={{ back: deckBack(deck) }}>
+                    <RuleCardFace rule={r} n={i} color={cardColor(deck)} on={used} tag="Used" />
+                  </DeckDesign>
                 </span>
               </button>
             );
@@ -3507,9 +3514,6 @@ function CardRule({ rule, n, deck }: { rule: Rule; n: number; deck: Strategy }) 
   );
 }
 
-// A strategy's card, smaller, in the reasons for what it did (a Strategies card is 116 by 150).
-const MINI_W = 87;
-const MINI_H = 112;
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 // What a strategy did over a recap's days, a line each (its day and what it did). One with a
@@ -4868,7 +4872,7 @@ function Notice({ message, attempt }: { message: string | null; attempt: number 
   return (
     <div
       role="alert"
-      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+      className={`grid transition-[grid-template-rows,opacity] duration-(--fade) ease-out ${
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
       }`}
     >

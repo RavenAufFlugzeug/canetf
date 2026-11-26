@@ -43,7 +43,7 @@ export function SetupArea({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`grid transition-[grid-template-rows,opacity] duration-(--fade) ease-[cubic-bezier(0.22,1,0.36,1)] ${
         testing ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
       }`}
       aria-hidden={testing}

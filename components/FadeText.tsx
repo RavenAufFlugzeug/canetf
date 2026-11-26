@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { FADE_MS } from "@/lib/motion";
 
 // How long the old words take to fade away (.fade-text-out in globals.css): they are removed
 // after it, whether or not the animation ran.
-const OUT_MS = 520;
+const OUT_MS = FADE_MS;
 // How long the text takes to ease to its new size.
 const SIZE_MS = 520;
 

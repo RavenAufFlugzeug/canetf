@@ -9,8 +9,9 @@ import KindBadge from "@/components/KindBadge";
 import { listingOf } from "@/lib/exchanges";
 import { countryFlag } from "@/lib/fx";
 import { REMOVE_BUTTON } from "@/lib/ui";
+import { FADE_MS } from "@/lib/motion";
 
-const ROW_LEAVE_MS = 350; // matches .picker-collapse in globals.css
+const ROW_LEAVE_MS = FADE_MS + 50; // .picker-collapse in globals.css, and a moment more
 
 const money = (value: number | null, currency: string | null) =>
   value === null ? "—" : moneyFormatter(currency).format(value);

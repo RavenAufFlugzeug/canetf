@@ -6,15 +6,16 @@ import { searchCompanies } from "@/app/actions/companies";
 import DiamondLoader from "@/components/DiamondLoader";
 import type { CompanyMatch } from "@/lib/db";
 import { field } from "@/lib/ui";
+import { FADE_MS } from "@/lib/motion";
 
 const DEBOUNCE_MS = 200;
 // The "Searching…" stage always shows for at least this long, so a fast search
 // doesn't flash; with a big database the real wait takes over.
 const MIN_THINKING_MS = 350;
 const ENTER_STAGGER_MS = 90; // gap between options appearing one at a time
-const LEAVE_MS = 300; // matches .picker-collapse in globals.css
+const LEAVE_MS = FADE_MS; // .picker-collapse in globals.css
 // How long the company shown takes to fade away before another is fetched (.company-view).
-const COMPANY_FADE_MS = 760;
+const COMPANY_FADE_MS = FADE_MS;
 
 // An option in the dropdown. Options that stop matching stay a moment longer
 // (leftAt is set) so they can fade out and fold away.

@@ -16,14 +16,54 @@ export const TIMEFRAMES = [
 export const AMOUNTS = [500, 1_000, 2_000, 5_000];
 
 // What can be added each month, in Canadian dollars (0: nothing), for a test longer than
-// MONTHLY_AFTER trading days (3 months). A month is 21 trading days (as the test's Next month),
-// and it comes in at the end of each: on Day 21, 42, 63 and so on.
-export const MONTHLY = [0, 50, 100, 500, 1_000];
-export const DEFAULT_MONTHLY = 0;
+// MONTHLY_AFTER trading days (3 months): a set amount, or "random", a different amount each month
+// (as someone with more or less to spare from month to month: RANDOM_MONTHLY). A month is 21
+// trading days (as the test's Next month), and it comes in at the end of each: on Day 21, 42, 63
+// and so on.
+export type Monthly = number | "random";
+export const MONTHLY: Monthly[] = [0, 50, 100, 500, 1_000, "random"];
+export const DEFAULT_MONTHLY: Monthly = 0;
 export const MONTH_DAYS = 21;
 export const MONTHLY_AFTER = 63;
-// How much has been added by the end of Day `day`, at `monthly` a month.
-export const addedBy = (monthly: number, day: number) => monthly * Math.floor(Math.max(day, 0) / MONTH_DAYS);
+export const parseMonthly = (v: unknown): Monthly =>
+  MONTHLY.find((m) => String(m) === v) ?? DEFAULT_MONTHLY;
+
+// A random month's amount: from 0 to 500, on a bell curve round the middle (250, give or take
+// 100), so the ends are rare; in whole dollars.
+export const RANDOM_MONTHLY = { least: 0, most: 500, mean: 250, spread: 100 };
+
+// What comes in at the end of each of `months` months. Random amounts follow from `seed` (the
+// test's), so they stay the same however often they are worked out.
+export function monthlyAmounts(monthly: Monthly, months: number, seed: string): number[] {
+  if (monthly !== "random") return Array(months).fill(monthly);
+  const next = seeded(seed);
+  const { least, most, mean, spread } = RANDOM_MONTHLY;
+  return Array.from({ length: months }, () => {
+    // A normal draw (Box–Muller), kept within the range.
+    const z = Math.sqrt(-2 * Math.log(1 - next())) * Math.cos(2 * Math.PI * next());
+    return Math.min(most, Math.max(least, Math.round(mean + z * spread)));
+  });
+}
+
+// How much has been added by the end of Day `day`, each month's amount in `amounts`.
+export function addedBy(amounts: number[], day: number) {
+  const months = Math.floor(Math.max(day, 0) / MONTH_DAYS);
+  let sum = 0;
+  for (let i = 0; i < months; i++) sum += amounts[i] ?? 0;
+  return sum;
+}
+
+// Numbers from 0 up to 1, the same for the same text (mulberry32 on its hash).
+function seeded(text: string) {
+  let a = 0;
+  for (let i = 0; i < text.length; i++) a = (Math.imul(a, 31) + text.charCodeAt(i)) | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 // How many companies and ETFs a test can have.
 export const COUNTS = [4, 12, 24];
@@ -46,7 +86,7 @@ export const MOST_CHOSEN = Math.max(...COUNTS);
 export type Choices = {
   range?: string;
   amount?: number;
-  monthly?: number;
+  monthly?: Monthly;
   count?: number;
   seed?: number;
   custom?: boolean;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { isPaletteName, paletteColor, type PaletteName } from "@/components/EtfBreakdown";
 import DeckBack from "@/components/DeckBack";
+import { DEFAULT_BACK, isDeckBack } from "@/lib/deckBack";
 import { TAG } from "@/lib/ui";
 import type { Strategy } from "@/lib/strategy";
 
@@ -10,10 +11,22 @@ import type { Strategy } from "@/lib/strategy";
 export const DECK_W = Math.round(116 * 1.1);
 export const DECK_H = Math.round(150 * 1.1);
 
-// A deck's colour family (one of the Search charts', blue unless another is chosen), and its
-// colour: that family's main shade.
-export const deckPalette = (s: Strategy): PaletteName => (isPaletteName(s.palette) ? s.palette : "blue");
+// A deck's colour family (one of the Search charts', blue unless another is chosen; always red in
+// a design other than Classic, which come in red only), and its colour: that family's main shade.
+export const deckPalette = (s: Strategy): PaletteName =>
+  deckBack(s) !== "classic" ? "red" : isPaletteName(s.palette) ? s.palette : "blue";
 export const deckColor = (s: Strategy) => paletteColor(deckPalette(s));
+// The colour of a deck's cards (their edge, suit and mark), as against its backs: the deck's own
+// for Classic; purple for Hexerei, and for Teegesellschaft the green of the hills on its backs,
+// deeper and richer (their backs being red).
+const CARD_COLORS = { magic: "oklch(0.5 0.2 300)", "tea-party": "oklch(0.64 0.13 165)" };
+export const cardColor = (s: Strategy) => {
+  const back = deckBack(s);
+  return back === "classic" ? deckColor(s) : CARD_COLORS[back];
+};
+// A deck's card design: its own, else Classic (decks kept from before have theirs filled in as
+// they are read: withBack in lib/strategy.ts).
+export const deckBack = (s: Strategy) => (isDeckBack(s.back) ? s.back : DEFAULT_BACK);
 
 // A deck (on the Strategies page's shelf, or to bring into a Sandbox test): up to three card
 // backs in its colour (the cat hiding behind a cup of coffee, surprised when the deck is pointed
@@ -69,13 +82,13 @@ export default function DeckPile({
                   : ""
               }`}
             >
-              <DeckBack color={color} />
+              <DeckBack color={color} design={deckBack(deck)} />
             </span>
           </span>
         ))}
         <span
           aria-hidden
-          className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+          className={`pointer-events-none absolute -top-3 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-(--fade) ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
             open ? "scale-100 opacity-100" : "scale-75 opacity-0"
           }`}
         >

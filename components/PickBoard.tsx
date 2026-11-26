@@ -11,6 +11,7 @@ import { moneyFormatter } from "@/lib/money";
 import { NAICS_GROUPS } from "@/lib/naics";
 import { CONTROL_HEIGHT, field, LABEL, FOCUS_RING, LINK_TEXT, TAG, EMPTY_STATE } from "@/lib/ui";
 import { ChevronDownIcon } from "@/components/Icons";
+import { FADE_MS as FADE } from "@/lib/motion";
 
 export type BoardPick = {
   symbol: string;
@@ -49,7 +50,7 @@ type Sort = "default" | "price-desc" | "price-asc" | "move-desc" | "move-asc" | 
 
 
 // How long the board takes to fade out when the filters change, before it shows the new ones.
-const FADE_MS = 170;
+const FADE_MS = FADE;
 
 const money = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
 const moneyText = (x: number) => money.format(x);
@@ -463,7 +464,7 @@ export default function PickBoard({
             opacity: changing ? 0 : 1,
             transform: changing ? "translateY(4px)" : "none",
             filter: changing ? "blur(1px)" : "none",
-            transition: `opacity ${changing ? FADE_MS : 260}ms ease, transform ${changing ? FADE_MS : 320}ms cubic-bezier(0.22, 1, 0.36, 1), filter ${FADE_MS}ms ease`,
+            transition: `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), filter ${FADE_MS}ms ease`,
           }}
         >
           <div
@@ -518,7 +519,6 @@ export default function PickBoard({
                         style={
                           {
                             animationDelay: `${Math.min(i, 12) * 20}ms`,
-                            animationDuration: "350ms",
                             "--accent": p.color,
                           } as React.CSSProperties
                         }
@@ -531,7 +531,7 @@ export default function PickBoard({
                               e.stopPropagation();
                               onChoose(p.symbol);
                             }}
-                            className={`flex min-w-0 items-center gap-2 text-left ${FOCUS_RING}`}
+                            className={`flex w-full min-w-0 items-center gap-2 text-left ${FOCUS_RING}`}
                           >
                             <span
                               className="universe-badge kind-badge grid size-6 shrink-0 place-items-center rounded-full shadow-sm"

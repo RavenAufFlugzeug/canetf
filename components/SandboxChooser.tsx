@@ -5,13 +5,14 @@ import { getChooserPreview, type ChooserPreview } from "@/app/actions/sandbox";
 import DiamondLoader from "@/components/DiamondLoader";
 import KindMark from "@/components/KindMark";
 import SearchBox from "@/components/SearchBox";
-import { useSandboxSwap } from "@/components/SandboxSwap";
+import { EaseHeight, useSandboxSwap } from "@/components/SandboxSwap";
 import { MOST_CHOSEN, sandboxHref, type Choices } from "@/lib/sandbox";
 import { button, EMPTY_STATE, REMOVE_BUTTON } from "@/lib/ui";
+import { FADE_MS } from "@/lib/motion";
 
 const compact = new Intl.NumberFormat("en-CA", { notation: "compact", maximumFractionDigits: 1 });
-// How long a row or the preview takes to go (.chosen-out in globals.css).
-const OUT_MS = 320;
+// How long a row or the preview takes to go (.chosen-row, .chosen-preview in globals.css).
+const OUT_MS = FADE_MS;
 
 // The Sandbox's companies and ETFs chosen by hand (its Custom mode). A search box: a listing
 // found there is shown first, with its general info, to add or clear; finding another shows that
@@ -71,6 +72,8 @@ export default function SandboxChooser({
     latest.current = "";
     setClosing(true);
     window.setTimeout(() => {
+      // (Unless another was looked up meanwhile: that one stays.)
+      if (latest.current) return;
       setFound(null);
       setClosing(false);
     }, OUT_MS);
@@ -90,75 +93,86 @@ export default function SandboxChooser({
       go(next);
     }, OUT_MS);
   };
+  const previewKey = found && typeof found === "object" ? found.symbol : String(found);
   const added = found && typeof found === "object" && rows.some((r) => r.symbol === found.symbol);
 
   return (
     <div className="mt-3 space-y-4">
       {!full && (
-        <div className="max-w-xl space-y-3">
+        <div className="max-w-xl">
           <SearchBox
             placeholders={{ symbol: "e.g. NVDA or XEQT.TO", name: "e.g. Shopify" }}
             added={rows.map((r) => r.symbol)}
             onChoose={look}
           />
+          {/* The preview folds open and shut (as a chosen row does), so what is below glides
+              rather than jumping once it has gone; one listing to the next eases between heights. */}
           {found && (
-            <div
-              key={typeof found === "object" ? found.symbol : found}
-              data-out={closing ? "" : undefined}
-              className="chosen-preview rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              {found === "loading" ? (
-                <p className="flex items-center gap-2 text-sm text-slate-500">
-                  <DiamondLoader className="size-3.5" />
-                  Loading {asked}…
-                </p>
-              ) : found === "none" ? (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-slate-600">{asked} can&apos;t be added.</p>
-                  <button type="button" onClick={clear} className={button("secondary", "xs")}>
-                    Clear
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="grid size-9 shrink-0 place-items-center rounded-full shadow-sm"
-                      style={{ background: found.color, color: found.mark }}
+            <div data-out={closing ? "" : undefined} className="chosen-row grid">
+              <div className="min-h-0 overflow-clip [overflow-clip-margin:6px]">
+                <EaseHeight changeKey={previewKey} duration={OUT_MS}>
+                  <div className="pt-3">
+                    <div
+                      key={previewKey}
+                      data-out={closing ? "" : undefined}
+                      className="chosen-preview rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
-                      <KindMark kind={found.kind} className="size-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900">
-                        {found.name} <span className="text-sm font-normal text-slate-500">{found.symbol}</span>
-                      </p>
-                      {found.line && <p className="text-xs text-slate-500">{found.line}</p>}
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {[
-                          found.trades && `Trades on ${found.trades}`,
-                          found.currency,
-                          found.marketCap && `Market value ${compact.format(found.marketCap)}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
+                      {found === "loading" ? (
+                        <p className="flex items-center gap-2 text-sm text-slate-500">
+                          <DiamondLoader className="size-3.5" />
+                          Loading {asked}…
+                        </p>
+                      ) : found === "none" ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm text-slate-600">{asked} can&apos;t be added.</p>
+                          <button type="button" onClick={clear} className={button("secondary", "xs")}>
+                            Clear
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-3">
+                            <span
+                              className="grid size-9 shrink-0 place-items-center rounded-full shadow-sm"
+                              style={{ background: found.color, color: found.mark }}
+                            >
+                              <KindMark kind={found.kind} className="size-4" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-slate-900">
+                                {found.name} <span className="text-sm font-normal text-slate-500">{found.symbol}</span>
+                              </p>
+                              {found.line && <p className="text-xs text-slate-500">{found.line}</p>}
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                {[
+                                  found.trades && `Trades on ${found.trades}`,
+                                  found.currency,
+                                  found.marketCap && `Market value ${compact.format(found.marketCap)}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex gap-2">
+                            <button
+                              type="button"
+                              disabled={added || full || closing}
+                              onClick={() => add(found)}
+                              className={button("primary", "xs")}
+                            >
+                              {added ? "Added" : "Add"}
+                            </button>
+                            <button type="button" onClick={clear} className={button("secondary", "xs")}>
+                              Clear
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={added || full || closing}
-                      onClick={() => add(found)}
-                      className={button("primary", "xs")}
-                    >
-                      {added ? "Added" : "Add"}
-                    </button>
-                    <button type="button" onClick={clear} className={button("secondary", "xs")}>
-                      Clear
-                    </button>
-                  </div>
-                </>
-              )}
+                </EaseHeight>
+              </div>
             </div>
           )}
         </div>
@@ -166,11 +180,7 @@ export default function SandboxChooser({
       {rows.length ? (
         <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           {rows.map((r, i) => (
-            <li
-              key={r.symbol}
-              data-out={going.includes(r.symbol) ? "" : undefined}
-              className="chosen-row grid"
-            >
+            <li key={r.symbol} data-out={going.includes(r.symbol) ? "" : undefined} className="chosen-row grid">
               <div className="min-h-0 overflow-hidden">
                 <div className={`flex items-center gap-3 px-3 py-2.5 ${i ? "border-t border-slate-100" : ""}`}>
                   <span

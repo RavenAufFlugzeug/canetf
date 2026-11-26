@@ -3,7 +3,7 @@
 import DiamondLoader from "@/components/DiamondLoader";
 import FadeText from "@/components/FadeText";
 import { useSandboxSwap } from "@/components/SandboxSwap";
-import { newSeed, sandboxHref } from "@/lib/sandbox";
+import { newSeed, sandboxHref, type Monthly } from "@/lib/sandbox";
 import { button } from "@/lib/ui";
 
 // The Sandbox's button for a random set of `count` companies and ETFs, keeping the timeframe
@@ -22,7 +22,7 @@ export default function PickButton({
   current?: string;
   range: string;
   amount: number;
-  monthly: number;
+  monthly: Monthly;
   count: number;
 }) {
   const { pending, leaving, change } = useSandboxSwap();

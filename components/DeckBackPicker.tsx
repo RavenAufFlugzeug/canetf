@@ -2,21 +2,27 @@
 
 import { useState } from "react";
 import DeckBack from "@/components/DeckBack";
-import { DECK_BACKS, saveDeckBack, useDeckBack } from "@/lib/deckBack";
+import { paletteColor } from "@/components/EtfBreakdown";
+import { DECK_BACKS, type DeckBackName } from "@/lib/deckBack";
 import { TAG } from "@/lib/ui";
 
-// The account page's choice of deck back, used by every deck on the site: each design as a small
-// card (a deck of its own, so the cat on it is surprised when it is pointed at, and happy once it
-// is clicked, until the pointer leaves, as on the decks), its name under it. The one chosen is
-// ringed and tagged "In use".
-const PREVIEW = "oklch(0.58 0.19 25)";
-
-export default function DeckBackPicker() {
-  const chosen = useDeckBack();
+// A strategy's choice of card design (on the Strategies page): each design as a card (Classic in
+// the deck's colour, the others in red, the only colour they come in) (a deck of its own, so the cat on it is surprised when it is pointed at, and happy
+// once it is clicked, until the pointer leaves, as on the decks), its name under it. The one
+// chosen is ringed and tagged "In use".
+export default function DeckBackPicker({
+  chosen,
+  classicColor,
+  onPick,
+}: {
+  chosen: DeckBackName;
+  classicColor: string;
+  onPick: (back: DeckBackName) => void;
+}) {
   // The design last clicked, its cat happy until the pointer leaves it.
   const [happy, setHappy] = useState<string | null>(null);
   return (
-    <div role="radiogroup" aria-label="Deck back" className="mt-5 flex flex-wrap gap-6">
+    <div role="radiogroup" aria-label="Deck design" className="mt-3 flex flex-wrap gap-6">
       {DECK_BACKS.map(({ value, label }) => {
         const on = chosen === value;
         return (
@@ -26,7 +32,7 @@ export default function DeckBackPicker() {
             role="radio"
             aria-checked={on}
             onClick={() => {
-              saveDeckBack(value);
+              onPick(value);
               setHappy(value);
             }}
             data-happy={happy === value || undefined}
@@ -39,11 +45,11 @@ export default function DeckBackPicker() {
                   on ? "ring-2 ring-slate-900 ring-offset-2" : ""
                 }`}
               >
-                <DeckBack color={PREVIEW} design={value} />
+                <DeckBack color={value === "classic" ? classicColor : paletteColor("red")} design={value} />
               </span>
               <span
                 aria-hidden
-                className={`pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+                className={`pointer-events-none absolute -top-3 left-1/2 z-10 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-(--fade) ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
                   on ? "scale-100 opacity-100" : "scale-75 opacity-0"
                 }`}
               >

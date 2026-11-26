@@ -220,6 +220,20 @@ export function FinishMark(props: Props) {
   );
 }
 
+// Starting (a strategy's initial plan): a pennant on a pole, planted at the start line. (Unlike the
+// finish's swallowtail flag, a solid triangle.) It runs up the pole as it first shows, and waves
+// while its card is pointed at, as the finish's does.
+export function StartFlagMark(props: Props) {
+  return (
+    <Mark {...props}>
+      <path d="M3.5 17.5h6M6.5 17.5V2.5" />
+      <g className="start-flag-raise">
+        <path className="test-mark-flag" d="M6.5 3.2 15.5 6.6 6.5 10Z" fill="currentColor" />
+      </g>
+    </Mark>
+  );
+}
+
 // Running a full backtest (the computer trading every day left): a chip, its pins along each
 // side, with a core in the middle. Pointed at, its pins light one side after another round it
 // and its core glows; at work (.test-mark-busy, the backtest's pop-up), they keep on.

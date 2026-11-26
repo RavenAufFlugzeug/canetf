@@ -3,6 +3,7 @@
 // does, what the deck applies to, and its plan for money. Kept in this browser (STORE).
 
 import type { PaletteName } from "@/components/EtfBreakdown";
+import { isDeckBack, oldDeckBack, type DeckBackName } from "@/lib/deckBack";
 
 export type Scope = "sector" | "etfs" | "single";
 export type Metric =
@@ -32,8 +33,19 @@ export type Op = "above" | "below" | "atLeast" | "atMost";
 export type Condition = { id: number; metric: Metric; op: Op; value: string; lasting?: string };
 // What a card does. (Cards from before there were others have only `side`: buying or selling
 // shares.)
-export type Action = "buy" | "sell" | "buyAmount" | "buyMonthly" | "buyPot" | "move" | "split" | "pause" | "stop";
-export type Check = "day" | "month" | "quarter" | "year";
+export type Action =
+  | "buy"
+  | "sell"
+  | "buyAmount"
+  | "buyMonthly"
+  | "buyPot"
+  | "spread"
+  | "move"
+  | "split"
+  | "pause"
+  | "stop";
+// ("once": the first day it can act, and never again.)
+export type Check = "once" | "day" | "month" | "quarter" | "year";
 export type Limit = "none" | "month" | "quarter" | "year";
 export type Phase = "always" | "build" | "hold";
 export type Rule = {
@@ -43,7 +55,7 @@ export type Rule = {
   side: "buy" | "sell";
   shares: string;
   action?: Action;
-  amount?: string; // dollars (buyAmount), percent (move, split) or months (pause)
+  amount?: string; // dollars (buyAmount), percent (move, split), months (pause) or funds (spread)
   target?: string; // the fund moved or sent to (move, split)
   match?: "all" | "any";
   check?: Check;
@@ -56,9 +68,6 @@ export type Plan = {
   monthlyMax: string;
   reserve: string;
   pot: string;
-  emergencyEvery: string;
-  emergencyMin: string;
-  emergencyMax: string;
   dividends: "reinvest" | "cash";
   buildYears: string;
   averagesFrom: string;
@@ -73,6 +82,8 @@ export type Strategy = {
   symbol: string;
   rules: Rule[];
   palette?: PaletteName; // its colour, one of the Search charts' families (blue, as theirs, if none is chosen)
+  sample?: boolean; // the ETF sample (etfSample): always kept, and can't be deleted
+  back?: DeckBackName; // its cards' design (lib/deckBack.ts); kept from before decks had one, the account's old choice
   plan?: Plan;
 };
 // What is kept: the decks, the one open, and the card being edited in each.
@@ -227,6 +238,7 @@ export function actionDone(r: Rule) {
   const a = actionOf(r);
   if (a === "buy" || a === "sell") return wholeShares(r.shares);
   if (a === "buyAmount" || a === "pause") return positive(r.amount);
+  if (a === "spread") return wholeShares(r.amount ?? "");
   if (a === "move" || a === "split")
     return positive(r.amount) && Number(r.amount) <= 100 && !!r.target?.trim();
   return true;
@@ -242,9 +254,6 @@ export const EMPTY_PLAN: Plan = {
   monthlyMax: "",
   reserve: "",
   pot: "",
-  emergencyEvery: "",
-  emergencyMin: "",
-  emergencyMax: "",
   dividends: "reinvest",
   buildYears: "",
   averagesFrom: "",
@@ -335,6 +344,8 @@ export function actionText(rule: Rule, s: Strategy) {
       return `buy ${what} with this month's money`;
     case "buyPot":
       return `buy ${what} with the pot`;
+    case "spread":
+      return `spread the money across the top ${amount} ${amount === 1 ? "fund" : "funds"}, evenly`;
     case "move":
       return amount >= 100
         ? `move all of ${what} to ${rule.target?.trim()}`
@@ -351,12 +362,66 @@ export function actionText(rule: Rule, s: Strategy) {
 export const STORE = "canetf-strategy-decks";
 export type Saved = { decks: Strategy[]; open: number; editing: Record<number, number> };
 
-// The decks kept in this browser (none before the Strategies page has kept any).
+// A deck kept from before decks had their own design, given the one the account page chose for
+// every deck (read from this browser, so only once the page is up).
+export const withBack = (d: Strategy): Strategy => (isDeckBack(d.back) ? d : { ...d, back: oldDeckBack() });
+
+// The ETF sample: the deck every shelf starts with, kept first and never deleted. It applies to
+// every ETF; 20% of the money goes to the pot; and, for now, one card: once, at the start, the
+// rest is spread evenly across the top 4 ETFs by the dividend score (lib/strategyRun.ts). Its ids
+// are its own (below zero, where the decks made on the page never go). A shelf with an older one
+// (SAMPLE_VERSION) has it replaced as it is read.
+export const SAMPLE_ID = -1;
+const SAMPLE_VERSION = "1";
+const SAMPLE_KEY = "canetf-strategy-sample";
+const OLD_EXAMPLES = ["Tech dip buyer", "New grad dividends"];
+export const etfSample = (): Strategy => ({
+  id: SAMPLE_ID,
+  name: "ETF SAMPLE",
+  sample: true,
+  scope: "etfs",
+  sector: "Technology",
+  symbol: "",
+  palette: "green",
+  back: "classic",
+  plan: { ...EMPTY_PLAN, pot: "20" },
+  rules: [
+    {
+      id: -2,
+      name: "Invest the start",
+      conditions: [],
+      side: "buy",
+      shares: "",
+      action: "spread",
+      amount: "4",
+      check: "once",
+    },
+  ],
+});
+// The decks with the ETF sample first (its kept form, unless older than this one's), the old
+// examples taken off.
+export function withSample(decks: Strategy[]) {
+  let current = true;
+  try {
+    current = localStorage.getItem(SAMPLE_KEY) === SAMPLE_VERSION;
+  } catch {}
+  const kept = decks.find((d) => d.sample);
+  const rest = decks.filter((d) => !d.sample && !OLD_EXAMPLES.includes(d.name));
+  return [kept && current ? kept : etfSample(), ...rest];
+}
+// (Once the shelf is kept with this version of it.)
+export function markSample() {
+  try {
+    localStorage.setItem(SAMPLE_KEY, SAMPLE_VERSION);
+  } catch {}
+}
+
+// The decks kept in this browser (the ETF sample, at least).
 export function loadDecks(): Strategy[] {
   try {
     const kept = JSON.parse(localStorage.getItem(STORE) ?? "null") as Saved | null;
-    return kept?.decks ?? [];
+    return withSample((kept?.decks ?? []).map(withBack));
   } catch {
-    return [];
+    return [etfSample()];
   }
 }

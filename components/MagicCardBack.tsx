@@ -21,7 +21,7 @@ import { paletteColor, type PaletteName } from "@/components/EtfBreakdown";
 // lifts her head a little out of it, so her mouth shows (.magic-cat), the book glows and the
 // moon swings up again. Clicked (data-happy, until the pointer leaves), sparkles rise out of
 // its pages (.magic-* in globals.css). The sky is drawn in its own units: 100 wide, 130 tall,
-// about a px each on the account page's cards;
+// about a px each on a full-size card;
 // the book and quill in px from the card's middle.
 const BAND = "#111214";
 const MOON = "oklch(0.93 0.1 95)";
@@ -228,8 +228,7 @@ const MOTES: [number, number, number, number, number][] = [
 // The sky, at one of four times: two nights and two days. Clicking the moon on the book's right
 // cover makes it night (or, at night, the other night); clicking the sun on its left cover makes
 // it day (or, by day, the other day). Each sky is a gradient, top to bottom: [offset, colour].
-// The nights are deep (a colour mixed mostly with the dark of night): red, as the account page's
-// preview, and teal. The days: Teegesellschaft's pastel sky, blue fading to pink, and an early
+// The nights are deep (a colour mixed mostly with the dark of night): red and teal. The days: Teegesellschaft's pastel sky, blue fading to pink, and an early
 // morning, lavender fading to a warm peach. By day the gold stars by the book fade (the sky's
 // white ones stay, as on Teegesellschaft's), and the corner's moon gives way to a sun.
 type SkyName = "night-red" | "night-teal" | "day" | "dawn";

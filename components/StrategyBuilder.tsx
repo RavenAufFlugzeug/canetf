@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { PalettePicker } from "@/components/EtfBreakdown";
+import { isPaletteName, paletteColor, PalettePicker } from "@/components/EtfBreakdown";
+import { DEFAULT_BACK } from "@/lib/deckBack";
 import SearchBox from "@/components/SearchBox";
 import SlideTabs from "@/components/SlideTabs";
-import { ChevronDownIcon } from "@/components/Icons";
-import { Suit } from "@/components/DeckBack";
-import DeckPile, { DECK_H, DECK_W, deckColor, deckPalette } from "@/components/DeckPile";
+import { DeckDesign, Suit } from "@/components/DeckBack";
+import DeckPile, { cardColor, DECK_H, DECK_W, deckBack } from "@/components/DeckPile";
+import DeckBackPicker from "@/components/DeckBackPicker";
 import {
   AmountMark,
   BuyMark,
   MonthMark,
+  StartFlagMark,
   MoveMark,
   PauseMark,
   PotMark,
@@ -29,6 +31,11 @@ import {
   num,
   STORE,
   wholeShares,
+  etfSample,
+  markSample,
+  SAMPLE_ID,
+  withBack,
+  withSample,
   type Action,
   type Check,
   type Condition,
@@ -44,7 +51,7 @@ import {
 import { button, field, LABEL as UI_LABEL, PANEL_TITLE, REMOVE_ARMED, REMOVE_BUTTON, CARD_COMPACT, FOCUS_RING, TAG, TAG_SHAPE, CARD_SLOT } from "@/lib/ui";
 
 // The Strategies page's builder (app/strategy/page.tsx), in the Sandbox's cards. Each strategy
-// is a deck: on the shelf at the top, the decks kept, face down (DeckBack, in the design chosen on the account page) in their
+// is a deck: on the shelf at the top, the decks kept, face down (DeckBack, in its own design) in their
 // colour (one of the Search charts' four), each with its name and how many cards it holds;
 // clicking one opens it. A strategy says what it
 // applies to (every firm in a sector, every ETF, or one firm or ETF), and each of its rules is
@@ -56,13 +63,13 @@ import { button, field, LABEL as UI_LABEL, PANEL_TITLE, REMOVE_ARMED, REMOVE_BUT
 // first deck is an example for tech firms; the decks are kept in this browser.
 //
 // A deck can also say how money comes in and is kept (its plan): a monthly amount, a cash
-// reserve kept for emergencies, an opportunity pot set aside from each month's money, what is
+// reserve kept in cash, an opportunity pot set aside from each month's money, what is
 // done with dividends, how many years it is actively built before it is simply held, and how
 // far back its averages look. A card can then be checked each day, month, quarter or year, at
 // most once in a while, in the building or the holding years, with all or any of its
 // conditions, and do more than buy or sell shares: buy an amount, buy with the month's money or
 // the pot, move part of a holding to another fund, send part of new money to one, or pause or
-// stop buying. The dividend example (after a course paper) uses all of these.
+// stop buying.
 
 
 // The sectors a strategy can apply to: the broad ones each firm's listing gives.
@@ -86,13 +93,10 @@ const SECTORS = [
 const GROUPS = [...new Set(Object.values(METRICS).map((m) => m.group))];
 
 const OLD_STORE = "canetf-strategy-draft-v2";
-// Set once the dividend example (the course paper's strategy) has been dealt onto the shelf,
-// so it is added once only: deleted, it stays gone (the shelf's tile adds it again).
-const DIVIDEND_ADDED = "canetf-strategy-dividend-added-v3";
 
 // A card's size, as the Sandbox's; and the room between cards laid side by side.
-const CARD_W = 116;
-const CARD_H = 150;
+export const CARD_W = 116;
+export const CARD_H = 150;
 const GAP = 12;
 
 let next = 1;
@@ -118,128 +122,18 @@ const newDeck = (d: Partial<Strategy> = {}): Strategy => ({
   sector: "Technology",
   symbol: "",
   rules: [newRule()],
+  back: DEFAULT_BACK,
   ...d,
 });
 
-// The example: tech firms, bought on a sharp daily dip while their long-term trend is still
-// up (and only up to a cap), part sold once well up, and more sold if a holding falls too far.
-function techExample(): Strategy {
-  return newDeck({
-    name: "Tech dip buyer",
-    rules: [
-      newRule({
-        name: "Buy the dip",
-        conditions: [
-          newCondition({ metric: "dayChange", op: "below", value: "-3" }),
-          newCondition({ metric: "vsAvg200", op: "above", value: "0" }),
-          newCondition({ metric: "held", op: "below", value: "50" }),
-        ],
-        side: "buy",
-        shares: "5",
-      }),
-      newRule({
-        name: "Take profit",
-        conditions: [newCondition({ metric: "gain", op: "above", value: "20" })],
-        side: "sell",
-        shares: "5",
-      }),
-      newRule({
-        name: "Cut losses",
-        conditions: [newCondition({ metric: "gain", op: "below", value: "-10" })],
-        side: "sell",
-        shares: "10",
-      }),
-    ],
-  });
-}
+// The card to edit first in a deck just added: its first (none, without cards).
+const editingFirst = (editing: Saved["editing"], d: Strategy) =>
+  d.rules.length ? { ...editing, [d.id]: d.rules[0].id } : editing;
 
-
-// The dividend example, after a course paper, kept simple: a new graduate puts $100–$500 into
-// dividend ETFs each month (whichever looks best: in the Sandbox, the one with the best outlook), keeps $300 in cash
-// for emergencies, and saves 10% of the rest in a pot to buy more when the fund is cheap (its
-// yield well above usual, or the Canadian dollar strong). Built for 5 years, then held, adding a
-// second fund. A dividend cut pauses buying; still cut a year on, half moves to a similar fund;
-// a new tax on foreign holdings stops buying.
-function dividendExample(): Strategy {
-  return newDeck({
-    name: "New grad dividends",
-    scope: "etfs",
-    palette: "green",
-    plan: {
-      monthlyMin: "100",
-      monthlyMax: "500",
-      reserve: "300",
-      pot: "10",
-      emergencyEvery: "6",
-      emergencyMin: "100",
-      emergencyMax: "300",
-      dividends: "reinvest",
-      buildYears: "5",
-      averagesFrom: "2022",
-      averagesYears: "5",
-      noDebt: true,
-    },
-    rules: [
-      newRule({ name: "Invest every month", conditions: [], action: "buyMonthly", check: "month" }),
-      newRule({
-        name: "Buy more when it's cheap",
-        match: "any",
-        conditions: [
-          newCondition({ metric: "yieldVsAvg", op: "above", value: "15" }),
-          newCondition({ metric: "cadVsAvg", op: "above", value: "7" }),
-        ],
-        action: "buyPot",
-        check: "month",
-        limit: "quarter",
-        phase: "build",
-      }),
-      newRule({
-        name: "Don't leave the pot idle",
-        conditions: [newCondition({ metric: "quietQuarters", op: "atLeast", value: "4" })],
-        action: "buyPot",
-        check: "quarter",
-        phase: "build",
-      }),
-      newRule({
-        name: "Dividend cut: wait",
-        conditions: [newCondition({ metric: "dividendChange", op: "below", value: "-20", lasting: "2" })],
-        action: "pause",
-        amount: "12",
-        check: "quarter",
-      }),
-      newRule({
-        name: "Still cut: switch half",
-        conditions: [
-          newCondition({ metric: "pausedMonths", op: "atLeast", value: "12" }),
-          newCondition({ metric: "dividendChange", op: "below", value: "-20" }),
-        ],
-        action: "move",
-        amount: "50",
-        target: "a similar ETF",
-        check: "quarter",
-      }),
-      newRule({
-        name: "New tax: stop buying",
-        conditions: [newCondition({ metric: "policyChange", op: "above", value: "" })],
-        action: "stop",
-        check: "quarter",
-      }),
-      newRule({
-        name: "Add a second fund",
-        conditions: [newCondition({ metric: "funds", op: "below", value: "2" })],
-        action: "split",
-        amount: "50",
-        target: "a broader fund",
-        check: "year",
-        phase: "hold",
-      }),
-    ],
-  });
-}
-
+// The shelf before anything is kept: the ETF sample alone, open.
 function starting(): Saved {
-  const deck = techExample();
-  return { decks: [deck], open: deck.id, editing: { [deck.id]: deck.rules[0].id } };
+  const deck = etfSample();
+  return { decks: [deck], open: deck.id, editing: {} };
 }
 
 
@@ -259,7 +153,7 @@ function scopeText(s: Strategy) {
 }
 
 
-const CHECK_TEXT: Record<Check, string> = { day: "Every day", month: "Every month", quarter: "Every quarter", year: "Every year" };
+const CHECK_TEXT: Record<Check, string> = { once: "Once, at the start", day: "Every day", month: "Every month", quarter: "Every quarter", year: "Every year" };
 const LIMIT_TEXT: Record<Limit, string> = { none: "", month: "a month", quarter: "a quarter", year: "a year" };
 
 // The years a card is in force, in words ("years 1–5", "from year 6"), or "".
@@ -278,7 +172,7 @@ function ruleParts(rule: Rule, s: Strategy) {
   const timing = [
     CHECK_TEXT[rule.check ?? "day"],
     phaseText(rule, s),
-    rule.limit && rule.limit !== "none" ? `at most once ${LIMIT_TEXT[rule.limit]}` : "",
+    rule.check !== "once" && rule.limit && rule.limit !== "none" ? `at most once ${LIMIT_TEXT[rule.limit]}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -297,13 +191,8 @@ function planTexts(s: Strategy) {
   const reserve = num(p.reserve);
   const pot = num(p.pot);
   if (lo !== null || hi !== null) out.push(`Adds ${range(lo, hi)} a month.`);
-  if (reserve) out.push(`Keeps ${dollars(reserve)} in cash for emergencies, topped up first.`);
+  if (reserve) out.push(`Keeps ${dollars(reserve)} in cash, topped up first.`);
   if (pot) out.push(`Saves ${pot}% of the rest in a pot for extra buys.`);
-  const every = num(p.emergencyEvery);
-  const eLo = num(p.emergencyMin);
-  const eHi = num(p.emergencyMax);
-  if (every && (eLo !== null || eHi !== null))
-    out.push(`Emergencies (${range(eLo, eHi)}, every ${every} ${every === 1 ? "month" : "months"}) are paid from cash, never by selling.`);
   out.push(p.dividends === "reinvest" ? "Reinvests dividends." : "Takes dividends as cash.");
   const years = buildYears(s);
   if (years) out.push(`Builds for ${years} ${years === 1 ? "year" : "years"}, then just holds.`);
@@ -336,7 +225,8 @@ export default function StrategyBuilder() {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       try {
-        const kept = JSON.parse(localStorage.getItem(STORE) ?? "null") as Saved | null;
+        const stored = JSON.parse(localStorage.getItem(STORE) ?? "null") as Saved | null;
+        const kept = stored && { ...stored, decks: stored.decks.map(withBack) };
         const draft = JSON.parse(localStorage.getItem(OLD_STORE) ?? "null") as Omit<Strategy, "id"> | null;
         const ids = (d: Strategy[]) =>
           d.flatMap((s) => [s.id, ...s.rules.flatMap((r) => [r.id, ...r.conditions.map((c) => c.id)])]);
@@ -348,17 +238,12 @@ export default function StrategyBuilder() {
           const deck = { ...draft, id: next++ };
           setSaved({ decks: [deck], open: deck.id, editing: { [deck.id]: deck.rules[0].id } });
         }
-        // The dividend example, added to the shelf and opened, the first time (in place of the
-        // longer one it once was, if that is there).
-        if (!localStorage.getItem(DIVIDEND_ADDED)) {
-          localStorage.setItem(DIVIDEND_ADDED, "1");
-          const deck = dividendExample();
-          setSaved((s) => {
-            const at = s.decks.findIndex((d) => d.name === deck.name);
-            const decks = at < 0 ? [...s.decks, deck] : s.decks.map((d, i) => (i === at ? deck : d));
-            return { decks, open: deck.id, editing: { ...s.editing, [deck.id]: deck.rules[0].id } };
-          });
-        }
+        // The ETF sample: always on the shelf, first, in its latest form (the old examples gone).
+        setSaved((s) => {
+          const decks = withSample(s.decks);
+          return { ...s, decks, open: decks.some((d) => d.id === s.open) ? s.open : SAMPLE_ID };
+        });
+        markSample();
       } catch {}
       setLoaded(true);
     });
@@ -404,7 +289,7 @@ export default function StrategyBuilder() {
     setSaved((s) => ({
       decks: [...s.decks, d],
       open: d.id,
-      editing: { ...s.editing, [d.id]: d.rules[0].id },
+      editing: editingFirst(s.editing, d),
     }));
   };
   const addCard = () => {
@@ -429,20 +314,19 @@ export default function StrategyBuilder() {
   const removeDeck = () => {
     setDeleting(false);
     setSaved((s) => {
-      const decks = s.decks.filter((d) => d.id !== s.open);
-      if (!decks.length) return starting();
+      const decks = s.decks.filter((d) => d.id !== s.open || d.sample);
+      if (decks.length === s.decks.length) return s;
       return { ...s, decks, open: decks[0].id };
     });
   };
 
   if (!deck || !rule) return null;
-  const color = deckColor(deck);
+  const color = cardColor(deck);
   const texts = deck.rules.map((r) => ruleParts(r, deck));
 
   return (
     <div className="space-y-6">
-      {/* The shelf: every deck kept, and room for a new one. (Above the panels under it, so the
-          examples' menu drops over them.) */}
+      {/* The shelf: every deck kept, and room for a new one. */}
       <section className={`rise-in relative z-20 ${CARD_COMPACT}`}>
         <p className={`${PANEL_TITLE}`}>
           Your decks · {saved.decks.length}
@@ -451,9 +335,8 @@ export default function StrategyBuilder() {
           {saved.decks.map((d) => (
             <DeckPile key={d.id} deck={d} open={d.id === deck.id} onOpen={() => openDeck(d.id)} />
           ))}
-          {/* Room for another: a blank deck, or one of the examples (from a menu). */}
-          <NewDeckTile label="New deck" onClick={() => addDeck(newDeck())} />
-          <ExamplesTile onAdd={addDeck} />
+          {/* Room for another. */}
+          <NewDeckTile label="New deck" onClick={() => addDeck(newDeck({ palette: "red" }))} />
         </div>
       </section>
 
@@ -479,27 +362,45 @@ export default function StrategyBuilder() {
                   />
                 </label>
                 {/* Its colour: one of the families the Search page's charts are coloured in,
-                    chosen the same way (with its diamonds), level with the name's field. */}
-                <div className="flex flex-col gap-1.5">
-                  <p className={LABEL}>Deck colour</p>
-                  <div className="flex h-[34px] items-center">
-                    <PalettePicker
-                      label="Deck colour"
-                      current={deckPalette(deck)}
-                      onPick={(palette) => set({ palette })}
-                    />
+                    chosen the same way (with its diamonds), level with the name's field. Only
+                    for Classic (the other designs are red only): it folds away, fading, for them. */}
+                <div
+                  className="fade-slot"
+                  data-off={deckBack(deck) === "classic" ? undefined : ""}
+                  inert={deckBack(deck) !== "classic"}
+                  aria-hidden={deckBack(deck) !== "classic"}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <p className={LABEL}>Deck colour</p>
+                    <div className="flex h-[34px] items-center">
+                      <PalettePicker
+                        label="Deck colour"
+                        current={isPaletteName(deck.palette) ? deck.palette : "blue"}
+                        onPick={(palette) => set({ palette })}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => (deleting ? removeDeck() : setDeleting(true))}
-                onBlur={() => setDeleting(false)}
-                className={`-mt-1 shrink-0 ${REMOVE_BUTTON} ${deleting ? REMOVE_ARMED : ""}`}
-              >
-                {deleting ? "Click again to delete" : "Delete deck"}
-              </button>
+              {/* (The ETF sample stays.) */}
+              {!deck.sample && (
+                <button
+                  type="button"
+                  onClick={() => (deleting ? removeDeck() : setDeleting(true))}
+                  onBlur={() => setDeleting(false)}
+                  className={`-mt-1 shrink-0 ${REMOVE_BUTTON} ${deleting ? REMOVE_ARMED : ""}`}
+                >
+                  {deleting ? "Click again to delete" : "Delete deck"}
+                </button>
+              )}
             </div>
+
+            <p className={`mt-5 ${LABEL}`}>Deck design</p>
+            <DeckBackPicker
+              chosen={deckBack(deck)}
+              classicColor={paletteColor(isPaletteName(deck.palette) ? deck.palette : "blue")}
+              onPick={(back) => set({ back })}
+            />
 
             <p className={`mt-5 ${LABEL}`}>Applies to</p>
             <div className="mt-2 flex">
@@ -559,35 +460,40 @@ export default function StrategyBuilder() {
               chooses what the other edits. */}
           <div className={CARD_COMPACT}>
             <p className={PANEL_TITLE}>Cards · {deck.rules.length}</p>
-            <Hand rules={deck.rules} editing={rule.id} color={color} onEdit={edit} onAdd={addCard} />
+            <DeckDesign value={{ back: deckBack(deck) }}>
+              <Hand rules={deck.rules} editing={rule?.id} color={color} onEdit={edit} onAdd={addCard} />
+            </DeckDesign>
 
-            {/* The card being edited, sliding in from its side as another is chosen. */}
-            <div
-              key={rule.id}
-              className="pick-swap-in mt-6 border-t border-slate-100 pt-6"
-              style={{ "--dir": dir } as React.CSSProperties}
-            >
-              <RuleEditor
-                n={at + 1}
-                rule={rule}
-                phases={buildYears(deck)}
-                removable={deck.rules.length > 1}
-                onRemove={() => removeCard(rule.id)}
-                onRule={(change) => setRule(rule.id, (r) => ({ ...r, ...change }))}
-                onCondition={(id, change) =>
-                  setRule(rule.id, (r) => ({
-                    ...r,
-                    conditions: r.conditions.map((c) => (c.id === id ? { ...c, ...change } : c)),
-                  }))
-                }
-                onAddCondition={() =>
-                  setRule(rule.id, (r) => ({ ...r, conditions: [...r.conditions, newCondition()] }))
-                }
-                onRemoveCondition={(id) =>
-                  setRule(rule.id, (r) => ({ ...r, conditions: r.conditions.filter((c) => c.id !== id) }))
-                }
-              />
-            </div>
+            {/* The card being edited, sliding in from its side as another is chosen (none in a
+                deck without cards yet). */}
+            {rule && (
+              <div
+                key={rule.id}
+                className="pick-swap-in mt-6 border-t border-slate-100 pt-6"
+                style={{ "--dir": dir } as React.CSSProperties}
+              >
+                <RuleEditor
+                  n={at + 1}
+                  rule={rule}
+                  phases={buildYears(deck)}
+                  removable={deck.rules.length > 1}
+                  onRemove={() => removeCard(rule.id)}
+                  onRule={(change) => setRule(rule.id, (r) => ({ ...r, ...change }))}
+                  onCondition={(id, change) =>
+                    setRule(rule.id, (r) => ({
+                      ...r,
+                      conditions: r.conditions.map((c) => (c.id === id ? { ...c, ...change } : c)),
+                    }))
+                  }
+                  onAddCondition={() =>
+                    setRule(rule.id, (r) => ({ ...r, conditions: [...r.conditions, newCondition()] }))
+                  }
+                  onRemoveCondition={(id) =>
+                    setRule(rule.id, (r) => ({ ...r, conditions: r.conditions.filter((c) => c.id !== id) }))
+                  }
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -611,7 +517,7 @@ export default function StrategyBuilder() {
           <ol className="mt-4 space-y-1 text-sm text-slate-700">
             {texts.map((text, i) => {
               const r = deck.rules[i];
-              const on = r.id === rule.id;
+              const on = r.id === rule?.id;
               return (
                 <li key={r.id}>
                   <button
@@ -679,8 +585,16 @@ const MATCHES = [
   { value: "any", label: "Any can hold" },
 ] as const;
 
-// The actions, in the menu: buying, then moving money elsewhere, then holding back.
+// Whether an action is part of the initial plan: done once, at the start.
+const atStart = (a: Action) => a === "spread";
+
+// The actions, in the menu: what the strategy does at the start (its initial plan), buying, then
+// moving money elsewhere, then holding back.
 const ACTIONS: { group: string; options: [Action, string][] }[] = [
+  {
+    group: "Initial plan",
+    options: [["spread", "Spread across the top funds"]],
+  },
   {
     group: "Buy and sell",
     options: [
@@ -716,6 +630,7 @@ const ACTION_MARKS: Record<Action, (props: { className?: string }) => React.Reac
   buyAmount: AmountMark,
   buyMonthly: MonthMark,
   buyPot: PotMark,
+  spread: StartFlagMark,
   move: MoveMark,
   split: SplitMark,
   pause: PauseMark,
@@ -736,6 +651,7 @@ function rankText(r: Rule) {
   if (a === "pause") return `${Number(r.amount)}m`;
   if (a === "buyMonthly") return "M";
   if (a === "buyPot") return "P";
+  if (a === "spread") return "";
   return "×";
 }
 const TAG_WORD: Record<Action, string> = {
@@ -744,12 +660,14 @@ const TAG_WORD: Record<Action, string> = {
   buyAmount: "buy",
   buyMonthly: "buy",
   buyPot: "buy",
+  spread: "start",
   move: "move",
   split: "split",
   pause: "pause",
   stop: "stop",
 };
-const buying = (a: Action) => a === "buy" || a === "buyAmount" || a === "buyMonthly" || a === "buyPot" || a === "split";
+const buying = (a: Action) =>
+  a === "buy" || a === "buyAmount" || a === "buyMonthly" || a === "buyPot" || a === "spread" || a === "split";
 
 // The open deck's cards, face up in a row (overlapping when there are too many to fit side by
 // side), each sliding to its place as cards come and go, and a dashed slot after them to deal
@@ -762,7 +680,7 @@ function Hand({
   onAdd,
 }: {
   rules: Rule[];
-  editing: number;
+  editing?: number;
   color: string;
   onEdit: (id: number) => void;
   onAdd: () => void;
@@ -779,7 +697,8 @@ function Hand({
 
   const n = rules.length;
   const spread = n > 1 ? Math.max(0, Math.min(CARD_W + GAP, (width - 2 * CARD_W - GAP) / (n - 1))) : 0;
-  const slot = Math.min((n - 1) * spread + CARD_W + GAP, Math.max(width - CARD_W, 0));
+  // (In a deck with no cards yet, at the start of the row.)
+  const slot = n ? Math.min((n - 1) * spread + CARD_W + GAP, Math.max(width - CARD_W, 0)) : 0;
 
   return (
     <div
@@ -891,7 +810,9 @@ export function RuleCardFace({
             {!complete(rule)
               ? "Unfinished"
               : count === 0
-                ? `Every ${rule.check && rule.check !== "day" ? rule.check : "day"}`
+                ? rule.check === "once"
+                  ? "Once"
+                  : `Every ${rule.check && rule.check !== "day" ? rule.check : "day"}`
                 : `${rule.match === "any" && count > 1 ? "Any of " : ""}${count} ${count === 1 ? "condition" : "conditions"}`}
           </span>
         </span>
@@ -899,7 +820,7 @@ export function RuleCardFace({
       {/* Being edited: tagged on its top edge, as the Sandbox's card being traded is. */}
       <span
         aria-hidden
-        className={`pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
+        className={`pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 ${TAG} shadow transition-[opacity,scale] duration-(--fade) ease-[cubic-bezier(0.3,1.25,0.5,1)] ${
           on ? "scale-100 opacity-100" : "scale-75 opacity-0"
         }`}
       >
@@ -966,28 +887,35 @@ function RuleEditor({
       <p className={`mt-4 ${LABEL}`}>When</p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
         <span className="hidden w-9 sm:block" />
-        <select
-          aria-label="Checked"
-          value={rule.check ?? "day"}
-          onChange={(e) => onRule({ check: e.target.value as Check })}
-          className={FIELD}
-        >
-          <option value="day">Checked each day</option>
-          <option value="month">Checked each month</option>
-          <option value="quarter">Checked each quarter</option>
-          <option value="year">Checked each year</option>
-        </select>
-        <select
-          aria-label="At most"
-          value={rule.limit ?? "none"}
-          onChange={(e) => onRule({ limit: e.target.value as Limit })}
-          className={FIELD}
-        >
-          <option value="none">Any number of times</option>
-          <option value="month">At most once a month</option>
-          <option value="quarter">At most once a quarter</option>
-          <option value="year">At most once a year</option>
-        </select>
+        {/* (The initial plan's actions: once, at the start, nothing to choose.) */}
+        {rule.check === "once" ? (
+          <span className="text-sm text-slate-600">Once, at the start</span>
+        ) : (
+          <select
+            aria-label="Checked"
+            value={rule.check ?? "day"}
+            onChange={(e) => onRule({ check: e.target.value as Check })}
+            className={FIELD}
+          >
+            <option value="day">Checked each day</option>
+            <option value="month">Checked each month</option>
+            <option value="quarter">Checked each quarter</option>
+            <option value="year">Checked each year</option>
+          </select>
+        )}
+        {rule.check !== "once" && (
+          <select
+            aria-label="At most"
+            value={rule.limit ?? "none"}
+            onChange={(e) => onRule({ limit: e.target.value as Limit })}
+            className={FIELD}
+          >
+            <option value="none">Any number of times</option>
+            <option value="month">At most once a month</option>
+            <option value="quarter">At most once a quarter</option>
+            <option value="year">At most once a year</option>
+          </select>
+        )}
         {phases && (
           <select
             aria-label="In which years"
@@ -1005,7 +933,7 @@ function RuleEditor({
         {rule.conditions.map((c, i) => {
           const info = METRICS[c.metric];
           return (
-            <div key={c.id} className="rise-in" style={{ animationDuration: "500ms" }}>
+            <div key={c.id} className="rise-in">
               <div className="flex flex-wrap items-center gap-2">
                 {/* "and" before each condition after the first: on its own line on a phone, in a
                     column to the left on a wider screen. */}
@@ -1116,7 +1044,9 @@ function RuleEditor({
           value={action}
           onChange={(e) => {
             const next = e.target.value as Action;
-            onRule({ action: next, side: next === "sell" ? "sell" : "buy" });
+            // (The initial plan's actions are done once, at the start; leaving them, every day.)
+            const check = atStart(next) ? "once" : rule.check === "once" ? "day" : rule.check;
+            onRule({ action: next, side: next === "sell" ? "sell" : "buy", check });
           }}
           className={FIELD}
         >
@@ -1155,6 +1085,20 @@ function RuleEditor({
               className={`${FIELD} w-24 tabular-nums`}
             />
           </span>
+        )}
+        {action === "spread" && (
+          <>
+            top
+            <input
+              aria-label="Number of funds"
+              inputMode="numeric"
+              value={rule.amount ?? ""}
+              onChange={(e) => onRule({ amount: e.target.value })}
+              placeholder="0"
+              className={`${FIELD} w-16 tabular-nums`}
+            />
+            funds
+          </>
         )}
         {action === "pause" && (
           <>
@@ -1196,7 +1140,7 @@ function RuleEditor({
 }
 
 // The deck's plan for its money: what comes in each month, the cash kept back and the pot set
-// aside from it, emergencies, dividends, how long it is built before it is held, and how far
+// aside from it, dividends, how long it is built before it is held, and how far
 // back its averages look. Each figure left empty is not part of the plan.
 function PlanEditor({ plan, onPlan }: { plan: Plan; onPlan: (change: Partial<Plan>) => void }) {
   const figure = (key: keyof Plan, label: string, width = "w-20") => (
@@ -1232,14 +1176,6 @@ function PlanEditor({ plan, onPlan }: { plan: Plan; onPlan: (change: Partial<Pla
           <p className={LABEL}>Opportunity pot</p>
           <div className={`mt-2 ${row}`}>
             {figure("pot", "Opportunity pot", "w-16")}% of what&apos;s left
-          </div>
-        </div>
-        <div>
-          <p className={LABEL}>Emergencies</p>
-          <div className={`mt-2 ${row} gap-y-2`}>
-            Every {figure("emergencyEvery", "Months between emergencies", "w-14")} months
-            <span className="basis-full" />
-            {money("emergencyMin", "Least emergency")} to {money("emergencyMax", "Most emergency")}
           </div>
         </div>
         <div>
@@ -1296,106 +1232,6 @@ function NewDeckTile({ label, onClick }: { label: string; onClick: () => void })
       </span>
       <span className="text-xs font-semibold text-slate-500 group-hover:text-slate-900">{label}</span>
     </button>
-  );
-}
-
-// The example decks, to add one: a dashed space the size of a deck (as New deck's) whose menu
-// drops open under it (as the investment universe's sort menu does), each example with a line
-// saying what it does. A click outside or Escape closes it.
-const EXAMPLES = [
-  { key: "tech", label: "Tech dip buyer", hint: "Buys tech firms on a sharp dip, sells on a gain or a loss", make: techExample },
-  {
-    key: "dividends",
-    label: "New grad dividends",
-    hint: "Invests monthly in the best dividend ETF, more when it's cheap",
-    make: dividendExample,
-  },
-];
-
-function ExamplesTile({ onAdd }: { onAdd: (deck: Strategy) => void }) {
-  const [open, setOpen] = useState(false);
-  const [focus, setFocus] = useState(0);
-  const root = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLUListElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", away);
-    list.current?.focus({ preventScroll: true });
-    return () => document.removeEventListener("pointerdown", away);
-  }, [open]);
-  const choose = (i: number) => {
-    onAdd(EXAMPLES[i].make());
-    setOpen(false);
-  };
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => {
-          setFocus(0);
-          setOpen(!open);
-        }}
-        className="deck-pile group flex w-36 flex-col items-center gap-2 focus-visible:outline-none"
-      >
-        <span
-          className={`${CARD_SLOT} transition group-hover:border-slate-500 group-hover:text-slate-700 group-focus-visible:border-slate-900 ${
-            open ? "border-slate-900 text-slate-900" : ""
-          }`}
-          style={{ width: DECK_W, height: DECK_H }}
-        >
-          <PlusMark className="size-5" />
-        </span>
-        <span
-          className={`flex items-center gap-1 text-xs font-semibold group-hover:text-slate-900 ${open ? "text-slate-900" : "text-slate-500"}`}
-        >
-          Examples
-          <ChevronDownIcon className={`size-3 transition duration-300 ease-out ${open ? "rotate-180" : ""}`} />
-        </span>
-      </button>
-      <ul
-        ref={list}
-        role="listbox"
-        aria-label="Example decks"
-        tabIndex={-1}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
-          else if (e.key === "ArrowDown") setFocus((f) => Math.min(EXAMPLES.length - 1, f + 1));
-          else if (e.key === "ArrowUp") setFocus((f) => Math.max(0, f - 1));
-          else if (e.key === "Enter" || e.key === " ") choose(focus);
-          else return;
-          e.preventDefault();
-        }}
-        data-open={open ? "" : undefined}
-        className={`sort-menu absolute left-0 top-full z-30 mt-1.5 w-72 origin-top-left rounded-xl border border-slate-200 bg-white p-1 shadow-lg shadow-slate-900/10 outline-none ${
-          open ? "" : "pointer-events-none"
-        }`}
-      >
-        {EXAMPLES.map((x, i) => (
-          <li
-            key={x.key}
-            role="option"
-            aria-selected={false}
-            onPointerEnter={() => setFocus(i)}
-            onClick={() => choose(i)}
-            className={`sort-option flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors duration-150 ${
-              focus === i ? "bg-slate-100 text-slate-900" : "text-slate-700"
-            }`}
-            style={{ "--i": i } as React.CSSProperties}
-          >
-            <PlusMark className="size-3 shrink-0 text-slate-400" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs font-semibold">{x.label}</span>
-              <span className="block text-[11px] text-slate-500">{x.hint}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

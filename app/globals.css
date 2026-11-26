@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* How long anything takes to fade in or out, everywhere (lib/motion.ts FADE_MS, for the
+     timers that wait on one). */
+  --fade: 400ms;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -64,7 +67,7 @@ body:has(> main.bg-slate-50) {
 }
 
 .chart-fade {
-  animation: chart-fade 900ms ease-out;
+  animation: chart-fade var(--fade) ease-out;
 }
 
 /* Price chart range options (RangeTabs in components/PriceChart.tsx): the pill behind
@@ -141,10 +144,10 @@ body:has(> main.bg-slate-50) {
 
 .picker-menu {
   transform-origin: top;
-  animation: picker-menu-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: picker-menu-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1);
   transition:
-    opacity 300ms ease-in,
-    transform 300ms ease-in;
+    opacity var(--fade) ease-in,
+    transform var(--fade) ease-in;
 }
 
 .picker-menu-closing {
@@ -158,8 +161,8 @@ body:has(> main.bg-slate-50) {
   display: grid;
   grid-template-rows: 1fr;
   transition:
-    grid-template-rows 300ms ease,
-    opacity 300ms ease;
+    grid-template-rows var(--fade) ease,
+    opacity var(--fade) ease;
 }
 
 .picker-collapse > * {
@@ -184,7 +187,7 @@ body:has(> main.bg-slate-50) {
 /* "backwards" only: the delay holds each option hidden until its turn, then the
    option's own styles take over, so the fade-out transition above still works. */
 .picker-option {
-  animation: picker-option-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: picker-option-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 /* The Holdings Map's NAICS legend (components/HoldingsMap.tsx) folds and opens like
@@ -228,8 +231,8 @@ body:has(> main.bg-slate-50) {
 
 .legend-row {
   transition:
-    opacity 280ms ease-out,
-    transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    opacity var(--fade) ease-out,
+    transform var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1);
   transition-delay: var(--d, 0ms);
 }
 
@@ -252,8 +255,8 @@ body:has(> main.bg-slate-50) {
    without waiting its turn in the cascade. */
 .legend-row.legend-tile {
   transition:
-    opacity 280ms ease-out var(--d, 0ms),
-    transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms),
+    opacity var(--fade) ease-out var(--d, 0ms),
+    transform var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms),
     translate 300ms cubic-bezier(0.3, 1.6, 0.5, 1),
     border-color 200ms ease,
     background-color 200ms ease,
@@ -280,14 +283,14 @@ body:has(> main.bg-slate-50) {
 }
 
 .row-added .picker-collapse {
-  animation: row-unfold 400ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: row-unfold var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 /* Rows already on the list rise in when the page opens. The motion goes on the cells'
    content, not the <tr>: a transform on a table row changes how the table sizes its
    columns, so text would re-wrap when the animation ends. */
 .row-rise .picker-collapse > * {
-  animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 /* ETF breakdown treemap (components/EtfBreakdown.tsx): tiles fade and grow into place
@@ -306,7 +309,7 @@ body:has(> main.bg-slate-50) {
    just made slides into the top of the list, briefly tinted. */
 .fx-swap-from {
   display: inline-block;
-  animation: fx-swap-from 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fx-swap-from var(--fade) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fx-swap-from {
@@ -318,7 +321,7 @@ body:has(> main.bg-slate-50) {
 
 .fx-swap-to {
   display: inline-block;
-  animation: fx-swap-to 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fx-swap-to var(--fade) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fx-swap-to {
@@ -329,7 +332,7 @@ body:has(> main.bg-slate-50) {
 }
 
 .fx-row-in {
-  animation: fx-row-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fx-row-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fx-row-in {
@@ -358,10 +361,9 @@ body:has(> main.bg-slate-50) {
 }
 
 /* A line of the Sandbox set-up changing its wording (components/FadeText.tsx): the old words
-   fade and drift up away as the new fade and rise into place, overlapping (a cross-fade),
-   slowly enough to follow. */
+   fade and drift up away as the new fade and rise into place, overlapping (a cross-fade). */
 .fade-text-out {
-  animation: fade-text-out 520ms cubic-bezier(0.4, 0, 0.6, 1) both; /* OUT_MS */
+  animation: fade-text-out var(--fade) cubic-bezier(0.4, 0, 0.6, 1) both;
 }
 
 @keyframes fade-text-out {
@@ -373,7 +375,7 @@ body:has(> main.bg-slate-50) {
 }
 
 .fade-text-in {
-  animation: fade-text-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+  animation: fade-text-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
 }
 
 @keyframes fade-text-in {
@@ -384,15 +386,15 @@ body:has(> main.bg-slate-50) {
   }
 }
 
-/* A tile coming in after a change of choices (SetComposition): all together, quickly, so the
-   new set arrives whole. */
+/* A tile coming in after a change of choices (SetComposition): all together, so the new set
+   arrives whole. */
 .tile-quick {
-  animation: chart-fade 280ms ease-out backwards;
+  animation: chart-fade var(--fade) ease-out backwards;
 }
 
 /* "backwards" only: once in place, the tile's own transform takes over for hover. */
 .tile-in {
-  animation: tile-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: tile-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 .breakdown-tile {
@@ -428,7 +430,7 @@ body:has(> main.bg-slate-50) {
 }
 
 .map-node-in {
-  animation: map-node-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: map-node-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 /* Opening and folding a fund is animated in the component, frame by frame. Pointing at
@@ -454,7 +456,7 @@ body:has(> main.bg-slate-50) {
   grid-template-rows: 1fr;
   transition:
     grid-template-rows 500ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 380ms ease-out,
+    opacity var(--fade) ease-out,
     transform 500ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -483,7 +485,7 @@ body:has(> main.bg-slate-50) {
 }
 
 .map-route {
-  animation: chart-fade 320ms ease-out;
+  animation: chart-fade var(--fade) ease-out;
 }
 
 .map-node[data-state="lit"] {
@@ -510,11 +512,11 @@ body:has(> main.bg-slate-50) {
 }
 
 .map-caption {
-  animation: map-caption-in 280ms ease-out;
+  animation: map-caption-in var(--fade) ease-out;
 }
 
 .map-link-in {
-  animation: chart-fade 600ms ease-out backwards;
+  animation: chart-fade var(--fade) ease-out backwards;
 }
 
 @keyframes rise-in {
@@ -529,9 +531,9 @@ body:has(> main.bg-slate-50) {
    little while the new ones are fetched (for at least as long as this takes). */
 .sandbox-swap {
   transition:
-    opacity 750ms ease-in-out,
-    filter 750ms ease-in-out,
-    translate 750ms ease-in-out;
+    opacity var(--fade) ease-in-out,
+    filter var(--fade) ease-in-out,
+    translate var(--fade) ease-in-out;
 }
 
 .sandbox-swap[data-leaving] {
@@ -544,7 +546,7 @@ body:has(> main.bg-slate-50) {
 /* New contents after a change (Swap in components/SandboxSwap.tsx): fading and rising in out
    of the softness the old ones left in, so nothing snaps. */
 .sandbox-swap-in {
-  animation: sandbox-swap-in 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: sandbox-swap-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 @keyframes sandbox-swap-in {
@@ -557,7 +559,7 @@ body:has(> main.bg-slate-50) {
 
 /* The loading mark over an area being changed: only after a moment, then fading in. */
 .swap-wait {
-  animation: swap-wait 300ms ease-out 800ms both;
+  animation: swap-wait var(--fade) ease-out 800ms both;
 }
 
 @keyframes swap-wait {
@@ -621,11 +623,11 @@ body:has(> main.bg-slate-50) {
 /* The Sandbox test's guide while it walks through new days (TourGuide in
    components/SandboxTest.tsx): it rises in from the foot of the screen and sinks back away. */
 .tour-guide {
-  animation: tour-in 420ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  animation: tour-in var(--fade) cubic-bezier(0.2, 1.2, 0.4, 1) both;
 }
 
 .tour-guide[data-leaving] {
-  animation: tour-out 280ms ease-in both;
+  animation: tour-out var(--fade) ease-in both;
 }
 
 @keyframes tour-in {
@@ -646,8 +648,8 @@ body:has(> main.bg-slate-50) {
    so it doesn't fight the panel's own rise-in (an animation of opacity). */
 .tour-panel {
   transition:
-    filter 1000ms ease-out,
-    translate 1000ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    filter var(--fade) ease-out,
+    translate var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 /* Room below the test while the walk is on, so the page can always glide a chart to the top of
@@ -660,14 +662,13 @@ body:has(> main.bg-slate-50) {
   filter: opacity(0) blur(3px);
   translate: 0 8px;
   transition:
-    filter 750ms ease-in-out,
-    translate 750ms ease-in-out;
+    filter var(--fade) ease-in-out,
+    translate var(--fade) ease-in-out;
 }
 
-/* The test's results, once it has faded away: the panel comes in slowly (its parts after it,
-   slower still: enterSlow in components/SandboxTest.tsx). */
+/* The test's results, once it has faded away: the panel comes in a moment later (its parts
+   after it, one by one: enterSlow in components/SandboxTest.tsx). */
 .rise-in.result-in {
-  animation-duration: 1000ms;
   animation-delay: 150ms;
 }
 
@@ -680,12 +681,12 @@ body:has(> main.bg-slate-50) {
 
 /* A company chosen in Search: the one shown fades and softens away while the new one is
    fetched (html[data-company-leaving], set by components/CompanyPicker.tsx), and the new one
-   fades in slowly out of the same softness (as Sandbox's days passing do). */
+   fades in out of the same softness (as Sandbox's days passing do). */
 .company-view {
-  animation: company-in 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: company-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
   transition:
-    filter 750ms ease-in-out,
-    translate 750ms ease-in-out;
+    filter var(--fade) ease-in-out,
+    translate var(--fade) ease-in-out;
 }
 
 html[data-company-leaving] .company-view {
@@ -703,11 +704,11 @@ html[data-company-leaving] .company-view {
 /* The days passed, on their own while the test is faded out: it springs in, and fades and
    lifts away as the test comes back. */
 .days-passed {
-  animation: days-passed-in 520ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  animation: days-passed-in var(--fade) cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 
 .days-passed[data-leaving] {
-  animation: days-passed-out 600ms ease-in-out both;
+  animation: days-passed-out var(--fade) ease-in-out both;
 }
 
 @keyframes days-passed-in {
@@ -737,19 +738,19 @@ html[data-company-leaving] .company-view {
    the panel dims and the card pops up, springing a little; once closed, the card lifts away as the
    panel clears. Every pop-up comes and goes this way (lib/popup.ts). */
 .recap-in {
-  animation: recap-dim-in 250ms ease-out both;
+  animation: recap-dim-in var(--fade) ease-out both;
 }
 
 .recap-in .recap-card {
-  animation: recap-card-in 450ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  animation: recap-card-in var(--fade) cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 
 .recap-out {
-  animation: recap-dim-out 260ms ease-in both;
+  animation: recap-dim-out var(--fade) ease-in both;
 }
 
 .recap-out .recap-card {
-  animation: recap-card-out 260ms ease-in both;
+  animation: recap-card-out var(--fade) ease-in both;
 }
 
 @keyframes recap-dim-in {
@@ -806,15 +807,15 @@ html[data-company-leaving] .company-view {
 
 .trade-row {
   animation:
-    rise-in 450ms cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    rise-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) both,
     trade-row-lit 1600ms ease-out both;
 }
 
 /* The Sandbox test's chosen pick (components/SandboxTest.tsx): choosing another, its parts
    slide in from the side of the pick chosen (--dir: 1 from the right, -1 from the left) as
-   they fade up, slowly, and come into focus. */
+   they fade up and come into focus. */
 .pick-swap-in {
-  animation: pick-swap-in 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: pick-swap-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 /* Before that, the parts shown fade out and slide away the other way (SWAP_OUT_MS in
@@ -824,9 +825,9 @@ html[data-company-leaving] .company-view {
   transform: translateX(calc(var(--dir, 1) * -12px));
   filter: blur(2px);
   transition:
-    opacity 260ms ease-in,
-    transform 260ms ease-in,
-    filter 260ms ease-in;
+    opacity var(--fade) ease-in,
+    transform var(--fade) ease-in,
+    filter var(--fade) ease-in;
 }
 
 @keyframes pick-swap-in {
@@ -967,8 +968,8 @@ html[data-company-leaving] .company-view {
   opacity: 0;
   scale: 0.9;
   transition:
-    opacity 220ms ease-in,
-    scale 260ms ease-in,
+    opacity var(--fade) ease-in,
+    scale var(--fade) ease-in,
     grid-template-columns 420ms cubic-bezier(0.65, 0, 0.35, 1) 160ms,
     padding-left 420ms cubic-bezier(0.65, 0, 0.35, 1) 160ms;
 }
@@ -981,8 +982,8 @@ html[data-company-leaving] .company-view {
   transition:
     grid-template-columns 420ms cubic-bezier(0.65, 0, 0.35, 1),
     padding-left 420ms cubic-bezier(0.65, 0, 0.35, 1),
-    opacity 300ms ease-out 260ms,
-    scale 380ms cubic-bezier(0.22, 1.2, 0.36, 1) 260ms;
+    opacity var(--fade) ease-out 260ms,
+    scale var(--fade) cubic-bezier(0.22, 1.2, 0.36, 1) 260ms;
 }
 
 .step-slot > div {
@@ -1000,15 +1001,43 @@ html[data-company-leaving] .company-view {
   }
 }
 
+/* Something beside others that comes and goes (the Strategies page's deck colour, only for the
+   Classic design): its width opens as it fades in, and folds away as it fades out, so what is
+   beside it eases into its room. */
+.fade-slot {
+  display: grid;
+  grid-template-columns: 1fr;
+  transition:
+    grid-template-columns var(--fade) cubic-bezier(0.65, 0, 0.35, 1),
+    opacity var(--fade) ease;
+}
+
+.fade-slot[data-off] {
+  grid-template-columns: 0fr;
+  opacity: 0;
+}
+
+.fade-slot > * {
+  min-width: 0;
+  overflow: clip;
+  overflow-clip-margin: 8px; /* room for the diamonds' rings */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-slot {
+    transition: none;
+  }
+}
+
 /* The Sandbox's companies and ETFs chosen by hand (components/SandboxChooser.tsx): a row
    added rises in as its room opens; one taken out fades and folds its room away. The preview
    of one found rises in, and sinks and fades as it is cleared. */
 .chosen-row {
   grid-template-rows: 1fr;
-  animation: chosen-row-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: chosen-row-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
   transition:
-    grid-template-rows 320ms cubic-bezier(0.65, 0, 0.35, 1),
-    opacity 220ms ease-in;
+    grid-template-rows var(--fade) cubic-bezier(0.65, 0, 0.35, 1),
+    opacity var(--fade) ease-in;
 }
 
 .chosen-row[data-out] {
@@ -1024,11 +1053,11 @@ html[data-company-leaving] .company-view {
 }
 
 .chosen-preview {
-  animation: chosen-preview-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: chosen-preview-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
   transition:
-    opacity 300ms ease-in,
-    translate 300ms ease-in,
-    filter 300ms ease-in;
+    opacity var(--fade) ease-in,
+    translate var(--fade) ease-in,
+    filter var(--fade) ease-in;
 }
 
 .chosen-preview[data-out] {
@@ -1047,7 +1076,7 @@ html[data-company-leaving] .company-view {
 
 /* A note on a custom set's start (a pick not yet listed then), rising in after the others. */
 .start-note {
-  animation: chosen-preview-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: chosen-preview-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1062,7 +1091,7 @@ html[data-company-leaving] .company-view {
 /* The calendar beside the test's day (components/SandboxTest.tsx): its date marks fade up
    afresh each new day. */
 .calendar-tick {
-  animation: calendar-tick 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: calendar-tick var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @keyframes calendar-tick {
@@ -1078,8 +1107,8 @@ html[data-company-leaving] .company-view {
   opacity: 0;
   transform: translateY(-4px) scale(0.97);
   transition:
-    opacity 160ms ease,
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--fade) ease,
+    transform var(--fade) cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sort-menu[data-open] {
@@ -1091,8 +1120,8 @@ html[data-company-leaving] .company-view {
   opacity: 0;
   translate: 0 -3px;
   transition:
-    opacity 200ms ease,
-    translate 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--fade) ease,
+    translate var(--fade) cubic-bezier(0.22, 1, 0.36, 1),
     background-color 150ms ease,
     color 150ms ease;
 }
@@ -1154,7 +1183,7 @@ html[data-company-leaving] .company-view {
 }
 
 .universe-tag {
-  animation: universe-tag-in 380ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+  animation: universe-tag-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
 }
 
 @keyframes universe-tag-in {
@@ -1202,7 +1231,7 @@ html[data-company-leaving] .company-view {
 
 .result-area,
 .result-marker {
-  animation: text-fade-in 600ms ease-out 700ms backwards;
+  animation: text-fade-in var(--fade) ease-out 700ms backwards;
 }
 
 /* The trade record (components/TradeLog.tsx): its chip strips scroll sideways without a bar,
@@ -1338,6 +1367,18 @@ html[data-company-leaving] .company-view {
   animation: test-mark-flag 900ms ease-in-out infinite;
 }
 
+/* The start flag (StartFlagMark): run up its pole as it first shows. */
+.start-flag-raise {
+  animation: start-flag-raise 700ms cubic-bezier(0.3, 1.3, 0.5, 1) 300ms both;
+}
+
+@keyframes start-flag-raise {
+  from {
+    transform: translateY(8px) scaleX(0.4);
+    opacity: 0;
+  }
+}
+
 @keyframes test-mark-flag {
   0%,
   100% {
@@ -1381,7 +1422,7 @@ html[data-company-leaving] .company-view {
    controls (Notice) fades and slides in, each new attempt afresh; and the warning mark by a
    cost the cash can't cover pops up as it appears. */
 .notice-in {
-  animation: notice-in 350ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation: notice-in var(--fade) cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
 @keyframes notice-in {
@@ -1617,7 +1658,7 @@ html[data-company-leaving] .company-view {
 /* The Sandbox's locked order ticket (OrderTicket in SandboxTest.tsx): its "Click to switch"
    drifts in out of a blur as the ticket locks (its arrows turn by Tailwind on hover). */
 .switch-in {
-  animation: switch-in 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both; /* as the ticket locks */
+  animation: switch-in var(--fade) cubic-bezier(0.2, 0.8, 0.3, 1) both; /* as the ticket locks */
 }
 
 @keyframes switch-in {
@@ -1762,7 +1803,7 @@ html[data-company-leaving] .company-view {
 
 /* Rising in leaves each element on a layer of its own (see the Sandbox's steps). */
 .rise-in {
-  animation: rise-in 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise-in var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 /* The loading mark (components/DiamondLoader.tsx): its four small diamonds fade out and
@@ -1799,11 +1840,11 @@ html[data-company-leaving] .company-view {
 }
 
 .search-swap-from-right {
-  animation: search-swap-from-right 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: search-swap-from-right var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 .search-swap-from-left {
-  animation: search-swap-from-left 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation: search-swap-from-left var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 /* The login card (components/AuthForm.tsx), switching between logging in and creating an
@@ -1825,15 +1866,15 @@ html[data-company-leaving] .company-view {
 }
 
 .auth-swap-from-right {
-  animation: auth-swap-from-right 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: auth-swap-from-right var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .auth-swap-from-left {
-  animation: auth-swap-from-left 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: auth-swap-from-left var(--fade) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .auth-fade {
-  animation: text-fade-in 400ms ease-out 120ms backwards; /* after the form starts moving */
+  animation: text-fade-in var(--fade) ease-out 120ms backwards; /* after the form starts moving */
 }
 
 @keyframes text-fade-in {
@@ -1895,7 +1936,7 @@ html[data-company-leaving] .company-view {
 }
 
 .chart-area-in {
-  animation: chart-area-in 700ms ease-out 600ms both;
+  animation: chart-area-in var(--fade) ease-out 600ms both;
 }
 
 /* The navbar's link labels (NavLabel in components/Navbar.tsx). At the top of the page
@@ -2097,7 +2138,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* The "Teegesellschaft" deck back (components/StrategyCardBack.tsx): the cat behind her cup, on any
-   deck (.deck-pile) when it is the back chosen on the account page (lib/deckBack.ts).
+   deck (.deck-pile) whose design it is (lib/deckBack.ts).
    Pointed at, she is surprised as the Sandbox deck's cat is: three yellow strokes pop out by her
    ear and her mouth opens. Clicked (data-happy, until the pointer leaves), she is happy instead,
    as the Sandbox deck's cat is (her mouth a little "ω"), and the roses on her hat turn, the small
@@ -2221,7 +2262,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* The "Hexerei" deck back (components/MagicCardBack.tsx), on any deck (.deck-pile) when it is the
-   back chosen on the account page (lib/deckBack.ts). Its cat's moods are Classic's
+   deck's design (lib/deckBack.ts). Its cat's moods are Classic's
    (.logo-mark-out above).
    All the time: the cat and her book float gently up and down together, the book opening and
    closing a little as it rises and falls, its pages turning one after another; the pen, the
@@ -3014,14 +3055,14 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 /* Page transitions (app/template.tsx): the old page fades and softens away, then the new
-   one fades in slowly out of the same softness, rising a little, as the Sandbox's days do
+   one fades in out of the same softness, rising a little, as the Sandbox's days do
    when they pass. The navbar stays put throughout. */
 ::view-transition-old(.page-exit) {
-  animation: 700ms ease-in-out both page-out;
+  animation: var(--fade) ease-in-out both page-out;
 }
 
 ::view-transition-new(.page-enter) {
-  animation: 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) 620ms both page-in;
+  animation: var(--fade) cubic-bezier(0.2, 0.7, 0.2, 1) var(--fade) both page-in;
 }
 
 @keyframes page-out {
@@ -3060,11 +3101,11 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
 }
 
 ::view-transition-old(.auth-morph) {
-  animation: 220ms ease-in both page-out-fade;
+  animation: var(--fade) ease-in both page-out-fade;
 }
 
 ::view-transition-new(.auth-morph) {
-  animation: 380ms ease-out 170ms both page-in-fade;
+  animation: var(--fade) ease-out 170ms both page-in-fade;
 }
 
 @keyframes page-out-fade {
@@ -3173,6 +3214,7 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   .group:enabled:hover .test-mark-week,
   .group:enabled:hover .test-mark-date,
   .group:enabled:hover .test-mark-flag,
+  .start-flag-raise,
   .group:enabled:hover .test-mark-pin,
   .test-mark-busy .test-mark-pin,
   .group:enabled:hover .test-mark-core,
@@ -3448,19 +3490,14 @@ nav[data-scrolled] .group:focus-visible .nav-label-text {
   }
 }
 
-/* Its pop-up fades in a little more slowly than the others (.recap-in above), the card rising
-   more gently. */
-.popup-slow.recap-in {
-  animation-duration: 450ms;
-}
-
+/* Its pop-up's card rises more gently than the others' (.recap-in above). */
 .popup-slow.recap-in .recap-card {
-  animation: recap-card-in 700ms cubic-bezier(0.2, 1.15, 0.4, 1) both;
+  animation: recap-card-in var(--fade) cubic-bezier(0.2, 1.15, 0.4, 1) both;
 }
 
 /* Its pop-up's payments, rising in one after another for each year shown. */
 .chip-in {
-  animation: chip-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: chip-in var(--fade) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes chip-in {

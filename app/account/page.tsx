@@ -1,5 +1,4 @@
 import Link from "next/link";
-import DeckBackPicker from "@/components/DeckBackPicker";
 import { EmailMark, PasswordMark } from "@/components/TestMarks";
 import { getAppDb } from "@/lib/appDb";
 import { questions, type Answers } from "@/lib/questions";
@@ -44,11 +43,6 @@ export default async function AccountPage() {
             Change password
           </Link>
         </div>
-      </div>
-
-      <div className={CARD}>
-        <h2 className={SECTION_TITLE}>Deck back</h2>
-        <DeckBackPicker />
       </div>
 
       <div className={CARD}>

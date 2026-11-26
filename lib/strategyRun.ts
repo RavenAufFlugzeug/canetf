@@ -10,7 +10,7 @@
 //
 // Money: whatever comes in (the cash when the strategy starts, each month's contribution, the
 // dividends if the plan reinvests them) is shared out as the plan says: the pot gets its share,
-// and the rest is the month's money. The plan's emergencies (and so its cash reserve for them)
+// and the rest is the month's money. The plan's cash reserve
 // and its own monthly amounts aren't played out (the Sandbox's capital is what comes in), nor "averages since" a year (the test's dates are hidden): averages look
 // back the plan's number of years (5 if none).
 //
@@ -95,7 +95,8 @@ export type Note = { text: string; acted: boolean; why?: Why };
 const MONTH = 21;
 const QUARTER = 63;
 const YEAR = 252;
-const PERIOD = { day: 1, month: MONTH, quarter: QUARTER, year: YEAR, none: 0 } as const;
+// (A card checked "once" looks each day until it has acted.)
+const PERIOD = { once: 1, day: 1, month: MONTH, quarter: QUARTER, year: YEAR, none: 0 } as const;
 
 // A strategy starting on Day `day`, with nothing shared out yet.
 export const startRun = (day: number): RunState => ({
@@ -112,8 +113,8 @@ export const startRun = (day: number): RunState => ({
 });
 
 // Money come in, shared out as the plan says: the pot's share (until the pot is closed), the
-// rest to invest. (Not the plan's cash reserve: it is kept for emergencies, which the Sandbox
-// doesn't play out, so here it would only sit idle.)
+// rest to invest. (Not the plan's cash reserve: the Sandbox doesn't play it
+// out, so here it would only sit idle.)
 export function addMoney(deck: Strategy, state: RunState, amount: number): RunState {
   if (amount <= 0) return state;
   const next = { ...state };
@@ -143,14 +144,20 @@ function inScope(deck: Strategy, p: { kind: string; symbol: string }) {
 }
 
 // Whether any of a deck's cards looks on Day `day` (or its building years end then), and the
-// next day after `day` that one does: the days between, it has nothing to decide.
-export function checksOn(deck: Strategy, day: number) {
+// next day after `day` that one does: the days between, it has nothing to decide. (A card that
+// acts once looks no more once it has, by what the strategy has kept, `state`.)
+export function checksOn(deck: Strategy, day: number, state?: RunState) {
   const years = num(deck.plan?.buildYears);
   if (years !== null && years > 0 && day - 1 === years * YEAR) return true;
-  return deck.rules.some((r) => complete(r) && (day - 1) % PERIOD[r.check ?? "day"] === 0);
+  return deck.rules.some(
+    (r) =>
+      complete(r) &&
+      (day - 1) % PERIOD[r.check ?? "day"] === 0 &&
+      !(r.check === "once" && state?.lastFired[r.id] !== undefined),
+  );
 }
-export function nextCheck(deck: Strategy, day: number, last: number) {
-  for (let d = day + 1; d < last; d++) if (checksOn(deck, d)) return d;
+export function nextCheck(deck: Strategy, day: number, last: number, state?: RunState) {
+  for (let d = day + 1; d < last; d++) if (checksOn(deck, d, state)) return d;
   return last;
 }
 
@@ -162,6 +169,7 @@ export const runnable = (deck: Strategy) => deck.rules.some(complete);
 // Why a deck has nothing to do among these picks (none of its cards is finished, or none of what
 // it applies to is among them), or null.
 export function nothingToTrade(deck: Strategy, picks: { kind: string; symbol: string }[]) {
+  if (!deck.rules.length) return "It has no cards yet, so it can't do anything. Add some on the Strategies page.";
   if (!runnable(deck))
     return "None of its cards is finished (each is missing a figure), so it can't do anything. Fill them in on the Strategies page.";
   if (picks.some((p) => inScope(deck, p))) return null;
@@ -298,7 +306,13 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
   // Why `rule` acted on `p`: each of its conditions, with its figure today and whether it held.
   // (`pool`: how many picks it chose `p` from, for a card that buys with money.)
   let current: { rule: Rule; pool: number } | null = null;
-  const CHECKS = { day: "Checks every day", month: "Checks every month", quarter: "Checks every quarter", year: "Checks every year" };
+  const CHECKS = {
+    once: "Acts once, at the start",
+    day: "Checks every day",
+    month: "Checks every month",
+    quarter: "Checks every quarter",
+    year: "Checks every year",
+  };
   function explain(p: RunPick | undefined): Why | undefined {
     if (!current) return undefined;
     const { rule, pool } = current;
@@ -348,6 +362,55 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
       .join(", ");
   };
 
+  // The dividend score, for choosing the top funds to spread money across: of the picks given,
+  // those with a year of prices before today and no dividend cut (the last 12 months' dividends
+  // more than 10% under the 12 before, where two years are known), ranked on three measures, each
+  // among them: the yield (the last 12 months' dividends over today's price), the total return
+  // (the last 12 months' price change and dividends, in CAD), and steadiness (how much the price
+  // moves from day to day over the year, in CAD: less is better). Best first: the lowest average
+  // of the three ranks, ties going to the higher yield. With each, its figures, to say why.
+  type Scored = { p: RunPick; yield: number; total: number; swing: number; place: number };
+  function dividendRanking(list: RunPick[]): Scored[] {
+    const scored = list.flatMap((p) => {
+      const i = idx(p);
+      if (i < YEAR || !p.closes[i - YEAR]) return [];
+      const now = ttm(p, i);
+      const before = ttm(p, i - YEAR);
+      if (now !== null && before && now < before * 0.9) return [];
+      const cad = (j: number) => p.closes[j] * rateAt(p, j);
+      let paid = 0;
+      const moves: number[] = [];
+      for (let j = i - YEAR + 1; j <= i; j++) {
+        paid += p.dividends[j] * rateAt(p, j);
+        if (cad(j - 1) > 0 && cad(j) > 0) moves.push(Math.log(cad(j) / cad(j - 1)));
+      }
+      const avg = moves.length ? mean(moves) : 0;
+      const swing = moves.length ? Math.sqrt(mean(moves.map((m) => (m - avg) ** 2))) * Math.sqrt(YEAR) * 100 : Infinity;
+      return [
+        {
+          p,
+          yield: ((now ?? 0) / p.closes[i]) * 100,
+          total: ((cad(i) + paid) / cad(i - YEAR) - 1) * 100,
+          swing,
+          place: 0,
+        },
+      ];
+    });
+    const rank = (key: (s: Scored) => number) => {
+      const order = [...scored].sort((a, b) => key(b) - key(a));
+      return (s: Scored) => order.indexOf(s) + 1;
+    };
+    const byYield = rank((s) => s.yield);
+    const byTotal = rank((s) => s.total);
+    const bySwing = rank((s) => -s.swing);
+    const score = new Map(scored.map((s) => [s, (byYield(s) + byTotal(s) + bySwing(s)) / 3]));
+    return scored
+      .sort((a, b) => score.get(a)! - score.get(b)! || b.yield - a.yield)
+      .map((s, k) => ({ ...s, place: k + 1 }));
+  }
+  const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+  const signed = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`;
+
   const blocked = () => state.stopped || day < state.pausedUntil;
   // Buys as many whole shares of `p` as `amount` (in CAD) and the cash stretch to; what it spent.
   function buy(p: RunPick, amount: number, what: string) {
@@ -369,6 +432,19 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
     const h = held[p.symbol] ?? { shares: 0, cost: 0 };
     held[p.symbol] = { shares: h.shares + n, cost: h.cost + spent };
     say(`Bought ${n} ${p.name}${what ? ` ${what}` : ""}.`, reason);
+    return spent;
+  }
+  // Buys `n` shares of `p` (as many as the cash stretches to), with why; what it spent.
+  function buyShares(p: RunPick, n: number, what: string, reason: Why | undefined) {
+    const each = perShare(p);
+    const shares = Math.min(n, each > 0 ? Math.floor(cash / each + 1e-9) : 0);
+    if (shares < 1) return 0;
+    orders.push({ symbol: p.symbol, side: "Bought", shares, why: reason });
+    const spent = shares * each;
+    cash -= spent;
+    const h = held[p.symbol] ?? { shares: 0, cost: 0 };
+    held[p.symbol] = { shares: h.shares + shares, cost: h.cost + spent };
+    say(`Bought ${shares} ${p.name} ${what}.`, reason);
     return spent;
   }
   function sell(p: RunPick, n: number, what: string) {
@@ -400,6 +476,7 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
     if (!complete(rule)) continue;
     // Checked today? (Day 1, then every day, month, quarter or year on.)
     if ((day - 1) % PERIOD[rule.check ?? "day"]) continue;
+    if (rule.check === "once" && state.lastFired[rule.id] !== undefined) continue;
     if (rule.phase === "build" && holding(deck, day)) continue;
     if (rule.phase === "hold" && !holding(deck, day)) continue;
     const limit = PERIOD[rule.limit ?? "none"];
@@ -447,6 +524,51 @@ export function decide(deck: Strategy, market: RunMarket, start: RunState) {
         const spent = to ? buy(to, state.pot, "with the pot") : 0;
         state.pot -= spent;
         if (spent > 0) state.potUsed = day;
+        fired = spent > 0;
+        break;
+      }
+      case "spread": {
+        // The money waiting (less a cent), spread evenly across the top funds by the dividend
+        // score, in whole shares: as many funds as the card says (fewer where too few pass, or
+        // where a fund's share costs more than its slice: it gives way to the next). Each fund is
+        // brought up to an even share of what they hold together with the money; what is left is
+        // spent a share at a time, best first, until no share fits.
+        if (blocked() || state.fresh < 1) break;
+        const ranked = dividendRanking(matching);
+        const money = Math.min(state.fresh, cash);
+        let top: Scored[] = [];
+        for (let k = Math.min(amount, ranked.length); k >= 1; k--) {
+          top = ranked.filter((s) => perShare(s.p) <= money / k).slice(0, k);
+          if (top.length === k) break;
+        }
+        if (!top.length) break;
+        const worth = (p: RunPick) => sharesOf(p) * perShare(p);
+        const even = (money + top.reduce((sum, s) => sum + worth(s.p), 0)) / top.length;
+        const count = new Map(top.map((s) => [s, Math.max(0, Math.floor((even - worth(s.p)) / perShare(s.p) + 1e-9))]));
+        let left = money - top.reduce((sum, s) => sum + count.get(s)! * perShare(s.p), 0);
+        for (let more = true; more; ) {
+          more = false;
+          for (const s of top)
+            if (perShare(s.p) <= left + 1e-9) {
+              count.set(s, count.get(s)! + 1);
+              left -= perShare(s.p);
+              more = true;
+              break;
+            }
+        }
+        let spent = 0;
+        for (const s of top) {
+          const n = count.get(s)!;
+          if (!n) continue;
+          // Why this fund: its place and figures, among how many passed.
+          const base = explain(s.p);
+          const reason = base && {
+            ...base,
+            chosen: `It ranked ${ordinal(s.place)} of the ${ranked.length} ${ranked.length === 1 ? "fund" : "funds"} with a year of prices and no dividend cut, on yield (${s.yield.toFixed(1)}%), total return over a year (${signed(s.total)} in CAD) and steadiness (${s.swing.toFixed(0)}% a year of price swings).`,
+          };
+          spent += buyShares(s.p, n, `as one of the top ${top.length}`, reason);
+        }
+        state.fresh -= spent;
         fired = spent > 0;
         break;
       }

@@ -13,6 +13,7 @@ import {
   RISK_YEARS,
   type Risk,
 } from "@/lib/risk";
+import { FADE_MS } from "@/lib/motion";
 
 // The walkthrough's steps: the calculation, one step at a time over the fund's own data, each
 // with a chart to explore and its formula worked with the selected values; then a summary.
@@ -335,7 +336,7 @@ const FLASH_MS = 1800; // .risk-flash in globals.css, with its delay
 
 // Which view a step is in: steps 1–3 share one chart (0); the others are each their own.
 const viewOf = (step: number) => (step <= 2 ? 0 : step);
-const SWAP_OUT_MS = 520; // .fade-text-out in globals.css
+const SWAP_OUT_MS = FADE_MS; // .fade-text-out in globals.css
 // How a band grows when picked (and its outline with it).
 const BAND_EASE = "300ms cubic-bezier(0.22, 1, 0.36, 1)";
 

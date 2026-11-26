@@ -1,8 +1,10 @@
+import { FADE_MS } from "@/lib/motion";
+
 // What every pop-up looks like (as the Sandbox's "Leave the test?" card first did): over the
 // screen, the page dimmed a little and softly blurred behind it, the card white with a fine
 // border and a soft shadow, rounded; it fades and rises in (.recap-in, .recap-card in
 // globals.css), and fades and sinks away over POPUP_OUT_MS (.recap-out) when closed.
-export const POPUP_OUT_MS = 260;
+export const POPUP_OUT_MS = FADE_MS;
 
 // The screen behind the card, as it comes or goes.
 export const popupOverlay = (leaving: boolean) =>

@@ -30,12 +30,12 @@ import {
   COUNTS,
   DEFAULT_AMOUNT,
   DEFAULT_COUNT,
-  DEFAULT_MONTHLY,
   DEFAULT_RANGE,
   kindOf,
   MONTHLY,
   MONTHLY_AFTER,
   MOST_CHOSEN,
+  parseMonthly,
   pickNames,
   sandboxHref,
   SEEDS,
@@ -110,7 +110,7 @@ export default async function SandboxPage({
   // What is added each month: kept as chosen (in the address) whatever the timeframe, but only
   // added in a test longer than three months.
   const monthlyOn = timeframe.days > MONTHLY_AFTER;
-  const monthlyChosen = MONTHLY.find((m) => String(m) === params.monthly) ?? DEFAULT_MONTHLY;
+  const monthlyChosen = parseMonthly(params.monthly);
   const monthly = monthlyOn ? monthlyChosen : 0;
   const count = COUNTS.find((c) => String(c) === params.count) ?? DEFAULT_COUNT;
   const seed = Number(params.seed);
@@ -278,13 +278,13 @@ export default async function SandboxPage({
           chosen={String(monthlyChosen)}
           choices={MONTHLY.map((m) => ({
             key: String(m),
-            label: m ? `${cad.format(m)} CAD` : "None",
+            label: m === "random" ? "Random" : m ? `${cad.format(m)} CAD` : "None",
             href: sandboxHref({ ...choices, ...keep, monthly: m }),
           }))}
         />
       </div>
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`grid transition-[grid-template-rows,opacity] duration-(--fade) ease-[cubic-bezier(0.22,1,0.36,1)] ${
           monthlyOn ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
         }`}
         aria-hidden={monthlyOn}

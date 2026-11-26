@@ -110,7 +110,7 @@ function Card({ card, flip, chosen }: { card: DeckCard; flip: string; chosen: bo
       {/* The pick being traded, tagged on its top edge as its row is in the investment universe. */}
       <span
         aria-hidden
-        className={`pointer-events-none absolute -top-2 left-1/2 ${TAG} shadow transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.3,1.25,0.5,1)] [backface-visibility:hidden] ${
+        className={`pointer-events-none absolute -top-3 left-1/2 ${TAG} shadow transition-[opacity,transform] duration-(--fade) ease-[cubic-bezier(0.3,1.25,0.5,1)] [backface-visibility:hidden] ${
           chosen
             ? "opacity-100 [transform:translateX(-50%)_translateZ(1px)_scale(1)]"
             : "opacity-0 [transform:translateX(-50%)_translateZ(1px)_scale(0.6)]"

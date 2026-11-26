@@ -1,9 +1,6 @@
-import { useSyncExternalStore } from "react";
-
-// The deck back chosen on the account page, used by every deck and card back on the site:
+// The designs a deck's card backs come in, each strategy choosing its own on the Strategies page:
 // "classic" (the cat in her box), "tea-party" (the cat behind her cup of coffee) or "magic" (the
-// cat peeking out of a magician's hat). It is
-// remembered in this browser (localStorage), as Search's chart colours are.
+// cat with her book of spells).
 export const DECK_BACKS = [
   { value: "classic", label: "Classic" },
   { value: "tea-party", label: "Teegesellschaft" },
@@ -12,38 +9,17 @@ export const DECK_BACKS = [
 
 export type DeckBackName = (typeof DECK_BACKS)[number]["value"];
 
-const DEFAULT: DeckBackName = "classic";
-const STORAGE_KEY = "canetf:deck-back";
-const CHANGE_EVENT = "canetf:deck-back";
-const isDeckBack = (v: string | null): v is DeckBackName => DECK_BACKS.some((b) => b.value === v);
+export const DEFAULT_BACK: DeckBackName = "classic";
+export const isDeckBack = (v: unknown): v is DeckBackName => DECK_BACKS.some((b) => b.value === v);
 
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange); // other tabs
-  window.addEventListener(CHANGE_EVENT, onChange); // this tab
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CHANGE_EVENT, onChange);
-  };
-}
-
-function read(): DeckBackName {
+// The one design the account page used to choose for every deck, remembered in this browser: a
+// deck kept from before each had its own still shows it.
+const OLD_KEY = "canetf:deck-back";
+export function oldDeckBack(): DeckBackName {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return isDeckBack(stored) ? stored : DEFAULT;
+    const stored = localStorage.getItem(OLD_KEY);
+    return isDeckBack(stored) ? stored : DEFAULT_BACK;
   } catch {
-    return DEFAULT; // storage blocked: just use the default
+    return DEFAULT_BACK;
   }
 }
-
-export function saveDeckBack(back: DeckBackName) {
-  try {
-    localStorage.setItem(STORAGE_KEY, back);
-  } catch {
-    // Storage blocked: the choice lasts until the page is left.
-  }
-  window.dispatchEvent(new Event(CHANGE_EVENT));
-}
-
-// The back chosen in this browser. The server always renders the default; the stored choice
-// applies once in the browser.
-export const useDeckBack = () => useSyncExternalStore(subscribe, read, () => DEFAULT);
